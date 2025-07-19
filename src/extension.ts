@@ -20,6 +20,7 @@ export class ClaudeCodeUsageExtension {
   };
 
   constructor(private context: vscode.ExtensionContext) {
+    console.log('Claude Code Usage Extension: Constructor called');
     this.statusBar = new StatusBarManager();
     this.webviewProvider = new UsageWebviewProvider(context);
     
@@ -27,6 +28,7 @@ export class ClaudeCodeUsageExtension {
     this.loadConfiguration();
     this.startAutoRefresh();
     this.refreshData();
+    console.log('Claude Code Usage Extension: Initialization complete');
   }
 
   private setupCommands(): void {

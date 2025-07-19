@@ -4,11 +4,33 @@
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
   "version": "1.0.0",
   "publisher": "GrowthJack",
+  "author": "GrowthJack",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GrowthJack/claude-code-usage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GrowthJack/claude-code-usage/issues"
+  },
+  "homepage": "https://github.com/GrowthJack/claude-code-usage#readme",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "usage",
+    "cost",
+    "monitoring",
+    "ai",
+    "anthropic",
+    "token",
+    "status-bar"
+  ],
   "engines": {
     "vscode": "^1.74.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -75,14 +97,9 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/vscode": "^1.102.0",
-    "@types/node": "24.0.15",
     "@types/glob": "^9.0.0",
+    "@types/node": "24.0.15",
+    "@types/vscode": "^1.74.0",
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "glob": "^11.0.3",
-    "tinyglobby": "^0.2.14",
-    "zod": "^4.0.5"
   }
 }

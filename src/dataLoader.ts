@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { glob } from 'tinyglobby';
-import { z } from 'zod';
+// Removed tinyglobby dependency - using native fs instead
+// Removed zod dependency - using native validation instead
 import { ClaudeUsageRecord, UsageData, SessionData } from './types';
 import { calculateCostFromTokens } from './pricing';
 
@@ -18,27 +18,64 @@ const USER_HOME_DIR = os.homedir();
 const XDG_CONFIG_DIR = process.env.XDG_CONFIG_HOME || path.join(USER_HOME_DIR, '.config');
 const DEFAULT_CLAUDE_CONFIG_PATH = path.join(XDG_CONFIG_DIR, 'claude');
 
-// Usage data schema for validation
-const usageDataSchema = z.object({
-  timestamp: z.string(),
-  version: z.string().optional(),
-  message: z.object({
-    usage: z.object({
-      input_tokens: z.number(),
-      output_tokens: z.number(),
-      cache_creation_input_tokens: z.number().optional(),
-      cache_read_input_tokens: z.number().optional(),
-    }),
-    model: z.string().optional(),
-    id: z.string().optional(),
-    content: z.array(z.object({
-      text: z.string().optional(),
-    })).optional(),
-  }),
-  costUSD: z.number().optional(),
-  requestId: z.string().optional(),
-  isApiErrorMessage: z.boolean().optional(),
-});
+// Native file search function to replace tinyglobby
+async function findJsonlFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  
+  async function searchRecursively(currentDir: string) {
+    try {
+      const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        
+        if (entry.isDirectory()) {
+          await searchRecursively(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+          files.push(fullPath);
+        }
+      }
+    } catch (error) {
+      // Ignore permission errors and continue
+      console.warn(`Cannot read directory ${currentDir}:`, error);
+    }
+  }
+  
+  await searchRecursively(dir);
+  return files;
+}
+
+// Native validation function to replace zod
+function validateUsageRecord(data: any): data is ClaudeUsageRecord {
+  // Basic structure validation
+  if (!data || typeof data !== 'object') return false;
+  
+  // Required timestamp
+  if (typeof data.timestamp !== 'string') return false;
+  
+  // Required message with usage
+  if (!data.message || typeof data.message !== 'object') return false;
+  if (!data.message.usage || typeof data.message.usage !== 'object') return false;
+  
+  const usage = data.message.usage;
+  
+  // Required token fields must be numbers
+  if (typeof usage.input_tokens !== 'number') return false;
+  if (typeof usage.output_tokens !== 'number') return false;
+  
+  // Optional fields validation
+  if (usage.cache_creation_input_tokens !== undefined && typeof usage.cache_creation_input_tokens !== 'number') return false;
+  if (usage.cache_read_input_tokens !== undefined && typeof usage.cache_read_input_tokens !== 'number') return false;
+  
+  // Optional fields validation
+  if (data.message.model !== undefined && typeof data.message.model !== 'string') return false;
+  if (data.message.id !== undefined && typeof data.message.id !== 'string') return false;
+  if (data.costUSD !== undefined && typeof data.costUSD !== 'number') return false;
+  if (data.requestId !== undefined && typeof data.requestId !== 'string') return false;
+  if (data.isApiErrorMessage !== undefined && typeof data.isApiErrorMessage !== 'boolean') return false;
+  
+  return true;
+}
 
 export class ClaudeDataLoader {
 
@@ -106,12 +143,10 @@ export class ClaudeDataLoader {
 
       for (const claudePath of claudePaths) {
         const claudeDir = path.join(claudePath, CLAUDE_PROJECTS_DIR_NAME);
-        const files = await glob([USAGE_DATA_GLOB_PATTERN], {
-          cwd: claudeDir,
-          absolute: true,
-          onlyFiles: true,
-        });
-        allFiles.push(...files);
+        if (fs.existsSync(claudeDir)) {
+          const files = await findJsonlFiles(claudeDir);
+          allFiles.push(...files);
+        }
       }
 
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
@@ -126,13 +161,12 @@ export class ClaudeDataLoader {
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line) as unknown;
-              const result = usageDataSchema.safeParse(parsed);
               
-              if (!result.success) {
+              if (!validateUsageRecord(parsed)) {
                 continue;
               }
               
-              const data = result.data;
+              const data = parsed;
               const uniqueHash = this.createUniqueHash(data);
               
               if (uniqueHash && processedHashes.has(uniqueHash)) {
