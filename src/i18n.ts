@@ -13,6 +13,7 @@ export interface Translations {
     currentSession: string;
     today: string;
     thisMonth: string;
+    allTime: string;
     refresh: string;
     settings: string;
     totalTokens: string;
@@ -53,6 +54,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       currentSession: 'Current Session',
       today: 'Today',
       thisMonth: 'This Month',
+      allTime: 'All Time',
       refresh: 'Refresh',
       settings: 'Settings',
       totalTokens: 'Total Tokens',
@@ -91,6 +93,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       currentSession: '當前會話',
       today: '今日',
       thisMonth: '本月',
+      allTime: '所有',
       refresh: '重新整理',
       settings: '設定',
       totalTokens: '總 Token 數',
@@ -129,6 +132,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       currentSession: '当前会话',
       today: '今日',
       thisMonth: '本月',
+      allTime: '所有',
       refresh: '刷新',
       settings: '设置',
       totalTokens: '总 Token 数',
@@ -167,6 +171,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       currentSession: '現在のセッション',
       today: '今日',
       thisMonth: '今月',
+      allTime: 'すべて',
       refresh: '更新',
       settings: '設定',
       totalTokens: '総トークン数',
@@ -205,6 +210,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       currentSession: '현재 세션',
       today: '오늘',
       thisMonth: '이번 달',
+      allTime: '전체',
       refresh: '새로고침',
       settings: '설정',
       totalTokens: '총 토큰 수',

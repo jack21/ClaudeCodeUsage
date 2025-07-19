@@ -404,4 +404,33 @@ export class ClaudeDataLoader {
 
     return dailyData;
   }
+
+  static getAllTimeData(records: ClaudeUsageRecord[]): UsageData {
+    return this.calculateUsageData(records);
+  }
+
+  static getDailyDataForAllTime(records: ClaudeUsageRecord[]): { date: string; data: UsageData }[] {
+    // Group all records by month for all-time view
+    const recordsByMonth: Record<string, ClaudeUsageRecord[]> = {};
+    
+    records.forEach(record => {
+      const recordDate = new Date(record.timestamp);
+      const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+      
+      if (!recordsByMonth[monthKey]) {
+        recordsByMonth[monthKey] = [];
+      }
+      recordsByMonth[monthKey].push(record);
+    });
+    
+    // Calculate usage data for each month and sort by month (newest first)
+    const monthlyData = Object.entries(recordsByMonth)
+      .map(([month, monthRecords]) => ({
+        date: month + '-01', // Set to first day of month for date sorting
+        data: this.calculateUsageData(monthRecords)
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    
+    return monthlyData;
+  }
 }

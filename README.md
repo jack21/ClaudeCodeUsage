@@ -10,20 +10,51 @@
 
 ---
 
-A VSCode extension that monitors Claude Code usage and costs directly in your status bar.
+A comprehensive VSCode extension that monitors Claude Code usage and costs with detailed analytics and interactive visualizations.
 
-## Features
+## 🖼️ Screenshot
 
-- **Real-time Monitoring**: Display current session costs in the VSCode status bar
-- **Detailed Breakdown**: Click to view detailed usage statistics including:
-  - Current session, daily, and monthly usage
-  - Token consumption (input/output/cache)
-  - Cost breakdown by model
-  - Message count tracking
-- **Multi-language Support**: Auto-detection or manual language selection (English, 繁體中文, 简体中文, 日本語, 한국어)
-- **Configurable Refresh**: Set refresh intervals from 30 seconds to any desired frequency
-- **Auto-detection**: Automatically finds your Claude data directory
-- **Custom Themes**: Supports both light and dark VSCode themes
+### Status Bar
+
+![Status Bar Preview](images/status-bar-preview.jpg)
+
+### Dashboard
+
+![Dashboard Preview](images/dashboard-preview.jpg)
+
+## ✨ Features
+
+### 📊 Real-time Monitoring
+
+- **Status Bar Display**: Shows today's usage costs in the VSCode status bar
+- **Live Updates**: Automatic data refresh with configurable intervals (minimum 30 seconds)
+- **Zero Dependencies**: Built with native Node.js modules for maximum compatibility
+
+### 📈 Interactive Analytics Dashboard
+
+- **Multiple Time Views**: Today, This Month, and All Time perspectives
+- **Interactive Charts**: Switchable bar charts with 6 different metrics:
+  - Cost breakdown
+  - Input/Output tokens
+  - Cache creation/read tokens
+  - Message counts
+- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns
+- **Model Analysis**: Per-model cost and token consumption tracking
+
+![Dashboard Preview](images/dashboard-preview.png)
+
+### 🌐 Multi-language Support
+
+- **5 Languages**: English, 繁體中文, 简体中文, 日本語, 한국어
+- **Auto-detection**: Automatically detects system language
+- **Manual Override**: Choose your preferred language in settings
+
+### 🎨 Visual Features
+
+- **Bottom-up Charts**: Industry-standard chart orientation
+- **Monthly Trends**: All-time view shows monthly aggregated data for long-term analysis
+- **VSCode Theme Integration**: Seamless light/dark theme support
+- **Responsive Design**: Optimized for different screen sizes
 
 ## Installation
 
@@ -40,25 +71,50 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 - **Language**: Display language preference
 - **Decimal Places**: Number of decimal places for cost display
 
-## Usage
+## 🚀 Usage
 
-1. **Status Bar**: Shows current session cost with a pulse icon
-2. **Click Status Bar**: Opens detailed usage breakdown popup
-3. **Popup Tabs**: Switch between Current Session, Today, and This Month views
-4. **Manual Refresh**: Click the refresh button to update data immediately
+### Status Bar
 
-## Requirements
+- Shows **today's usage cost** with a pulse icon
+- Click to open the detailed analytics dashboard
 
-- Claude Code must be installed and running
-- VSCode 1.74.0 or later
+### Analytics Dashboard
 
-## Troubleshooting
+1. **Time Tabs**: Switch between Today, This Month, and All Time views
+2. **Chart Metrics**: Click tabs above charts to switch between:
+   - Cost breakdown
+   - Input/Output tokens
+   - Cache creation/read tokens
+   - Message counts
+3. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
+4. **Model Analysis**: Per-model usage statistics in each tab
 
-If the extension shows "No Claude Code Data":
+![Usage Flow](images/usage-flow.png)
+
+## 📋 Requirements
+
+- **Claude Code**: Must be installed and running
+- **VSCode**: Version 1.74.0 or later
+- **Node.js**: Built-in modules only (no external dependencies)
+
+## 🛠️ Troubleshooting
+
+### "No Claude Code Data" Error
 
 1. Ensure Claude Code is installed and has been used
 2. Check the data directory setting in extension preferences
-3. Verify Claude Code is generating usage logs
+3. Verify Claude Code is generating usage logs in `~/.claude/projects` or `~/.config/claude/projects`
+
+### Charts Not Updating
+
+1. Switch to a different tab and back to refresh the chart
+2. Check if the time period has actual usage data
+3. Verify cache tokens are available in your Claude usage
+
+### Performance Issues
+
+- Increase refresh interval if experiencing slowdowns
+- Extension uses 1-minute caching to minimize file I/O
 
 ## License
 

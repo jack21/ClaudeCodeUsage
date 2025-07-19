@@ -4,20 +4,47 @@
 
 ---
 
-A VSCode extension that monitors Claude Code usage and costs directly in your status bar.
+A comprehensive VSCode extension that monitors Claude Code usage and costs with detailed analytics and interactive visualizations.
 
-## Features
+## 🖼️ Screenshot
 
-- **Real-time Monitoring**: Display current session costs in the VSCode status bar
-- **Detailed Breakdown**: Click to view detailed usage statistics including:
-  - Current session, daily, and monthly usage
-  - Token consumption (input/output/cache)
-  - Cost breakdown by model
-  - Message count tracking
-- **Multi-language Support**: Auto-detection or manual language selection (English, 繁體中文, 简体中文, 日本語, 한국어)
-- **Configurable Refresh**: Set refresh intervals from 30 seconds to any desired frequency
-- **Auto-detection**: Automatically finds your Claude data directory
-- **Custom Themes**: Supports both light and dark VSCode themes
+### Status Bar
+
+![Status Bar Preview](images/status-bar-preview.jpg)
+
+### Dashboard
+
+![Dashboard Preview](images/dashboard-preview.jpg)
+
+## ✨ Features
+
+### 📊 Real-time Monitoring
+- **Status Bar Display**: Shows today's usage costs in the VSCode status bar
+- **Live Updates**: Automatic data refresh with configurable intervals (minimum 30 seconds)
+- **Zero Dependencies**: Built with native Node.js modules for maximum compatibility
+
+### 📈 Interactive Analytics Dashboard
+- **Multiple Time Views**: Today, This Month, and All Time perspectives
+- **Interactive Charts**: Switchable bar charts with 6 different metrics:
+  - Cost breakdown
+  - Input/Output tokens
+  - Cache creation/read tokens
+  - Message counts
+- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns
+- **Model Analysis**: Per-model cost and token consumption tracking
+
+![Dashboard Preview](images/dashboard-preview.png)
+
+### 🌐 Multi-language Support
+- **5 Languages**: English, 繁體中文, 简体中文, 日本語, 한국어
+- **Auto-detection**: Automatically detects system language
+- **Manual Override**: Choose your preferred language in settings
+
+### 🎨 Visual Features
+- **Bottom-up Charts**: Industry-standard chart orientation
+- **Monthly Trends**: All-time view shows monthly aggregated data for long-term analysis
+- **VSCode Theme Integration**: Seamless light/dark theme support
+- **Responsive Design**: Optimized for different screen sizes
 
 ## Installation
 
