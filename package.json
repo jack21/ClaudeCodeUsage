@@ -1,0 +1,88 @@
+{
+  "name": "claude-code-usage",
+  "displayName": "Claude Code Usage",
+  "description": "Monitor Claude Code usage and costs in VSCode status bar",
+  "version": "1.0.0",
+  "publisher": "GrowthJack",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Claude Code Usage",
+      "properties": {
+        "claudeCodeUsage.refreshInterval": {
+          "type": "number",
+          "default": 60,
+          "minimum": 30,
+          "description": "Refresh interval in seconds (minimum 30 seconds)"
+        },
+        "claudeCodeUsage.dataDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Custom Claude data directory path (leave empty for auto-detection)"
+        },
+        "claudeCodeUsage.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "zh-TW",
+            "zh-CN",
+            "ja",
+            "ko"
+          ],
+          "default": "auto",
+          "description": "Display language (auto-detection or manual selection)"
+        },
+        "claudeCodeUsage.decimalPlaces": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 4,
+          "description": "Number of decimal places for cost display"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "claudeCodeUsage.refresh",
+        "title": "Refresh Usage Data",
+        "category": "Claude Code Usage"
+      },
+      {
+        "command": "claudeCodeUsage.showDetails",
+        "title": "Show Usage Details",
+        "category": "Claude Code Usage"
+      },
+      {
+        "command": "claudeCodeUsage.openSettings",
+        "title": "Open Settings",
+        "category": "Claude Code Usage"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.102.0",
+    "@types/node": "24.0.15",
+    "@types/glob": "^9.0.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "glob": "^11.0.3",
+    "tinyglobby": "^0.2.14",
+    "zod": "^4.0.5"
+  }
+}
