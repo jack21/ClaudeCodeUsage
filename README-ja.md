@@ -10,11 +10,11 @@ Claude Code の使用量とコストを詳細な分析とインタラクティ�
 
 ### ステータスバー
 
-![ステータスバープレビュー](images/status-bar-preview.jpg)
+![ステータスバープレビュー](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
 
 ### ダッシュボード
 
-![ダッシュボードプレビュー](images/dashboard-preview.jpg)
+![ダッシュボードプレビュー](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
 
 ## ✨ 機能
 

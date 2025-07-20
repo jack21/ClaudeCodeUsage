@@ -16,11 +16,11 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
 
 ### Status Bar
 
-![Status Bar Preview](images/status-bar-preview.jpg)
+![Status Bar Preview](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
 
 ### Dashboard
 
-![Dashboard Preview](images/dashboard-preview.jpg)
+![Dashboard Preview](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
 
 ## ✨ Features
 

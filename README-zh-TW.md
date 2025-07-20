@@ -10,11 +10,11 @@
 
 ### 狀態列
 
-![狀態列預覽](images/status-bar-preview.jpg)
+![狀態列預覽](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
 
 ### 儀表板
 
-![儀表板預覽](images/dashboard-preview.jpg)
+![儀表板預覽](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
 
 ## ✨ 功能特色
 

@@ -2,18 +2,18 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GrowthJack/claude-code-usage.git"
+    "url": "https://github.com/jack21/ClaudeCodeUsage.git"
   },
   "bugs": {
-    "url": "https://github.com/GrowthJack/claude-code-usage/issues"
+    "url": "https://github.com/jack21/ClaudeCodeUsage/issues"
   },
-  "homepage": "https://github.com/GrowthJack/claude-code-usage#readme",
+  "homepage": "https://github.com/jack21/ClaudeCodeUsage",
   "keywords": [
     "claude",
     "claude-code",

@@ -10,11 +10,11 @@ Claude Code 사용량과 비용을 상세한 분석과 인터랙티브 시각화
 
 ### 상태바
 
-![상태바 미리보기](images/status-bar-preview.jpg)
+![상태바 미리보기](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
 
 ### 대시보드
 
-![대시보드 미리보기](images/dashboard-preview.jpg)
+![대시보드 미리보기](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
 
 ## ✨ 기능
 
