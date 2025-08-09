@@ -38,7 +38,9 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
   - Input/Output tokens
   - Cache creation/read tokens
   - Message counts
-- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns
+- **Hourly Breakdown**: Detailed hourly usage analysis for today and specific dates
+- **Expandable Monthly Data**: Click on any month in "All Time" to view daily breakdown
+- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns with drill-down capabilities
 - **Model Analysis**: Per-model cost and token consumption tracking
 
 ![Dashboard Preview](images/dashboard-preview.png)
@@ -86,8 +88,12 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
    - Input/Output tokens
    - Cache creation/read tokens
    - Message counts
-3. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
-4. **Model Analysis**: Per-model usage statistics in each tab
+3. **Hourly Analysis**: View hourly usage patterns in "Today" tab
+4. **Expandable Data**: 
+   - Click on daily entries in "This Month" to see hourly breakdown
+   - Click on monthly entries in "All Time" to see daily breakdown
+5. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
+6. **Model Analysis**: Per-model usage statistics in each tab
 
 ![Usage Flow](images/usage-flow.png)
 

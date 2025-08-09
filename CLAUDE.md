@@ -27,7 +27,19 @@ npm run watch
 
 # Prepare for publishing (runs compile)
 npm run vscode:prepublish
+
+# Package extension for distribution
+vsce package
+
+# Install extension locally for testing
+code --install-extension claude-code-usage-<version>.vsix
 ```
+
+## Testing and Debugging
+
+- **F5 Key**: Launch Extension Development Host in VSCode to test the extension
+- **Extension Host**: The extension runs in a separate VSCode window for debugging
+- **Console Logs**: Use VSCode Developer Tools Console to view extension logs
 
 ## Key Technical Details
 
@@ -36,6 +48,8 @@ npm run vscode:prepublish
 - **Auto-refresh**: Configurable refresh intervals (minimum 30 seconds)
 - **Token Types**: Tracks input, output, cache creation, and cache read tokens
 - **Cost Calculation**: Supports different model pricing with tier-based rates
+- **File Processing**: Native file search without external dependencies (removed tinyglobby and zod)
+- **Data Aggregation**: Processes JSONL files to calculate daily, weekly, monthly, and all-time usage statistics
 
 ## Extension Configuration
 
@@ -48,3 +62,10 @@ The extension contributes several VSCode settings under `claudeCodeUsage.*`:
 ## Build Output
 
 Compiled JavaScript files are output to the `out/` directory, which serves as the extension's entry point via `package.json`'s `main` field.
+
+## Extension Commands
+
+The extension provides three commands accessible via Command Palette:
+- `Claude Code Usage: Refresh Usage Data` - Manually refresh the usage statistics
+- `Claude Code Usage: Show Usage Details` - Open detailed usage dashboard in webview
+- `Claude Code Usage: Open Settings` - Quick access to extension configuration

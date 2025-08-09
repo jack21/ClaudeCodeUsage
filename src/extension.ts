@@ -116,7 +116,7 @@ export class ClaudeCodeUsageExtension {
       if (!dataDirectory) {
         const error = 'Claude data directory not found. Please check your configuration.';
         this.statusBar.updateUsageData(null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], error, null);
+        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
         return;
       }
 
@@ -134,7 +134,7 @@ export class ClaudeCodeUsageExtension {
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
         this.statusBar.updateUsageData(null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], error, dataDirectory);
+        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
         return;
       }
 
@@ -145,17 +145,18 @@ export class ClaudeCodeUsageExtension {
       const allTimeData = ClaudeDataLoader.getAllTimeData(records);
       const dailyDataForMonth = ClaudeDataLoader.getDailyDataForMonth(records);
       const dailyDataForAllTime = ClaudeDataLoader.getDailyDataForAllTime(records);
+      const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
 
       // Update UI
       this.statusBar.updateUsageData(todayData);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, undefined, dataDirectory);
+      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
       
       this.statusBar.updateUsageData(null, errorMessage);
-      this.webviewProvider.updateData(null, null, null, null, [], [], errorMessage, null);
+      this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
     }
   }
 

@@ -30,7 +30,9 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
   - Input/Output tokens
   - Cache creation/read tokens
   - Message counts
-- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns
+- **Hourly Breakdown**: Detailed hourly usage analysis for today and specific dates
+- **Expandable Monthly Data**: Click on any month in "All Time" to view daily breakdown
+- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns with drill-down capabilities
 - **Model Analysis**: Per-model cost and token consumption tracking
 
 ![Dashboard Preview](images/dashboard-preview.png)
@@ -61,25 +63,51 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 - **Language**: Display language preference
 - **Decimal Places**: Number of decimal places for cost display
 
-## Usage
+## 🚀 Usage
 
-1. **Status Bar**: Shows current session cost with a pulse icon
-2. **Click Status Bar**: Opens detailed usage breakdown popup
-3. **Popup Tabs**: Switch between Current Session, Today, and This Month views
-4. **Manual Refresh**: Click the refresh button to update data immediately
+### Status Bar
+- Shows **today's usage cost** with a pulse icon
+- Click to open the detailed analytics dashboard
 
-## Requirements
+### Analytics Dashboard
 
-- Claude Code must be installed and running
-- VSCode 1.74.0 or later
+1. **Time Tabs**: Switch between Today, This Month, and All Time views
+2. **Chart Metrics**: Click tabs above charts to switch between:
+   - Cost breakdown
+   - Input/Output tokens
+   - Cache creation/read tokens
+   - Message counts
+3. **Hourly Analysis**: View hourly usage patterns in "Today" tab
+4. **Expandable Data**: 
+   - Click on daily entries in "This Month" to see hourly breakdown
+   - Click on monthly entries in "All Time" to see daily breakdown
+5. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
+6. **Model Analysis**: Per-model usage statistics in each tab
 
-## Troubleshooting
+## 📋 Requirements
 
-If the extension shows "No Claude Code Data":
+- **Claude Code**: Must be installed and running
+- **VSCode**: Version 1.74.0 or later
+- **Node.js**: Built-in modules only (no external dependencies)
+
+## 🛠️ Troubleshooting
+
+### "No Claude Code Data" Error
 
 1. Ensure Claude Code is installed and has been used
 2. Check the data directory setting in extension preferences
-3. Verify Claude Code is generating usage logs
+3. Verify Claude Code is generating usage logs in `~/.claude/projects` or `~/.config/claude/projects`
+
+### Charts Not Updating
+
+1. Switch to a different tab and back to refresh the chart
+2. Check if the time period has actual usage data
+3. Verify cache tokens are available in your Claude usage
+
+### Performance Issues
+
+- Increase refresh interval if experiencing slowdowns
+- Extension uses 1-minute caching to minimize file I/O
 
 ## License
 

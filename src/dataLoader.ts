@@ -409,6 +409,39 @@ export class ClaudeDataLoader {
     return this.calculateUsageData(records);
   }
 
+  static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {
+    // monthDateString 格式為 YYYY-MM-01 (每月第一天)
+    const monthDate = new Date(monthDateString);
+    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0); // 月份的最後一天
+    
+    const monthRecords = records.filter(record => {
+      const recordDate = new Date(record.timestamp);
+      return recordDate >= monthStart && recordDate <= monthEnd;
+    });
+
+    // Group records by date
+    const recordsByDate: Record<string, ClaudeUsageRecord[]> = {};
+    
+    monthRecords.forEach(record => {
+      const recordDate = new Date(record.timestamp);
+      const dateKey = recordDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      if (!recordsByDate[dateKey]) {
+        recordsByDate[dateKey] = [];
+      }
+      recordsByDate[dateKey].push(record);
+    });
+
+    // Convert to array and sort by date
+    return Object.keys(recordsByDate)
+      .sort()
+      .map(dateKey => ({
+        date: dateKey,
+        data: this.calculateUsageData(recordsByDate[dateKey])
+      }));
+  }
+
   static getDailyDataForAllTime(records: ClaudeUsageRecord[]): { date: string; data: UsageData }[] {
     // Group all records by month for all-time view
     const recordsByMonth: Record<string, ClaudeUsageRecord[]> = {};
@@ -432,5 +465,74 @@ export class ClaudeDataLoader {
       .sort((a, b) => b.date.localeCompare(a.date));
     
     return monthlyData;
+  }
+
+  static getHourlyDataForToday(records: ClaudeUsageRecord[]): { hour: string; data: UsageData }[] {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayRecords = records.filter(record => {
+      const recordDate = new Date(record.timestamp);
+      return recordDate >= today;
+    });
+
+    // Group records by hour
+    const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
+    
+    todayRecords.forEach(record => {
+      const recordDate = new Date(record.timestamp);
+      const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
+      
+      if (!recordsByHour[hourKey]) {
+        recordsByHour[hourKey] = [];
+      }
+      recordsByHour[hourKey].push(record);
+    });
+
+    // Calculate usage data for each hour and sort by hour
+    const hourlyData = Object.entries(recordsByHour)
+      .map(([hour, hourRecords]) => ({
+        hour,
+        data: this.calculateUsageData(hourRecords)
+      }))
+      .sort((a, b) => a.hour.localeCompare(b.hour));
+
+    return hourlyData;
+  }
+
+  static getHourlyDataForDate(records: ClaudeUsageRecord[], dateString: string): { hour: string; data: UsageData }[] {
+    const targetDate = new Date(dateString);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const nextDate = new Date(targetDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    
+    const dateRecords = records.filter(record => {
+      const recordDate = new Date(record.timestamp);
+      return recordDate >= targetDate && recordDate < nextDate;
+    });
+
+    // Group records by hour
+    const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
+    
+    dateRecords.forEach(record => {
+      const recordDate = new Date(record.timestamp);
+      const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
+      
+      if (!recordsByHour[hourKey]) {
+        recordsByHour[hourKey] = [];
+      }
+      recordsByHour[hourKey].push(record);
+    });
+
+    // Calculate usage data for each hour and sort by hour
+    const hourlyData = Object.entries(recordsByHour)
+      .map(([hour, hourRecords]) => ({
+        hour,
+        data: this.calculateUsageData(hourRecords)
+      }))
+      .sort((a, b) => a.hour.localeCompare(b.hour));
+
+    return hourlyData;
   }
 }
