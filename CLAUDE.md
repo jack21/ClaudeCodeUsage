@@ -69,3 +69,15 @@ The extension provides three commands accessible via Command Palette:
 - `Claude Code Usage: Refresh Usage Data` - Manually refresh the usage statistics
 - `Claude Code Usage: Show Usage Details` - Open detailed usage dashboard in webview
 - `Claude Code Usage: Open Settings` - Quick access to extension configuration
+
+## Documentation Maintenance
+
+**IMPORTANT**: When updating README.md, you MUST simultaneously update all language versions:
+- `README.md` (main, multi-language index)
+- `README-en.md` (English)
+- `README-zh-TW.md` (繁體中文)
+- `README-zh-CN.md` (简体中文)
+- `README-ja.md` (日本語)
+- `README-ko.md` (한국어)
+
+This ensures consistency across all documentation and maintains the multi-language support that users expect.

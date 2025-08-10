@@ -10,7 +10,7 @@ export interface TokenUsage {
   cache_read_input_tokens?: number;
 }
 
-// 官方定價資料 (截至 2025-07-19)
+// 官方定價資料 (截至 2025-08-10)
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // Claude Sonnet 4
   'claude-sonnet-4-20250514': {
@@ -22,6 +22,22 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   
   // Claude Opus 4
   'claude-opus-4-20250514': {
+    input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
+    output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
+    cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)
+    cache_read_input_token_cost: 0.0000015    // $1.50 / 1M tokens
+  },
+
+  // Claude Opus 4.1 (2025-08-05 版本)
+  'claude-opus-4-1-20250805': {
+    input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
+    output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
+    cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)
+    cache_read_input_token_cost: 0.0000015    // $1.50 / 1M tokens
+  },
+  
+  // Claude Opus 4.1 (別名支援)
+  'claude-opus-4-1': {
     input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
     output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
     cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)

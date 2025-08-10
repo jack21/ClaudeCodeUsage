@@ -126,6 +126,37 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 
 MIT
 
+## 📝 Changelog
+
+### v1.0.6 (2025-08-10)
+- 🆕 Added support for Claude Opus 4.1 model pricing
+- 🔄 Updated pricing data to include `claude-opus-4-1-20250805` and `claude-opus-4-1` model IDs
+- 📊 Pricing remains the same as Opus 4 ($15/1M input, $75/1M output tokens)
+
+### v1.0.5 (2025-01)
+- ⏰ Added hourly usage statistics and visualization
+- 📈 Enhanced dashboard with hourly breakdown functionality
+- 🔧 Improved data processing for hourly aggregation
+
+### v1.0.4 (2025-01)
+- 📊 Added all-time data calculation functionality
+- 🎨 Updated UI to display all-time usage data with charts and labels
+- 🔄 Fixed data update logic to support new data structure
+- 🌐 Added "All Time" translations to multi-language support
+
+### v1.0.3 (2025-01)
+- 🔗 Updated GitHub repository URL
+- 🖼️ Fixed README image links to point to new repository location
+- 📦 Version bump and repository migration
+
+### v1.0.0 (2025-01)
+- 🎉 Initial complete release
+- 📊 Real-time Claude Code usage monitoring in status bar
+- 🌐 Multi-language support (English, 繁體中文, 简体中文, 日本語, 한국어)
+- 📈 Interactive analytics dashboard with charts and tables
+- 🎨 VSCode theme integration and responsive design
+- ⚙️ Configurable refresh intervals and settings
+
 ## Contributing
 
 Issues and pull requests are welcome on the GitHub repository.

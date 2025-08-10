@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
