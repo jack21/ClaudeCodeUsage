@@ -315,7 +315,7 @@ export class UsageWebviewProvider {
       });
       
       hourlyBreakdown = '<div class="daily-breakdown">' +
-        '<h3>每小時使用量</h3>' +
+        '<h3>' + I18n.t.popup.hourlyBreakdown + '</h3>' +
         '<div class="chart-tabs">' +
           '<button class="chart-tab active" data-metric="cost">' + cost + '</button>' +
           '<button class="chart-tab" data-metric="inputTokens">' + inputTokens + '</button>' +
@@ -1648,7 +1648,7 @@ function renderHourlyData(hourlyData, date) {
   }
   
   let html = '<div class="hourly-breakdown">';
-  html += '<h4>' + new Date(date).toLocaleDateString() + ' 每小時使用量</h4>';
+  html += '<h4>' + new Date(date).toLocaleDateString() + ' ' + I18n.t.popup.hourlyBreakdown + '</h4>';
   
   // Chart tabs
   html += '<div class="chart-tabs">';

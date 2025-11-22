@@ -26,6 +26,7 @@ export interface Translations {
     modelBreakdown: string;
     dailyBreakdown: string;
     monthlyBreakdown: string;
+    hourlyBreakdown: string;
     date: string;
     yesterday: string;
     dataDirectory: string;
@@ -68,6 +69,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       modelBreakdown: 'Model Usage',
       dailyBreakdown: 'Daily Usage',
       monthlyBreakdown: 'Monthly Usage',
+      hourlyBreakdown: 'Hourly Usage',
       date: 'Date',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
@@ -108,6 +110,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       modelBreakdown: '模型使用量',
       dailyBreakdown: '每日使用量',
       monthlyBreakdown: '每月使用量',
+      hourlyBreakdown: '每小時使用量',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
@@ -148,6 +151,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       modelBreakdown: '模型使用量',
       dailyBreakdown: '每日使用量',
       monthlyBreakdown: '每月使用量',
+      hourlyBreakdown: '每小时使用量',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '数据目录',
@@ -188,6 +192,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       modelBreakdown: 'モデル別使用量',
       dailyBreakdown: '日別使用量',
       monthlyBreakdown: '月別使用量',
+      hourlyBreakdown: '時間別使用量',
       date: '日付',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
@@ -228,6 +233,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       modelBreakdown: '모델별 사용량',
       dailyBreakdown: '일별 사용량',
       monthlyBreakdown: '월별 사용량',
+      hourlyBreakdown: '시간별 사용량',
       date: '날짜',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',
