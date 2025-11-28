@@ -1,7 +1,6 @@
-// Claude 模型定價計算
-// 基於 Anthropic 官方定價：https://docs.anthropic.com/en/docs/about-claude/pricing
+// Claude Price calculation by model
 
-import { ModelPricing } from './types';
+import { ModelPricing } from "./types";
 
 export interface TokenUsage {
   input_tokens: number;
@@ -10,55 +9,83 @@ export interface TokenUsage {
   cache_read_input_tokens?: number;
 }
 
-// 官方定價資料 (截至 2025-08-10)
+const MILL = 1_000_000;
+
+// Official Price Info (State 2025-11-28)
+// https://platform.claude.com/docs/en/about-claude/models/overview
+// https://platform.claude.com/docs/en/about-claude/pricing
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // Claude Sonnet 4
-  'claude-sonnet-4-20250514': {
-    input_cost_per_token: 0.000003,           // $3.00 / 1M tokens
-    output_cost_per_token: 0.000015,          // $15.00 / 1M tokens
-    cache_creation_input_token_cost: 0.00000375, // $3.75 / 1M tokens (5分鐘快取)
-    cache_read_input_token_cost: 0.0000003    // $0.30 / 1M tokens
+  "claude-sonnet-4-20250514": {
+    input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
+    output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
+    cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 0.3 / MILL, // $0.30 / 1M tokens
   },
-  
+
   // Claude Opus 4
-  'claude-opus-4-20250514': {
-    input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
-    output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)
-    cache_read_input_token_cost: 0.0000015    // $1.50 / 1M tokens
+  "claude-opus-4-20250514": {
+    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
+    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
+    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
   },
 
-  // Claude Opus 4.1 (2025-08-05 版本)
-  'claude-opus-4-1-20250805': {
-    input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
-    output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)
-    cache_read_input_token_cost: 0.0000015    // $1.50 / 1M tokens
-  },
-  
-  // Claude Opus 4.1 (別名支援)
-  'claude-opus-4-1': {
-    input_cost_per_token: 0.000015,           // $15.00 / 1M tokens
-    output_cost_per_token: 0.000075,          // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 0.00001875, // $18.75 / 1M tokens (5分鐘快取)
-    cache_read_input_token_cost: 0.0000015    // $1.50 / 1M tokens
+  // Claude Opus 4.1 (2025-08-05)
+  "claude-opus-4-1-20250805": {
+    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
+    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
+    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
   },
 
-  // Claude Sonnet 3.5 (向後相容)
-  'claude-3-5-sonnet-20241022': {
-    input_cost_per_token: 0.000003,
-    output_cost_per_token: 0.000015,
-    cache_creation_input_token_cost: 0.00000375,
-    cache_read_input_token_cost: 0.0000003
+  // Claude Opus 4.1 (alias)
+  "claude-opus-4-1": {
+    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
+    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
+    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
   },
 
-  // Claude Haiku 3.5 (向後相容)
-  'claude-3-5-haiku-20241022': {
-    input_cost_per_token: 0.000001,           // $1.00 / 1M tokens
-    output_cost_per_token: 0.000005,          // $5.00 / 1M tokens
-    cache_creation_input_token_cost: 0.00000125, // $1.25 / 1M tokens
-    cache_read_input_token_cost: 0.0000001    // $0.10 / 1M tokens
-  }
+  // Claude Opus 4.5 (2025-11 v01)
+  "claude-opus-4-5-20251101": {
+    input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
+    output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
+    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
+  },
+
+  // Claude Opus 4.5 (alias)
+  "claude-opus-4-5": {
+    input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
+    output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
+    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
+  },
+
+  // Claude Sonnet 3.5 (2024-10-22)
+  "claude-3-5-sonnet-20241022": {
+    input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
+    output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
+    cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
+    cache_read_input_token_cost: 0.3 / MILL, // $0.30 / 1M tokens
+  },
+
+  // Claude Haiku 3.5 (Not used anymore)
+  "claude-3-5-haiku-20241022": {
+    input_cost_per_token: 0.8 / MILL, // $0.8 / 1M tokens
+    output_cost_per_token: 4 / MILL, // $4.00 / 1M tokens
+    cache_creation_input_token_cost: 1.6 / MILL, // $1.6 / 1M tokens
+    cache_read_input_token_cost: 0.08 / MILL, // $0.08 / 1M tokens
+  },
+
+  // Claude Haiku 4.5 (2025-10 v01)
+  "claude-haiku-4-5-20251001": {
+    input_cost_per_token: 1 / MILL, // $1.00 / 1M tokens
+    output_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
+    cache_creation_input_token_cost: 1.25 / MILL, // $1.25 / 1M tokens
+    cache_read_input_token_cost: 0.1 / MILL, // $0.10 / 1M tokens
+  },
 };
 
 /**
@@ -66,7 +93,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
  * @param modelName 模型名稱
  * @returns 定價資訊，如果找不到則返回 null
  */
-export function getModelPricing(modelName: string | undefined): ModelPricing | null {
+export function getModelPricing(
+  modelName: string | undefined,
+): ModelPricing | null {
   if (!modelName) {
     return null;
   }
@@ -92,8 +121,10 @@ export function getModelPricing(modelName: string | undefined): ModelPricing | n
   }
 
   // 如果是未知模型，使用 Sonnet 4 的定價作為預設值
-  console.warn(`Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`);
-  return MODEL_PRICING['claude-sonnet-4-20250514'];
+  console.warn(
+    `Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`,
+  );
+  return MODEL_PRICING["claude-sonnet-4-20250514"];
 }
 
 /**
@@ -102,7 +133,10 @@ export function getModelPricing(modelName: string | undefined): ModelPricing | n
  * @param pricing 定價資訊
  * @returns 總成本 (USD)
  */
-export function calculateCostFromPricing(tokens: TokenUsage, pricing: ModelPricing): number {
+export function calculateCostFromPricing(
+  tokens: TokenUsage,
+  pricing: ModelPricing,
+): number {
   let cost = 0;
 
   // 輸入 tokens 成本
@@ -116,13 +150,22 @@ export function calculateCostFromPricing(tokens: TokenUsage, pricing: ModelPrici
   }
 
   // 快取建立 tokens 成本
-  if (tokens.cache_creation_input_tokens != null && pricing.cache_creation_input_token_cost != null) {
-    cost += tokens.cache_creation_input_tokens * pricing.cache_creation_input_token_cost;
+  if (
+    tokens.cache_creation_input_tokens != null &&
+    pricing.cache_creation_input_token_cost != null
+  ) {
+    cost +=
+      tokens.cache_creation_input_tokens *
+      pricing.cache_creation_input_token_cost;
   }
 
   // 快取讀取 tokens 成本
-  if (tokens.cache_read_input_tokens != null && pricing.cache_read_input_token_cost != null) {
-    cost += tokens.cache_read_input_tokens * pricing.cache_read_input_token_cost;
+  if (
+    tokens.cache_read_input_tokens != null &&
+    pricing.cache_read_input_token_cost != null
+  ) {
+    cost +=
+      tokens.cache_read_input_tokens * pricing.cache_read_input_token_cost;
   }
 
   return cost;
@@ -134,12 +177,15 @@ export function calculateCostFromPricing(tokens: TokenUsage, pricing: ModelPrici
  * @param modelName 模型名稱
  * @returns 總成本 (USD)，如果找不到定價則返回 0
  */
-export function calculateCostFromTokens(tokens: TokenUsage, modelName: string | undefined): number {
+export function calculateCostFromTokens(
+  tokens: TokenUsage,
+  modelName: string | undefined,
+): number {
   const pricing = getModelPricing(modelName);
-  
+
   if (!pricing) {
     return 0;
   }
-  
+
   return calculateCostFromPricing(tokens, pricing);
 }
