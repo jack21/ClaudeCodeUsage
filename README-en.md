@@ -19,11 +19,13 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
 ## ✨ Features
 
 ### 📊 Real-time Monitoring
+
 - **Status Bar Display**: Shows today's usage costs in the VSCode status bar
 - **Live Updates**: Automatic data refresh with configurable intervals (minimum 30 seconds)
 - **Zero Dependencies**: Built with native Node.js modules for maximum compatibility
 
 ### 📈 Interactive Analytics Dashboard
+
 - **Multiple Time Views**: Today, This Month, and All Time perspectives
 - **Interactive Charts**: Switchable bar charts with 6 different metrics:
   - Cost breakdown
@@ -38,11 +40,13 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
 ![Dashboard Preview](images/dashboard-preview.png)
 
 ### 🌐 Multi-language Support
+
 - **5 Languages**: English, 繁體中文, 简体中文, 日本語, 한국어
 - **Auto-detection**: Automatically detects system language
 - **Manual Override**: Choose your preferred language in settings
 
 ### 🎨 Visual Features
+
 - **Bottom-up Charts**: Industry-standard chart orientation
 - **Monthly Trends**: All-time view shows monthly aggregated data for long-term analysis
 - **VSCode Theme Integration**: Seamless light/dark theme support
@@ -51,9 +55,11 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
 ## 📥 Download
 
 ### VSCode Marketplace
+
 [![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
 
 ### Open VSX Registry (for Cursor / Windsurf / Antigravity)
+
 [![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
 
 ## Installation
@@ -74,6 +80,7 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 ## 🚀 Usage
 
 ### Status Bar
+
 - Shows **today's usage cost** with a pulse icon
 - Click to open the detailed analytics dashboard
 
@@ -128,6 +135,8 @@ MIT
 - 📝 Converted all code comments from Traditional Chinese to English
 - 🌍 Improved code internationalization standards
 - 🔧 Enhanced code readability and maintainability
+- 💰 Fixed pricing table with new Opus 4.5 / Haiku 4.5 prices (thanks to [@mxzinke](https://github.com/mxzinke))
+- 🇩🇪 Added German (de-DE) translation support (thanks to [@mxzinke](https://github.com/mxzinke))
 
 ### v1.0.7 (2025-11-28)
 
@@ -136,27 +145,32 @@ MIT
 - ✨ Ensured multilingual consistency across user interface (English, Traditional Chinese, Simplified Chinese, Japanese, Korean)
 
 ### v1.0.6 (2025-08-10)
+
 - 🆕 Added support for Claude Opus 4.1 model pricing
 - 🔄 Updated pricing data to include `claude-opus-4-1-20250805` and `claude-opus-4-1` model IDs
 - 📊 Pricing remains the same as Opus 4 ($15/1M input, $75/1M output tokens)
 
 ### v1.0.5 (2025-01)
+
 - ⏰ Added hourly usage statistics and visualization
 - 📈 Enhanced dashboard with hourly breakdown functionality
 - 🔧 Improved data processing for hourly aggregation
 
 ### v1.0.4 (2025-01)
+
 - 📊 Added all-time data calculation functionality
 - 🎨 Updated UI to display all-time usage data with charts and labels
 - 🔄 Fixed data update logic to support new data structure
 - 🌐 Added "All Time" translations to multi-language support
 
 ### v1.0.3 (2025-01)
+
 - 🔗 Updated GitHub repository URL
 - 🖼️ Fixed README image links to point to new repository location
 - 📦 Version bump and repository migration
 
 ### v1.0.0 (2025-01)
+
 - 🎉 Initial complete release
 - 📊 Real-time Claude Code usage monitoring in status bar
 - 🌐 Multi-language support (English, 繁體中文, 简体中文, 日本語, 한국어)

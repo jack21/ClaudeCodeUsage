@@ -55,9 +55,11 @@
 ## 📥 下載
 
 ### VSCode Marketplace
+
 [![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
 
 ### Open VSX Registry（適用於 Cursor / Windsurf / Antigravity）
+
 [![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
 
 ## 安裝
@@ -135,6 +137,8 @@ MIT
 - 📝 將所有程式碼註解從繁體中文改為英文
 - 🌍 提升程式碼的國際化標準
 - 🔧 優化程式碼可讀性與維護性
+- 💰 修正定價表，加入新的 Opus 4.5 / Haiku 4.5 價格（感謝 [@mxzinke](https://github.com/mxzinke)）
+- 🇩🇪 新增德語（de-DE）翻譯支援（感謝 [@mxzinke](https://github.com/mxzinke)）
 
 ### v1.0.7 (2025-11-28)
 

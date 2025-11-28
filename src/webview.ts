@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { UsageData, SessionData } from './types';
 import { I18n } from './i18n';
+import { SessionData, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -21,12 +21,7 @@ export class UsageWebviewProvider {
   constructor(private context: vscode.ExtensionContext) {}
 
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   show(): void {
@@ -35,21 +30,16 @@ export class UsageWebviewProvider {
       return;
     }
 
-    this.panel = vscode.window.createWebviewPanel(
-      'claudeCodeUsage',
-      I18n.t.popup.title,
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true
-      }
-    );
+    this.panel = vscode.window.createWebviewPanel('claudeCodeUsage', I18n.t.popup.title, vscode.ViewColumn.One, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    });
 
     this.panel.onDidDispose(() => {
       this.panel = undefined;
     });
 
-    this.panel.webview.onDidReceiveMessage(async message => {
+    this.panel.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
         case 'refresh':
           vscode.commands.executeCommand('claudeCodeUsage.refresh');
@@ -71,7 +61,7 @@ export class UsageWebviewProvider {
             this.panel.webview.postMessage({
               command: 'hourlyDataResponse',
               date: dateString,
-              data: hourlyData
+              data: hourlyData,
             });
           }
           break;
@@ -86,7 +76,7 @@ export class UsageWebviewProvider {
             this.panel.webview.postMessage({
               command: 'dailyDataResponse',
               month: monthString,
-              data: dailyData
+              data: dailyData,
             });
           }
           break;
@@ -242,47 +232,85 @@ export class UsageWebviewProvider {
     const monthActive = this.currentTab === 'month' ? 'active' : '';
     const allActive = this.currentTab === 'all' ? 'active' : '';
 
-    return `
+    return (
+      `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-        <title>` + title + `</title>
-        <style>` + this.getStyles() + `</style>
+        <title>` +
+      title +
+      `</title>
+        <style>` +
+      this.getStyles() +
+      `</style>
       </head>
       <body>
         <div class="container">
           <header>
-            <h1>` + title + `</h1>
+            <h1>` +
+      title +
+      `</h1>
             <div class="actions">
-              <button onclick="refresh()" class="btn-secondary">` + refresh + `</button>
-              <button onclick="openSettings()" class="btn-secondary">` + settings + `</button>
+              <button onclick="refresh()" class="btn-secondary">` +
+      refresh +
+      `</button>
+              <button onclick="openSettings()" class="btn-secondary">` +
+      settings +
+      `</button>
             </div>
           </header>
 
           <div class="tabs">
-            <button id="tab-today" class="tab ` + todayActive + `" onclick="showTab('today')">` + today + `</button>
-            <button id="tab-month" class="tab ` + monthActive + `" onclick="showTab('month')">` + thisMonth + `</button>
-            <button id="tab-all" class="tab ` + allActive + `" onclick="showTab('all')">` + allTime + `</button>
+            <button id="tab-today" class="tab ` +
+      todayActive +
+      `" onclick="showTab('today')">` +
+      today +
+      `</button>
+            <button id="tab-month" class="tab ` +
+      monthActive +
+      `" onclick="showTab('month')">` +
+      thisMonth +
+      `</button>
+            <button id="tab-all" class="tab ` +
+      allActive +
+      `" onclick="showTab('all')">` +
+      allTime +
+      `</button>
           </div>
 
-          <div id="today" class="tab-content ` + todayActive + `">
-            ` + this.renderTodayData() + `
+          <div id="today" class="tab-content ` +
+      todayActive +
+      `">
+            ` +
+      this.renderTodayData() +
+      `
           </div>
 
-          <div id="month" class="tab-content ` + monthActive + `">
-            ` + this.renderMonthData() + `
+          <div id="month" class="tab-content ` +
+      monthActive +
+      `">
+            ` +
+      this.renderMonthData() +
+      `
           </div>
 
-          <div id="all" class="tab-content ` + allActive + `">
-            ` + this.renderAllTimeData() + `
+          <div id="all" class="tab-content ` +
+      allActive +
+      `">
+            ` +
+      this.renderAllTimeData() +
+      `
           </div>
         </div>
-        <script>` + this.getScript() + `</script>
+        <script>` +
+      this.getScript() +
+      `</script>
       </body>
       </html>
-    `;
+    `
+    );
   }
 
   private renderTodayData(): string {
@@ -303,49 +331,93 @@ export class UsageWebviewProvider {
 
       let hourlyRows = '';
       this.hourlyDataForToday.forEach(({ hour, data }) => {
-        hourlyRows += '<tr>' +
-          '<td class="date-cell">' + hour + '</td>' +
-          '<td class="cost-cell">' + I18n.formatCurrency(data.totalCost) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(data.totalInputTokens) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(data.totalOutputTokens) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(data.totalCacheCreationTokens) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(data.totalCacheReadTokens) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(data.messageCount) + '</td>' +
-        '</tr>';
+        hourlyRows +=
+          '<tr>' +
+          '<td class="date-cell">' +
+          hour +
+          '</td>' +
+          '<td class="cost-cell">' +
+          I18n.formatCurrency(data.totalCost) +
+          '</td>' +
+          '<td class="number-cell">' +
+          I18n.formatNumber(data.totalInputTokens) +
+          '</td>' +
+          '<td class="number-cell">' +
+          I18n.formatNumber(data.totalOutputTokens) +
+          '</td>' +
+          '<td class="number-cell">' +
+          I18n.formatNumber(data.totalCacheCreationTokens) +
+          '</td>' +
+          '<td class="number-cell">' +
+          I18n.formatNumber(data.totalCacheReadTokens) +
+          '</td>' +
+          '<td class="number-cell">' +
+          I18n.formatNumber(data.messageCount) +
+          '</td>' +
+          '</tr>';
       });
 
-      hourlyBreakdown = '<div class="daily-breakdown">' +
-        '<h3>' + I18n.t.popup.hourlyBreakdown + '</h3>' +
+      hourlyBreakdown =
+        '<div class="daily-breakdown">' +
+        '<h3>' +
+        I18n.t.popup.hourlyBreakdown +
+        '</h3>' +
         '<div class="chart-tabs">' +
-          '<button class="chart-tab active" data-metric="cost">' + cost + '</button>' +
-          '<button class="chart-tab" data-metric="inputTokens">' + inputTokens + '</button>' +
-          '<button class="chart-tab" data-metric="outputTokens">' + outputTokens + '</button>' +
-          '<button class="chart-tab" data-metric="cacheCreation">' + cacheCreation + '</button>' +
-          '<button class="chart-tab" data-metric="cacheRead">' + cacheRead + '</button>' +
-          '<button class="chart-tab" data-metric="messages">' + messages + '</button>' +
+        '<button class="chart-tab active" data-metric="cost">' +
+        cost +
+        '</button>' +
+        '<button class="chart-tab" data-metric="inputTokens">' +
+        inputTokens +
+        '</button>' +
+        '<button class="chart-tab" data-metric="outputTokens">' +
+        outputTokens +
+        '</button>' +
+        '<button class="chart-tab" data-metric="cacheCreation">' +
+        cacheCreation +
+        '</button>' +
+        '<button class="chart-tab" data-metric="cacheRead">' +
+        cacheRead +
+        '</button>' +
+        '<button class="chart-tab" data-metric="messages">' +
+        messages +
+        '</button>' +
         '</div>' +
         '<div class="chart-container">' +
-          '<div class="chart-content" id="hourlyChart">' +
-            this.renderHourlyChart() +
-          '</div>' +
+        '<div class="chart-content" id="hourlyChart">' +
+        this.renderHourlyChart() +
+        '</div>' +
         '</div>' +
         '<div class="daily-table-container">' +
-          '<table class="daily-table">' +
-            '<thead>' +
-              '<tr>' +
-                '<th>時間</th>' +
-                '<th>' + cost + '</th>' +
-                '<th>' + inputTokens + '</th>' +
-                '<th>' + outputTokens + '</th>' +
-                '<th>' + cacheCreation + '</th>' +
-                '<th>' + cacheRead + '</th>' +
-                '<th>' + messages + '</th>' +
-              '</tr>' +
-            '</thead>' +
-            '<tbody>' + hourlyRows + '</tbody>' +
-          '</table>' +
+        '<table class="daily-table">' +
+        '<thead>' +
+        '<tr>' +
+        '<th>時間</th>' +
+        '<th>' +
+        cost +
+        '</th>' +
+        '<th>' +
+        inputTokens +
+        '</th>' +
+        '<th>' +
+        outputTokens +
+        '</th>' +
+        '<th>' +
+        cacheCreation +
+        '</th>' +
+        '<th>' +
+        cacheRead +
+        '</th>' +
+        '<th>' +
+        messages +
+        '</th>' +
+        '</tr>' +
+        '</thead>' +
+        '<tbody>' +
+        hourlyRows +
+        '</tbody>' +
+        '</table>' +
         '</div>' +
-      '</div>';
+        '</div>';
     }
 
     return todaySummary + hourlyBreakdown;
@@ -364,54 +436,102 @@ export class UsageWebviewProvider {
     const cacheRead = I18n.t.popup.cacheRead;
     const modelBreakdown = I18n.t.popup.modelBreakdown;
 
-    let html = '<div class="usage-summary">' +
+    let html =
+      '<div class="usage-summary">' +
       '<div class="summary-grid">' +
-        '<div class="summary-item">' +
-          '<div class="label">' + cost + '</div>' +
-          '<div class="value cost">' + I18n.formatCurrency(data.totalCost) + '</div>' +
-        '</div>' +
-        '<div class="summary-item">' +
-          '<div class="label">' + messages + '</div>' +
-          '<div class="value">' + I18n.formatNumber(data.messageCount) + '</div>' +
-        '</div>' +
-        '<div class="summary-item">' +
-          '<div class="label">' + inputTokens + '</div>' +
-          '<div class="value">' + I18n.formatNumber(data.totalInputTokens) + '</div>' +
-        '</div>' +
-        '<div class="summary-item">' +
-          '<div class="label">' + outputTokens + '</div>' +
-          '<div class="value">' + I18n.formatNumber(data.totalOutputTokens) + '</div>' +
-        '</div>' +
-        '<div class="summary-item">' +
-          '<div class="label">' + cacheCreation + '</div>' +
-          '<div class="value">' + I18n.formatNumber(data.totalCacheCreationTokens) + '</div>' +
-        '</div>' +
-        '<div class="summary-item">' +
-          '<div class="label">' + cacheRead + '</div>' +
-          '<div class="value">' + I18n.formatNumber(data.totalCacheReadTokens) + '</div>' +
-        '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      cost +
       '</div>' +
-    '</div>';
+      '<div class="value cost">' +
+      I18n.formatCurrency(data.totalCost) +
+      '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      messages +
+      '</div>' +
+      '<div class="value">' +
+      I18n.formatNumber(data.messageCount) +
+      '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      inputTokens +
+      '</div>' +
+      '<div class="value">' +
+      I18n.formatNumber(data.totalInputTokens) +
+      '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      outputTokens +
+      '</div>' +
+      '<div class="value">' +
+      I18n.formatNumber(data.totalOutputTokens) +
+      '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      cacheCreation +
+      '</div>' +
+      '<div class="value">' +
+      I18n.formatNumber(data.totalCacheCreationTokens) +
+      '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      cacheRead +
+      '</div>' +
+      '<div class="value">' +
+      I18n.formatNumber(data.totalCacheReadTokens) +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
 
     if (Object.keys(data.modelBreakdown).length > 0) {
-      html += '<div class="model-breakdown">' +
-        '<h3>' + modelBreakdown + '</h3>' +
-        '<div class="model-list">';
+      html += '<div class="model-breakdown">' + '<h3>' + modelBreakdown + '</h3>' + '<div class="model-list">';
 
       Object.entries(data.modelBreakdown).forEach(([model, modelData]) => {
-        html += '<div class="model-item">' +
+        html +=
+          '<div class="model-item">' +
           '<div class="model-header">' +
-            '<span class="model-name">' + this.escapeHtml(model) + '</span>' +
-            '<span class="model-cost">' + I18n.formatCurrency(modelData.cost) + '</span>' +
+          '<span class="model-name">' +
+          this.escapeHtml(model) +
+          '</span>' +
+          '<span class="model-cost">' +
+          I18n.formatCurrency(modelData.cost) +
+          '</span>' +
           '</div>' +
           '<div class="model-details">' +
-            '<span>' + inputTokens + ': ' + I18n.formatNumber(modelData.inputTokens) + '</span>' +
-            '<span>' + outputTokens + ': ' + I18n.formatNumber(modelData.outputTokens) + '</span>' +
-            '<span>' + cacheCreation + ': ' + I18n.formatNumber(modelData.cacheCreationTokens) + '</span>' +
-            '<span>' + cacheRead + ': ' + I18n.formatNumber(modelData.cacheReadTokens) + '</span>' +
-            '<span>' + messages + ': ' + I18n.formatNumber(modelData.count) + '</span>' +
+          '<span>' +
+          inputTokens +
+          ': ' +
+          I18n.formatNumber(modelData.inputTokens) +
+          '</span>' +
+          '<span>' +
+          outputTokens +
+          ': ' +
+          I18n.formatNumber(modelData.outputTokens) +
+          '</span>' +
+          '<span>' +
+          cacheCreation +
+          ': ' +
+          I18n.formatNumber(modelData.cacheCreationTokens) +
+          '</span>' +
+          '<span>' +
+          cacheRead +
+          ': ' +
+          I18n.formatNumber(modelData.cacheReadTokens) +
+          '</span>' +
+          '<span>' +
+          messages +
+          ': ' +
+          I18n.formatNumber(modelData.count) +
+          '</span>' +
           '</div>' +
-        '</div>';
+          '</div>';
       });
 
       html += '</div></div>';
@@ -427,7 +547,9 @@ export class UsageWebviewProvider {
 
     const monthSummary = this.renderUsageData(this.monthData);
 
-    const dailyBreakdown = this.dailyDataForMonth.length > 0 ? `
+    const dailyBreakdown =
+      this.dailyDataForMonth.length > 0
+        ? `
       <div class="daily-breakdown">
         <h3>${I18n.t.popup.dailyBreakdown}</h3>
 
@@ -463,7 +585,9 @@ export class UsageWebviewProvider {
               </tr>
             </thead>
             <tbody>
-              ${this.dailyDataForMonth.map(({ date, data }) => `
+              ${this.dailyDataForMonth
+                .map(
+                  ({ date, data }) => `
                 <tr class="daily-row" data-date="${date}">
                   <td class="date-cell">${this.formatDate(date)}</td>
                   <td class="cost-cell">${I18n.formatCurrency(data.totalCost)}</td>
@@ -487,12 +611,15 @@ export class UsageWebviewProvider {
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join('')}
             </tbody>
           </table>
         </div>
       </div>
-    ` : '';
+    `
+        : '';
 
     return monthSummary + dailyBreakdown;
   }
@@ -504,7 +631,9 @@ export class UsageWebviewProvider {
 
     const allTimeSummary = this.renderUsageData(this.allTimeData);
 
-    const dailyBreakdown = this.dailyDataForAllTime.length > 0 ? `
+    const dailyBreakdown =
+      this.dailyDataForAllTime.length > 0
+        ? `
       <div class="daily-breakdown">
         <h3>${I18n.t.popup.monthlyBreakdown}</h3>
 
@@ -540,7 +669,9 @@ export class UsageWebviewProvider {
               </tr>
             </thead>
             <tbody>
-              ${this.dailyDataForAllTime.map(({ date, data }) => `
+              ${this.dailyDataForAllTime
+                .map(
+                  ({ date, data }) => `
                 <tr class="daily-row" data-date="${date}">
                   <td class="date-cell">${this.formatDate(date)}</td>
                   <td class="cost-cell">${I18n.formatCurrency(data.totalCost)}</td>
@@ -564,12 +695,15 @@ export class UsageWebviewProvider {
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join('')}
             </tbody>
           </table>
         </div>
       </div>
-    ` : '';
+    `
+        : '';
 
     return allTimeSummary + dailyBreakdown;
   }
@@ -583,14 +717,15 @@ export class UsageWebviewProvider {
     const sortedData = [...this.dailyDataForMonth].sort((a, b) => a.date.localeCompare(b.date));
 
     // Generate chart bars for cost (default metric)
-    const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
+    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
 
     return `
       <div class="chart-bars">
-        ${sortedData.map(({ date, data }) => {
-          const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
-          return `
+        ${sortedData
+          .map(({ date, data }) => {
+            const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
+            return `
             <div class="chart-bar-container" data-date="${date}">
               <div class="chart-bar cost-bar clickable"
                    style="height: ${height}px;"
@@ -605,7 +740,8 @@ export class UsageWebviewProvider {
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
           `;
-        }).join('')}
+          })
+          .join('')}
       </div>
     `;
   }
@@ -619,14 +755,15 @@ export class UsageWebviewProvider {
     const sortedData = [...this.dailyDataForAllTime].sort((a, b) => a.date.localeCompare(b.date));
 
     // Generate chart bars for cost (default metric)
-    const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
+    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
 
     return `
       <div class="chart-bars">
-        ${sortedData.map(({ date, data }) => {
-          const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
-          return `
+        ${sortedData
+          .map(({ date, data }) => {
+            const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
+            return `
             <div class="chart-bar-container" data-date="${date}">
               <div class="chart-bar cost-bar clickable"
                    style="height: ${height}px;"
@@ -641,7 +778,8 @@ export class UsageWebviewProvider {
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
           `;
-        }).join('')}
+          })
+          .join('')}
       </div>
     `;
   }
@@ -655,14 +793,15 @@ export class UsageWebviewProvider {
     const sortedData = [...this.hourlyDataForToday].sort((a, b) => a.hour.localeCompare(b.hour));
 
     // Generate chart bars for cost (default metric)
-    const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
+    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
 
     return `
       <div class="chart-bars">
-        ${sortedData.map(({ hour, data }) => {
-          const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
-          return `
+        ${sortedData
+          .map(({ hour, data }) => {
+            const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
+            return `
             <div class="chart-bar-container" data-hour="${hour}">
               <div class="chart-bar cost-bar"
                    style="height: ${height}px;"
@@ -677,7 +816,8 @@ export class UsageWebviewProvider {
               <div class="chart-label">${hour}</div>
             </div>
           `;
-        }).join('')}
+          })
+          .join('')}
       </div>
     `;
   }
@@ -705,7 +845,6 @@ export class UsageWebviewProvider {
     // Standard date formatting for daily data
     return date.toLocaleDateString();
   }
-
 
   private getStyles(): string {
     return `

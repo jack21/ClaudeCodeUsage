@@ -1,11 +1,11 @@
-import { readFile } from 'node:fs/promises';
 import * as fs from 'fs';
-import * as path from 'path';
+import { readFile } from 'node:fs/promises';
 import * as os from 'os';
+import * as path from 'path';
 // Removed tinyglobby dependency - using native fs instead
 // Removed zod dependency - using native validation instead
-import { ClaudeUsageRecord, UsageData, SessionData } from './types';
 import { calculateCostFromTokens } from './pricing';
+import { ClaudeUsageRecord, SessionData, UsageData } from './types';
 
 // Constants
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
@@ -78,7 +78,6 @@ function validateUsageRecord(data: any): data is ClaudeUsageRecord {
 }
 
 export class ClaudeDataLoader {
-
   static getClaudePaths(): string[] {
     const paths: string[] = [];
     const normalizedPaths = new Set<string>();
@@ -86,7 +85,10 @@ export class ClaudeDataLoader {
     // Check environment variable first (supports comma-separated paths)
     const envPaths = (process.env[CLAUDE_CONFIG_DIR_ENV] ?? '').trim();
     if (envPaths !== '') {
-      const envPathList = envPaths.split(',').map(p => p.trim()).filter(p => p !== '');
+      const envPathList = envPaths
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p !== '');
       for (const envPath of envPathList) {
         const normalizedPath = path.resolve(envPath);
         if (fs.existsSync(normalizedPath) && fs.statSync(normalizedPath).isDirectory()) {
@@ -102,10 +104,7 @@ export class ClaudeDataLoader {
     }
 
     // Add default paths if they exist
-    const defaultPaths = [
-      DEFAULT_CLAUDE_CONFIG_PATH,
-      path.join(USER_HOME_DIR, DEFAULT_CLAUDE_CODE_PATH),
-    ];
+    const defaultPaths = [DEFAULT_CLAUDE_CONFIG_PATH, path.join(USER_HOME_DIR, DEFAULT_CLAUDE_CODE_PATH)];
 
     for (const defaultPath of defaultPaths) {
       const normalizedPath = path.resolve(defaultPath);
@@ -156,7 +155,10 @@ export class ClaudeDataLoader {
       for (const file of sortedFiles) {
         try {
           const content = await readFile(file, 'utf-8');
-          const lines = content.trim().split('\n').filter(line => line.trim() !== '');
+          const lines = content
+            .trim()
+            .split('\n')
+            .filter((line) => line.trim() !== '');
 
           for (const line of lines) {
             try {
@@ -243,11 +245,8 @@ export class ClaudeDataLoader {
       })
     );
 
-    return filesWithTimestamps
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
-      .map(item => item.file);
+    return filesWithTimestamps.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()).map((item) => item.file);
   }
-
 
   static calculateUsageData(records: ClaudeUsageRecord[]): UsageData {
     const data: UsageData = {
@@ -257,7 +256,7 @@ export class ClaudeDataLoader {
       totalCacheReadTokens: 0,
       totalCost: 0,
       messageCount: 0,
-      modelBreakdown: {}
+      modelBreakdown: {},
     };
 
     for (const record of records) {
@@ -275,10 +274,7 @@ export class ClaudeDataLoader {
       }
 
       // Skip records where all tokens are 0
-      const tokenSum = usage.input_tokens +
-                      usage.output_tokens +
-                      (usage.cache_creation_input_tokens || 0) +
-                      (usage.cache_read_input_tokens || 0);
+      const tokenSum = usage.input_tokens + usage.output_tokens + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
       if (tokenSum === 0) {
         continue;
       }
@@ -300,7 +296,7 @@ export class ClaudeDataLoader {
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
           cost: 0,
-          count: 0
+          count: 0,
         };
       }
 
@@ -322,12 +318,10 @@ export class ClaudeDataLoader {
     }
 
     // Sort records by timestamp
-    const sortedRecords = records.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    const sortedRecords = records.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     const now = new Date();
-    const sessionRecords = sortedRecords.filter(record => {
+    const sessionRecords = sortedRecords.filter((record) => {
       const recordTime = new Date(record.timestamp);
       const timeDiff = now.getTime() - recordTime.getTime();
       return timeDiff <= 5 * 60 * 60 * 1000; // 5 hours in milliseconds
@@ -344,7 +338,7 @@ export class ClaudeDataLoader {
     return {
       ...usageData,
       sessionStart,
-      sessionEnd
+      sessionEnd,
     };
   }
 
@@ -352,7 +346,7 @@ export class ClaudeDataLoader {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayRecords = records.filter(record => {
+    const todayRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= today;
     });
@@ -364,7 +358,7 @@ export class ClaudeDataLoader {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthRecords = records.filter(record => {
+    const monthRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart;
     });
@@ -376,7 +370,7 @@ export class ClaudeDataLoader {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthRecords = records.filter(record => {
+    const monthRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart;
     });
@@ -384,7 +378,7 @@ export class ClaudeDataLoader {
     // Group records by date
     const recordsByDate: Record<string, ClaudeUsageRecord[]> = {};
 
-    monthRecords.forEach(record => {
+    monthRecords.forEach((record) => {
       const recordDate = new Date(record.timestamp);
       const dateKey = recordDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -398,7 +392,7 @@ export class ClaudeDataLoader {
     const dailyData = Object.entries(recordsByDate)
       .map(([date, dayRecords]) => ({
         date,
-        data: this.calculateUsageData(dayRecords)
+        data: this.calculateUsageData(dayRecords),
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -415,7 +409,7 @@ export class ClaudeDataLoader {
     const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
     const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0); // Last day of the month
 
-    const monthRecords = records.filter(record => {
+    const monthRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart && recordDate <= monthEnd;
     });
@@ -423,7 +417,7 @@ export class ClaudeDataLoader {
     // Group records by date
     const recordsByDate: Record<string, ClaudeUsageRecord[]> = {};
 
-    monthRecords.forEach(record => {
+    monthRecords.forEach((record) => {
       const recordDate = new Date(record.timestamp);
       const dateKey = recordDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -436,9 +430,9 @@ export class ClaudeDataLoader {
     // Convert to array and sort by date
     return Object.keys(recordsByDate)
       .sort()
-      .map(dateKey => ({
+      .map((dateKey) => ({
         date: dateKey,
-        data: this.calculateUsageData(recordsByDate[dateKey])
+        data: this.calculateUsageData(recordsByDate[dateKey]),
       }));
   }
 
@@ -446,7 +440,7 @@ export class ClaudeDataLoader {
     // Group all records by month for all-time view
     const recordsByMonth: Record<string, ClaudeUsageRecord[]> = {};
 
-    records.forEach(record => {
+    records.forEach((record) => {
       const recordDate = new Date(record.timestamp);
       const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
 
@@ -460,7 +454,7 @@ export class ClaudeDataLoader {
     const monthlyData = Object.entries(recordsByMonth)
       .map(([month, monthRecords]) => ({
         date: month + '-01', // Set to first day of month for date sorting
-        data: this.calculateUsageData(monthRecords)
+        data: this.calculateUsageData(monthRecords),
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -471,7 +465,7 @@ export class ClaudeDataLoader {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayRecords = records.filter(record => {
+    const todayRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= today;
     });
@@ -479,7 +473,7 @@ export class ClaudeDataLoader {
     // Group records by hour
     const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
 
-    todayRecords.forEach(record => {
+    todayRecords.forEach((record) => {
       const recordDate = new Date(record.timestamp);
       const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
 
@@ -493,7 +487,7 @@ export class ClaudeDataLoader {
     const hourlyData = Object.entries(recordsByHour)
       .map(([hour, hourRecords]) => ({
         hour,
-        data: this.calculateUsageData(hourRecords)
+        data: this.calculateUsageData(hourRecords),
       }))
       .sort((a, b) => a.hour.localeCompare(b.hour));
 
@@ -507,7 +501,7 @@ export class ClaudeDataLoader {
     const nextDate = new Date(targetDate);
     nextDate.setDate(nextDate.getDate() + 1);
 
-    const dateRecords = records.filter(record => {
+    const dateRecords = records.filter((record) => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= targetDate && recordDate < nextDate;
     });
@@ -515,7 +509,7 @@ export class ClaudeDataLoader {
     // Group records by hour
     const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
 
-    dateRecords.forEach(record => {
+    dateRecords.forEach((record) => {
       const recordDate = new Date(record.timestamp);
       const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
 
@@ -529,7 +523,7 @@ export class ClaudeDataLoader {
     const hourlyData = Object.entries(recordsByHour)
       .map(([hour, hourRecords]) => ({
         hour,
-        data: this.calculateUsageData(hourRecords)
+        data: this.calculateUsageData(hourRecords),
       }))
       .sort((a, b) => a.hour.localeCompare(b.hour));
 

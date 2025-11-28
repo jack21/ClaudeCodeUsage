@@ -55,9 +55,11 @@
 ## 📥 下载
 
 ### VSCode Marketplace
+
 [![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
 
 ### Open VSX Registry（适用于 Cursor / Windsurf / Antigravity）
+
 [![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
 
 ## 安装
@@ -131,6 +133,8 @@
 - 📝 将所有代码注释从繁体中文改为英文
 - 🌍 提升代码的国际化标准
 - 🔧 优化代码可读性与维护性
+- 💰 修正定价表，加入新的 Opus 4.5 / Haiku 4.5 价格（感谢 [@mxzinke](https://github.com/mxzinke)）
+- 🇩🇪 新增德语（de-DE）翻译支持（感谢 [@mxzinke](https://github.com/mxzinke)）
 
 ### v1.0.7 (2025-11-28)
 
@@ -139,27 +143,32 @@
 - ✨ 确保用户界面的多语言一致性（英文、繁体中文、简体中文、日文、韩文）
 
 ### v1.0.6 (2025-08-10)
+
 - 🆕 新增 Claude Opus 4.1 模型定价支持
-- 🔄 更新定价数据以包含 `claude-opus-4-1-20250805` 和 `claude-opus-4-1` 模型ID
+- 🔄 更新定价数据以包含 `claude-opus-4-1-20250805` 和 `claude-opus-4-1` 模型 ID
 - 📊 定价与 Opus 4 相同（$15/1M 输入，$75/1M 输出 tokens）
 
 ### v1.0.5 (2025-01)
+
 - ⏰ 新增每小时使用量统计与可视化
 - 📈 增强仪表板的每小时细分功能
 - 🔧 改善每小时汇总的数据处理
 
 ### v1.0.4 (2025-01)
+
 - 📊 新增全时间数据计算功能
 - 🎨 更新 UI 以显示全时间使用数据与图表和标签
 - 🔄 修正数据更新逻辑以支持新数据结构
 - 🌐 在多语言支持中新增「全时间」翻译
 
 ### v1.0.3 (2025-01)
+
 - 🔗 更新 GitHub 仓库 URL
 - 🖼️ 修正 README 图片链接指向新仓库位置
 - 📦 版本升级与仓库迁移
 
 ### v1.0.0 (2025-01)
+
 - 🎉 首次完整发行版
 - 📊 状态栏实时 Claude Code 使用量监控
 - 🌐 多语言支持（English, 繁體中文, 简体中文, 日本語, 한국어）

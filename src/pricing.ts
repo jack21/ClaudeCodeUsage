@@ -1,6 +1,6 @@
 // Claude Price calculation by model
 
-import { ModelPricing } from "./types";
+import { ModelPricing } from './types';
 
 export interface TokenUsage {
   input_tokens: number;
@@ -16,7 +16,7 @@ const MILL = 1_000_000;
 // https://platform.claude.com/docs/en/about-claude/pricing
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // Claude Sonnet 4
-  "claude-sonnet-4-20250514": {
+  'claude-sonnet-4-20250514': {
     input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
     output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
     cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
@@ -24,7 +24,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Opus 4
-  "claude-opus-4-20250514": {
+  'claude-opus-4-20250514': {
     input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
     output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
     cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
@@ -32,7 +32,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Opus 4.1 (2025-08-05)
-  "claude-opus-4-1-20250805": {
+  'claude-opus-4-1-20250805': {
     input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
     output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
     cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
@@ -40,7 +40,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Opus 4.1 (alias)
-  "claude-opus-4-1": {
+  'claude-opus-4-1': {
     input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
     output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
     cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
@@ -48,7 +48,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Opus 4.5 (2025-11 v01)
-  "claude-opus-4-5-20251101": {
+  'claude-opus-4-5-20251101': {
     input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
     output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
     cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
@@ -56,7 +56,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Opus 4.5 (alias)
-  "claude-opus-4-5": {
+  'claude-opus-4-5': {
     input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
     output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
     cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
@@ -64,7 +64,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Sonnet 3.5 (2024-10-22)
-  "claude-3-5-sonnet-20241022": {
+  'claude-3-5-sonnet-20241022': {
     input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
     output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
     cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
@@ -72,7 +72,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Haiku 3.5 (Not used anymore)
-  "claude-3-5-haiku-20241022": {
+  'claude-3-5-haiku-20241022': {
     input_cost_per_token: 0.8 / MILL, // $0.8 / 1M tokens
     output_cost_per_token: 4 / MILL, // $4.00 / 1M tokens
     cache_creation_input_token_cost: 1.6 / MILL, // $1.6 / 1M tokens
@@ -80,7 +80,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // Claude Haiku 4.5 (2025-10 v01)
-  "claude-haiku-4-5-20251001": {
+  'claude-haiku-4-5-20251001': {
     input_cost_per_token: 1 / MILL, // $1.00 / 1M tokens
     output_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
     cache_creation_input_token_cost: 1.25 / MILL, // $1.25 / 1M tokens
@@ -93,9 +93,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
  * @param modelName Model name
  * @returns Pricing information, or null if not found
  */
-export function getModelPricing(
-  modelName: string | undefined,
-): ModelPricing | null {
+export function getModelPricing(modelName: string | undefined): ModelPricing | null {
   if (!modelName) {
     return null;
   }
@@ -106,13 +104,7 @@ export function getModelPricing(
   }
 
   // Try different variation matches (similar to ccusage logic)
-  const variations = [
-    modelName,
-    `anthropic/${modelName}`,
-    `claude-3-5-${modelName}`,
-    `claude-3-${modelName}`,
-    `claude-${modelName}`,
-  ];
+  const variations = [modelName, `anthropic/${modelName}`, `claude-3-5-${modelName}`, `claude-3-${modelName}`, `claude-${modelName}`];
 
   for (const variation of variations) {
     if (MODEL_PRICING[variation]) {
@@ -121,10 +113,8 @@ export function getModelPricing(
   }
 
   // If unknown model, use Sonnet 4 pricing as default
-  console.warn(
-    `Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`,
-  );
-  return MODEL_PRICING["claude-sonnet-4-20250514"];
+  console.warn(`Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`);
+  return MODEL_PRICING['claude-sonnet-4-20250514'];
 }
 
 /**
@@ -133,10 +123,7 @@ export function getModelPricing(
  * @param pricing Pricing information
  * @returns Total cost (USD)
  */
-export function calculateCostFromPricing(
-  tokens: TokenUsage,
-  pricing: ModelPricing,
-): number {
+export function calculateCostFromPricing(tokens: TokenUsage, pricing: ModelPricing): number {
   let cost = 0;
 
   // Input tokens cost
@@ -150,22 +137,13 @@ export function calculateCostFromPricing(
   }
 
   // Cache creation tokens cost
-  if (
-    tokens.cache_creation_input_tokens != null &&
-    pricing.cache_creation_input_token_cost != null
-  ) {
-    cost +=
-      tokens.cache_creation_input_tokens *
-      pricing.cache_creation_input_token_cost;
+  if (tokens.cache_creation_input_tokens != null && pricing.cache_creation_input_token_cost != null) {
+    cost += tokens.cache_creation_input_tokens * pricing.cache_creation_input_token_cost;
   }
 
   // Cache read tokens cost
-  if (
-    tokens.cache_read_input_tokens != null &&
-    pricing.cache_read_input_token_cost != null
-  ) {
-    cost +=
-      tokens.cache_read_input_tokens * pricing.cache_read_input_token_cost;
+  if (tokens.cache_read_input_tokens != null && pricing.cache_read_input_token_cost != null) {
+    cost += tokens.cache_read_input_tokens * pricing.cache_read_input_token_cost;
   }
 
   return cost;
@@ -177,10 +155,7 @@ export function calculateCostFromPricing(
  * @param modelName Model name
  * @returns Total cost (USD), returns 0 if pricing not found
  */
-export function calculateCostFromTokens(
-  tokens: TokenUsage,
-  modelName: string | undefined,
-): number {
+export function calculateCostFromTokens(tokens: TokenUsage, modelName: string | undefined): number {
   const pricing = getModelPricing(modelName);
 
   if (!pricing) {
