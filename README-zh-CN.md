@@ -52,6 +52,14 @@
 - **VSCode 主题集成**：完美配合浅色/深色主题
 - **响应式设计**：针对不同屏幕尺寸优化
 
+## 📥 下载
+
+### VSCode Marketplace
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+
+### Open VSX Registry（适用于 Cursor / Windsurf / Antigravity）
+[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+
 ## 安装
 
 1. 从 VSCode 市场安装扩展
@@ -117,6 +125,12 @@
 - 扩展使用 1 分钟缓存来减少文件 I/O
 
 ## 📝 版本更新日志
+
+### v1.0.7 (2025-11-28)
+
+- 🌐 新增每小时使用量标签的多语言翻译支持
+- 🔧 移除代码中硬编码的中文文字，改用 i18n 翻译系统
+- ✨ 确保用户界面的多语言一致性（英文、繁体中文、简体中文、日文、韩文）
 
 ### v1.0.6 (2025-08-10)
 - 🆕 新增 Claude Opus 4.1 模型定价支持

@@ -52,6 +52,14 @@
 - **VSCode 主題整合**：完美配合亮色/暗色主題
 - **響應式設計**：針對不同螢幕尺寸最佳化
 
+## 📥 下載
+
+### VSCode Marketplace
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+
+### Open VSX Registry（適用於 Cursor / Windsurf / Antigravity）
+[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+
 ## 安裝
 
 1. 從 VSCode 市集安裝擴充功能
@@ -121,6 +129,12 @@
 MIT
 
 ## 📝 版本更新日誌
+
+### v1.0.7 (2025-11-28)
+
+- 🌐 新增每小時使用量標籤的多語言翻譯支援
+- 🔧 移除程式碼中硬編碼的中文文字，改用 i18n 翻譯系統
+- ✨ 確保使用者界面的多語言一致性（英文、繁體中文、简体中文、日文、韓文）
 
 ### v1.0.6 (2025-08-10)
 

@@ -48,6 +48,14 @@ A comprehensive VSCode extension that monitors Claude Code usage and costs with 
 - **VSCode Theme Integration**: Seamless light/dark theme support
 - **Responsive Design**: Optimized for different screen sizes
 
+## 📥 Download
+
+### VSCode Marketplace
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+
+### Open VSX Registry (for Cursor / Windsurf / Antigravity)
+[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+
 ## Installation
 
 1. Install the extension from the VSCode marketplace
@@ -78,7 +86,7 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
    - Cache creation/read tokens
    - Message counts
 3. **Hourly Analysis**: View hourly usage patterns in "Today" tab
-4. **Expandable Data**: 
+4. **Expandable Data**:
    - Click on daily entries in "This Month" to see hourly breakdown
    - Click on monthly entries in "All Time" to see daily breakdown
 5. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
@@ -114,6 +122,12 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 MIT
 
 ## 📝 Changelog
+
+### v1.0.7 (2025-11-28)
+
+- 🌐 Added multilingual translation support for hourly usage labels
+- 🔧 Removed hardcoded Chinese text from code, replaced with i18n translation system
+- ✨ Ensured multilingual consistency across user interface (English, Traditional Chinese, Simplified Chinese, Japanese, Korean)
 
 ### v1.0.6 (2025-08-10)
 - 🆕 Added support for Claude Opus 4.1 model pricing

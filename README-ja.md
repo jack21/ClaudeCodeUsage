@@ -52,6 +52,14 @@ Claude Code の使用量とコストを詳細な分析とインタラクティ�
 - **VSCode テーマ統合**：ライト/ダークテーマとのシームレスな統合
 - **レスポンシブデザイン**：異なる画面サイズに最適化
 
+## 📥 ダウンロード
+
+### VSCode Marketplace
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+
+### Open VSX Registry（Cursor / Windsurf / Antigravity 用）
+[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+
 ## インストール
 
 1. VSCode マーケットプレイスから拡張機能をインストール
@@ -117,6 +125,12 @@ Claude Code の使用量とコストを詳細な分析とインタラクティ�
 - 拡張機能はファイル I/O を最小限に抑えるため1分間のキャッシュを使用しています
 
 ## 📝 更新履歴
+
+### v1.0.7 (2025-11-28)
+
+- 🌐 時間別使用量ラベルの多言語翻訳サポートを追加
+- 🔧 コード内のハードコードされた中国語テキストを削除し、i18n翻訳システムに置き換え
+- ✨ ユーザーインターフェースの多言語一貫性を確保（英語、繁体字中国語、簡体字中国語、日本語、韓国語）
 
 ### v1.0.6 (2025-08-10)
 - 🆕 Claude Opus 4.1 モデルの価格設定サポートを追加
