@@ -136,6 +136,12 @@ MIT
 
 ## 📝 Changelog
 
+### v1.0.8 (2025-11-28)
+
+- 📝 Converted all code comments from Traditional Chinese to English
+- 🌍 Improved code internationalization standards
+- 🔧 Enhanced code readability and maintainability
+
 ### v1.0.7 (2025-11-28)
 
 - 🌐 Added multilingual translation support for hourly usage labels

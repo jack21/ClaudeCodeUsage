@@ -21,14 +21,14 @@ const DEFAULT_CLAUDE_CONFIG_PATH = path.join(XDG_CONFIG_DIR, 'claude');
 // Native file search function to replace tinyglobby
 async function findJsonlFiles(dir: string): Promise<string[]> {
   const files: string[] = [];
-  
+
   async function searchRecursively(currentDir: string) {
     try {
       const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const fullPath = path.join(currentDir, entry.name);
-        
+
         if (entry.isDirectory()) {
           await searchRecursively(fullPath);
         } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -40,7 +40,7 @@ async function findJsonlFiles(dir: string): Promise<string[]> {
       console.warn(`Cannot read directory ${currentDir}:`, error);
     }
   }
-  
+
   await searchRecursively(dir);
   return files;
 }
@@ -49,31 +49,31 @@ async function findJsonlFiles(dir: string): Promise<string[]> {
 function validateUsageRecord(data: any): data is ClaudeUsageRecord {
   // Basic structure validation
   if (!data || typeof data !== 'object') return false;
-  
+
   // Required timestamp
   if (typeof data.timestamp !== 'string') return false;
-  
+
   // Required message with usage
   if (!data.message || typeof data.message !== 'object') return false;
   if (!data.message.usage || typeof data.message.usage !== 'object') return false;
-  
+
   const usage = data.message.usage;
-  
+
   // Required token fields must be numbers
   if (typeof usage.input_tokens !== 'number') return false;
   if (typeof usage.output_tokens !== 'number') return false;
-  
+
   // Optional fields validation
   if (usage.cache_creation_input_tokens !== undefined && typeof usage.cache_creation_input_tokens !== 'number') return false;
   if (usage.cache_read_input_tokens !== undefined && typeof usage.cache_read_input_tokens !== 'number') return false;
-  
+
   // Optional fields validation
   if (data.message.model !== undefined && typeof data.message.model !== 'string') return false;
   if (data.message.id !== undefined && typeof data.message.id !== 'string') return false;
   if (data.costUSD !== undefined && typeof data.costUSD !== 'number') return false;
   if (data.requestId !== undefined && typeof data.requestId !== 'string') return false;
   if (data.isApiErrorMessage !== undefined && typeof data.isApiErrorMessage !== 'boolean') return false;
-  
+
   return true;
 }
 
@@ -152,31 +152,31 @@ export class ClaudeDataLoader {
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
       const processedHashes = new Set<string>();
       const records: ClaudeUsageRecord[] = [];
-      
+
       for (const file of sortedFiles) {
         try {
           const content = await readFile(file, 'utf-8');
           const lines = content.trim().split('\n').filter(line => line.trim() !== '');
-          
+
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line) as unknown;
-              
+
               if (!validateUsageRecord(parsed)) {
                 continue;
               }
-              
+
               const data = parsed;
               const uniqueHash = this.createUniqueHash(data);
-              
+
               if (uniqueHash && processedHashes.has(uniqueHash)) {
                 continue;
               }
-              
+
               if (uniqueHash) {
                 processedHashes.add(uniqueHash);
               }
-              
+
               records.push(data as ClaudeUsageRecord);
             } catch (parseError) {
               console.warn(`Failed to parse line in ${file}:`, parseError);
@@ -197,11 +197,11 @@ export class ClaudeDataLoader {
   private static createUniqueHash(data: any): string | null {
     const messageId = data.message?.id;
     const requestId = data.requestId;
-    
+
     if (!messageId && !requestId) {
       return null;
     }
-    
+
     return `${messageId || 'no-msg'}-${requestId || 'no-req'}`;
   }
 
@@ -209,10 +209,10 @@ export class ClaudeDataLoader {
     try {
       const content = await readFile(filePath, 'utf-8');
       const lines = content.trim().split('\n');
-      
+
       for (const line of lines) {
         if (line.trim() === '') continue;
-        
+
         try {
           const json = JSON.parse(line) as Record<string, unknown>;
           if (typeof json.timestamp === 'string') {
@@ -225,7 +225,7 @@ export class ClaudeDataLoader {
           // Skip invalid lines
         }
       }
-      
+
       return null;
     } catch {
       return null;
@@ -261,7 +261,7 @@ export class ClaudeDataLoader {
     };
 
     for (const record of records) {
-      // 只統計有 usage 和 model 的記錄（通常是 assistant 類型）
+      // Only count records with usage and model (typically assistant type)
       if (!record.message.usage || !record.message.model) {
         continue;
       }
@@ -269,21 +269,21 @@ export class ClaudeDataLoader {
       const usage = record.message.usage;
       const model = record.message.model;
 
-      // 跳過錯誤記錄和無效記錄
+      // Skip error records and invalid records
       if (model === '<synthetic>' || record.isApiErrorMessage) {
         continue;
       }
 
-      // 跳過所有 token 都是 0 的記錄
-      const tokenSum = usage.input_tokens + 
-                      usage.output_tokens + 
-                      (usage.cache_creation_input_tokens || 0) + 
+      // Skip records where all tokens are 0
+      const tokenSum = usage.input_tokens +
+                      usage.output_tokens +
+                      (usage.cache_creation_input_tokens || 0) +
                       (usage.cache_read_input_tokens || 0);
       if (tokenSum === 0) {
         continue;
       }
 
-      // 使用新的定價模型計算成本
+      // Calculate cost using new pricing model
       const calculatedCost = calculateCostFromTokens(usage, model);
 
       data.totalInputTokens += usage.input_tokens;
@@ -322,7 +322,7 @@ export class ClaudeDataLoader {
     }
 
     // Sort records by timestamp
-    const sortedRecords = records.sort((a, b) => 
+    const sortedRecords = records.sort((a, b) =>
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
@@ -351,7 +351,7 @@ export class ClaudeDataLoader {
   static getTodayData(records: ClaudeUsageRecord[]): UsageData {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const todayRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= today;
@@ -363,7 +363,7 @@ export class ClaudeDataLoader {
   static getThisMonthData(records: ClaudeUsageRecord[]): UsageData {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     const monthRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart;
@@ -375,7 +375,7 @@ export class ClaudeDataLoader {
   static getDailyDataForMonth(records: ClaudeUsageRecord[]): { date: string; data: UsageData }[] {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     const monthRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart;
@@ -383,11 +383,11 @@ export class ClaudeDataLoader {
 
     // Group records by date
     const recordsByDate: Record<string, ClaudeUsageRecord[]> = {};
-    
+
     monthRecords.forEach(record => {
       const recordDate = new Date(record.timestamp);
       const dateKey = recordDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      
+
       if (!recordsByDate[dateKey]) {
         recordsByDate[dateKey] = [];
       }
@@ -410,11 +410,11 @@ export class ClaudeDataLoader {
   }
 
   static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {
-    // monthDateString 格式為 YYYY-MM-01 (每月第一天)
+    // monthDateString format: YYYY-MM-01 (first day of the month)
     const monthDate = new Date(monthDateString);
     const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0); // 月份的最後一天
-    
+    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0); // Last day of the month
+
     const monthRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= monthStart && recordDate <= monthEnd;
@@ -422,11 +422,11 @@ export class ClaudeDataLoader {
 
     // Group records by date
     const recordsByDate: Record<string, ClaudeUsageRecord[]> = {};
-    
+
     monthRecords.forEach(record => {
       const recordDate = new Date(record.timestamp);
       const dateKey = recordDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      
+
       if (!recordsByDate[dateKey]) {
         recordsByDate[dateKey] = [];
       }
@@ -445,17 +445,17 @@ export class ClaudeDataLoader {
   static getDailyDataForAllTime(records: ClaudeUsageRecord[]): { date: string; data: UsageData }[] {
     // Group all records by month for all-time view
     const recordsByMonth: Record<string, ClaudeUsageRecord[]> = {};
-    
+
     records.forEach(record => {
       const recordDate = new Date(record.timestamp);
       const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
-      
+
       if (!recordsByMonth[monthKey]) {
         recordsByMonth[monthKey] = [];
       }
       recordsByMonth[monthKey].push(record);
     });
-    
+
     // Calculate usage data for each month and sort by month (newest first)
     const monthlyData = Object.entries(recordsByMonth)
       .map(([month, monthRecords]) => ({
@@ -463,14 +463,14 @@ export class ClaudeDataLoader {
         data: this.calculateUsageData(monthRecords)
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
-    
+
     return monthlyData;
   }
 
   static getHourlyDataForToday(records: ClaudeUsageRecord[]): { hour: string; data: UsageData }[] {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const todayRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= today;
@@ -478,11 +478,11 @@ export class ClaudeDataLoader {
 
     // Group records by hour
     const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
-    
+
     todayRecords.forEach(record => {
       const recordDate = new Date(record.timestamp);
       const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
-      
+
       if (!recordsByHour[hourKey]) {
         recordsByHour[hourKey] = [];
       }
@@ -503,10 +503,10 @@ export class ClaudeDataLoader {
   static getHourlyDataForDate(records: ClaudeUsageRecord[], dateString: string): { hour: string; data: UsageData }[] {
     const targetDate = new Date(dateString);
     targetDate.setHours(0, 0, 0, 0);
-    
+
     const nextDate = new Date(targetDate);
     nextDate.setDate(nextDate.getDate() + 1);
-    
+
     const dateRecords = records.filter(record => {
       const recordDate = new Date(record.timestamp);
       return recordDate >= targetDate && recordDate < nextDate;
@@ -514,11 +514,11 @@ export class ClaudeDataLoader {
 
     // Group records by hour
     const recordsByHour: Record<string, ClaudeUsageRecord[]> = {};
-    
+
     dateRecords.forEach(record => {
       const recordDate = new Date(record.timestamp);
       const hourKey = `${recordDate.getHours().toString().padStart(2, '0')}:00`; // HH:00 format
-      
+
       if (!recordsByHour[hourKey]) {
         recordsByHour[hourKey] = [];
       }

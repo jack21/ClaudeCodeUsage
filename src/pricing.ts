@@ -89,9 +89,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
 };
 
 /**
- * 獲取模型的定價資訊
- * @param modelName 模型名稱
- * @returns 定價資訊，如果找不到則返回 null
+ * Get pricing information for a model
+ * @param modelName Model name
+ * @returns Pricing information, or null if not found
  */
 export function getModelPricing(
   modelName: string | undefined,
@@ -100,12 +100,12 @@ export function getModelPricing(
     return null;
   }
 
-  // 直接匹配
+  // Direct match
   if (MODEL_PRICING[modelName]) {
     return MODEL_PRICING[modelName];
   }
 
-  // 嘗試不同的變體匹配（類似 ccusage 的邏輯）
+  // Try different variation matches (similar to ccusage logic)
   const variations = [
     modelName,
     `anthropic/${modelName}`,
@@ -120,7 +120,7 @@ export function getModelPricing(
     }
   }
 
-  // 如果是未知模型，使用 Sonnet 4 的定價作為預設值
+  // If unknown model, use Sonnet 4 pricing as default
   console.warn(
     `Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`,
   );
@@ -128,10 +128,10 @@ export function getModelPricing(
 }
 
 /**
- * 計算給定 token 使用量和定價的成本
- * @param tokens token 使用量
- * @param pricing 定價資訊
- * @returns 總成本 (USD)
+ * Calculate cost from given token usage and pricing
+ * @param tokens Token usage
+ * @param pricing Pricing information
+ * @returns Total cost (USD)
  */
 export function calculateCostFromPricing(
   tokens: TokenUsage,
@@ -139,17 +139,17 @@ export function calculateCostFromPricing(
 ): number {
   let cost = 0;
 
-  // 輸入 tokens 成本
+  // Input tokens cost
   if (pricing.input_cost_per_token != null) {
     cost += tokens.input_tokens * pricing.input_cost_per_token;
   }
 
-  // 輸出 tokens 成本
+  // Output tokens cost
   if (pricing.output_cost_per_token != null) {
     cost += tokens.output_tokens * pricing.output_cost_per_token;
   }
 
-  // 快取建立 tokens 成本
+  // Cache creation tokens cost
   if (
     tokens.cache_creation_input_tokens != null &&
     pricing.cache_creation_input_token_cost != null
@@ -159,7 +159,7 @@ export function calculateCostFromPricing(
       pricing.cache_creation_input_token_cost;
   }
 
-  // 快取讀取 tokens 成本
+  // Cache read tokens cost
   if (
     tokens.cache_read_input_tokens != null &&
     pricing.cache_read_input_token_cost != null
@@ -172,10 +172,10 @@ export function calculateCostFromPricing(
 }
 
 /**
- * 計算模型使用的總成本
- * @param tokens token 使用量
- * @param modelName 模型名稱
- * @returns 總成本 (USD)，如果找不到定價則返回 0
+ * Calculate total cost of model usage
+ * @param tokens Token usage
+ * @param modelName Model name
+ * @returns Total cost (USD), returns 0 if pricing not found
  */
 export function calculateCostFromTokens(
   tokens: TokenUsage,

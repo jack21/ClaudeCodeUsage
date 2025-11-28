@@ -63,11 +63,11 @@ export class UsageWebviewProvider {
         case 'getHourlyData':
           const dateString = message.date;
           if (dateString && this.panel) {
-            // 獲取該日期的每小時數據
+            // Get hourly data for the specified date
             const { ClaudeDataLoader } = await import('./dataLoader');
             const hourlyData = ClaudeDataLoader.getHourlyDataForDate(this.allRecords, dateString);
-            
-            // 發送數據回 webview
+
+            // Send data back to webview
             this.panel.webview.postMessage({
               command: 'hourlyDataResponse',
               date: dateString,
@@ -78,11 +78,11 @@ export class UsageWebviewProvider {
         case 'getDailyData':
           const monthString = message.month;
           if (monthString && this.panel) {
-            // 獲取該月份的每日數據
+            // Get daily data for the specified month
             const { ClaudeDataLoader } = await import('./dataLoader');
             const dailyData = ClaudeDataLoader.getDailyDataForSpecificMonth(this.allRecords, monthString);
-            
-            // 發送數據回 webview
+
+            // Send data back to webview
             this.panel.webview.postMessage({
               command: 'dailyDataResponse',
               month: monthString,
@@ -237,11 +237,11 @@ export class UsageWebviewProvider {
     const today = I18n.t.popup.today;
     const thisMonth = I18n.t.popup.thisMonth;
     const allTime = I18n.t.popup.allTime;
-    
+
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
     const allActive = this.currentTab === 'all' ? 'active' : '';
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -291,7 +291,7 @@ export class UsageWebviewProvider {
     }
 
     const todaySummary = this.renderUsageData(this.todayData);
-    
+
     let hourlyBreakdown = '';
     if (this.hourlyDataForToday.length > 0) {
       const cost = I18n.t.popup.cost;
@@ -300,7 +300,7 @@ export class UsageWebviewProvider {
       const cacheCreation = I18n.t.popup.cacheCreation;
       const cacheRead = I18n.t.popup.cacheRead;
       const messages = I18n.t.popup.messages;
-      
+
       let hourlyRows = '';
       this.hourlyDataForToday.forEach(({ hour, data }) => {
         hourlyRows += '<tr>' +
@@ -313,7 +313,7 @@ export class UsageWebviewProvider {
           '<td class="number-cell">' + I18n.formatNumber(data.messageCount) + '</td>' +
         '</tr>';
       });
-      
+
       hourlyBreakdown = '<div class="daily-breakdown">' +
         '<h3>' + I18n.t.popup.hourlyBreakdown + '</h3>' +
         '<div class="chart-tabs">' +
@@ -363,7 +363,7 @@ export class UsageWebviewProvider {
     const cacheCreation = I18n.t.popup.cacheCreation;
     const cacheRead = I18n.t.popup.cacheRead;
     const modelBreakdown = I18n.t.popup.modelBreakdown;
-    
+
     let html = '<div class="usage-summary">' +
       '<div class="summary-grid">' +
         '<div class="summary-item">' +
@@ -392,12 +392,12 @@ export class UsageWebviewProvider {
         '</div>' +
       '</div>' +
     '</div>';
-    
+
     if (Object.keys(data.modelBreakdown).length > 0) {
       html += '<div class="model-breakdown">' +
         '<h3>' + modelBreakdown + '</h3>' +
         '<div class="model-list">';
-        
+
       Object.entries(data.modelBreakdown).forEach(([model, modelData]) => {
         html += '<div class="model-item">' +
           '<div class="model-header">' +
@@ -413,10 +413,10 @@ export class UsageWebviewProvider {
           '</div>' +
         '</div>';
       });
-      
+
       html += '</div></div>';
     }
-    
+
     return html;
   }
 
@@ -426,11 +426,11 @@ export class UsageWebviewProvider {
     }
 
     const monthSummary = this.renderUsageData(this.monthData);
-    
+
     const dailyBreakdown = this.dailyDataForMonth.length > 0 ? `
       <div class="daily-breakdown">
         <h3>${I18n.t.popup.dailyBreakdown}</h3>
-        
+
         <!-- Chart Tabs -->
         <div class="chart-tabs">
           <button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>
@@ -440,14 +440,14 @@ export class UsageWebviewProvider {
           <button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>
           <button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>
         </div>
-        
+
         <!-- Chart Container -->
         <div class="chart-container">
           <div class="chart-content" id="dailyChart">
             ${this.renderDailyChart()}
           </div>
         </div>
-        
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -503,11 +503,11 @@ export class UsageWebviewProvider {
     }
 
     const allTimeSummary = this.renderUsageData(this.allTimeData);
-    
+
     const dailyBreakdown = this.dailyDataForAllTime.length > 0 ? `
       <div class="daily-breakdown">
         <h3>${I18n.t.popup.monthlyBreakdown}</h3>
-        
+
         <!-- Chart Tabs -->
         <div class="chart-tabs">
           <button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>
@@ -517,14 +517,14 @@ export class UsageWebviewProvider {
           <button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>
           <button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>
         </div>
-        
+
         <!-- Chart Container -->
         <div class="chart-container">
           <div class="chart-content" id="allTimeChart">
             ${this.renderAllTimeChart()}
           </div>
         </div>
-        
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -581,18 +581,18 @@ export class UsageWebviewProvider {
 
     // Sort data by date (oldest first for chart display)
     const sortedData = [...this.dailyDataForMonth].sort((a, b) => a.date.localeCompare(b.date));
-    
+
     // Generate chart bars for cost (default metric)
     const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
-    
+
     return `
       <div class="chart-bars">
         ${sortedData.map(({ date, data }) => {
           const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
           return `
             <div class="chart-bar-container" data-date="${date}">
-              <div class="chart-bar cost-bar clickable" 
+              <div class="chart-bar cost-bar clickable"
                    style="height: ${height}px;"
                    data-cost="${data.totalCost}"
                    data-input="${data.totalInputTokens}"
@@ -617,18 +617,18 @@ export class UsageWebviewProvider {
 
     // Sort data by date (oldest first for chart display)
     const sortedData = [...this.dailyDataForAllTime].sort((a, b) => a.date.localeCompare(b.date));
-    
+
     // Generate chart bars for cost (default metric)
     const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
-    
+
     return `
       <div class="chart-bars">
         ${sortedData.map(({ date, data }) => {
           const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
           return `
             <div class="chart-bar-container" data-date="${date}">
-              <div class="chart-bar cost-bar clickable" 
+              <div class="chart-bar cost-bar clickable"
                    style="height: ${height}px;"
                    data-cost="${data.totalCost}"
                    data-input="${data.totalInputTokens}"
@@ -653,18 +653,18 @@ export class UsageWebviewProvider {
 
     // Sort data by hour (chronological order)
     const sortedData = [...this.hourlyDataForToday].sort((a, b) => a.hour.localeCompare(b.hour));
-    
+
     // Generate chart bars for cost (default metric)
     const maxCost = Math.max(...sortedData.map(d => d.data.totalCost));
     const maxHeight = 120; // Max height in pixels
-    
+
     return `
       <div class="chart-bars">
         ${sortedData.map(({ hour, data }) => {
           const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
           return `
             <div class="chart-bar-container" data-hour="${hour}">
-              <div class="chart-bar cost-bar" 
+              <div class="chart-bar cost-bar"
                    style="height: ${height}px;"
                    data-cost="${data.totalCost}"
                    data-input="${data.totalInputTokens}"
@@ -1154,21 +1154,21 @@ function openSettings() {
 
 function showTab(tabName) {
   console.log("[DEBUG] showTab called:", tabName);
-  
+
   try {
     // Remove active from all tabs and contents
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    
+
     // Add active to selected tab and content
     const selectedTab = document.getElementById('tab-' + tabName);
     const selectedContent = document.getElementById(tabName);
-    
+
     if (selectedTab && selectedContent) {
       selectedTab.classList.add('active');
       selectedContent.classList.add('active');
       console.log("[DEBUG] Tab switched successfully to:", tabName);
-      
+
       // Notify extension
       vscode.postMessage({ command: 'tabChanged', tab: tabName });
     } else {
@@ -1181,39 +1181,39 @@ function showTab(tabName) {
 
 function toggleHourlyDetail(date) {
   console.log("[DEBUG] toggleHourlyDetail called for date:", date);
-  
+
   try {
     const detailRow = document.querySelector('.hourly-detail-row[data-date="' + date + '"]');
     const button = document.querySelector('.daily-row[data-date="' + date + '"] .detail-button');
     const container = document.getElementById('hourly-detail-' + date);
     const chartBar = document.querySelector('.chart-bar-container[data-date="' + date + '"] .chart-bar');
-    
+
     console.log("[DEBUG] Found elements:", {
       detailRow: !!detailRow,
       button: !!button,
       container: !!container,
       chartBar: !!chartBar
     });
-    
+
     if (detailRow && button && container) {
       const isExpanded = detailRow.style.display !== 'none' && detailRow.style.display !== '';
-      
+
       if (!isExpanded) {
         // First, close all other expanded details
         closeAllHourlyDetails();
-        
+
         // Show detail for this date
         detailRow.style.display = 'table-row';
         button.classList.add('expanded');
-        
+
         // Update chart bar selection state
         if (chartBar) {
           chartBar.classList.add('selected');
           console.log("[DEBUG] Chart bar selected for date:", date);
         }
-        
+
         console.log("[DEBUG] Showing hourly detail for date:", date);
-        
+
         // Request hourly data if not loaded
         if (!container.dataset.loaded) {
           console.log("[DEBUG] Requesting hourly data for date:", date);
@@ -1224,16 +1224,16 @@ function toggleHourlyDetail(date) {
         // Hide detail
         detailRow.style.display = 'none';
         button.classList.remove('expanded');
-        
+
         // Update chart bar selection state
         if (chartBar) {
           chartBar.classList.remove('selected');
           console.log("[DEBUG] Chart bar deselected for date:", date);
         }
-        
+
         console.log("[DEBUG] Hiding hourly detail for date:", date);
       }
-      
+
     } else {
       console.error("[DEBUG] Could not find required elements for date:", date);
     }
@@ -1244,62 +1244,62 @@ function toggleHourlyDetail(date) {
 
 function closeAllHourlyDetails() {
   console.log("[DEBUG] closeAllHourlyDetails called");
-  
+
   // Close all expanded detail rows
   const allDetailRows = document.querySelectorAll('.hourly-detail-row');
   const allButtons = document.querySelectorAll('.detail-button.expanded');
   const allChartBars = document.querySelectorAll('.chart-bar.selected');
-  
+
   allDetailRows.forEach(function(row) {
     row.style.display = 'none';
   });
-  
+
   allButtons.forEach(function(btn) {
     btn.classList.remove('expanded');
   });
-  
+
   allChartBars.forEach(function(bar) {
     bar.classList.remove('selected');
   });
-  
+
   console.log("[DEBUG] Closed all detail rows");
 }
 
 function toggleMonthlyDetail(monthDate) {
   console.log("[DEBUG] toggleMonthlyDetail called for month:", monthDate);
-  
+
   try {
     const detailRow = document.querySelector('.monthly-detail-row[data-date="' + monthDate + '"]');
     const button = document.querySelector('.daily-row[data-date="' + monthDate + '"] .detail-button');
     const container = document.getElementById('monthly-detail-' + monthDate);
     const chartBar = document.querySelector('.chart-bar-container[data-date="' + monthDate + '"] .chart-bar');
-    
+
     console.log("[DEBUG] Found elements:", {
       detailRow: !!detailRow,
       button: !!button,
       container: !!container,
       chartBar: !!chartBar
     });
-    
+
     if (detailRow && button && container) {
       const isExpanded = detailRow.style.display !== 'none' && detailRow.style.display !== '';
-      
+
       if (!isExpanded) {
         // First, close all other expanded details
         closeAllMonthlyDetails();
-        
+
         // Show detail for this month
         detailRow.style.display = 'table-row';
         button.classList.add('expanded');
-        
+
         // Update chart bar selection state
         if (chartBar) {
           chartBar.classList.add('selected');
           console.log("[DEBUG] Chart bar selected for month:", monthDate);
         }
-        
+
         console.log("[DEBUG] Showing monthly detail for month:", monthDate);
-        
+
         // Request monthly data if not loaded
         if (!container.dataset.loaded) {
           console.log("[DEBUG] Requesting daily data for month:", monthDate);
@@ -1310,16 +1310,16 @@ function toggleMonthlyDetail(monthDate) {
         // Hide detail
         detailRow.style.display = 'none';
         button.classList.remove('expanded');
-        
+
         // Update chart bar selection state
         if (chartBar) {
           chartBar.classList.remove('selected');
           console.log("[DEBUG] Chart bar deselected for month:", monthDate);
         }
-        
+
         console.log("[DEBUG] Hiding monthly detail for month:", monthDate);
       }
-      
+
     } else {
       console.error("[DEBUG] Could not find required elements for month:", monthDate);
     }
@@ -1330,33 +1330,33 @@ function toggleMonthlyDetail(monthDate) {
 
 function closeAllMonthlyDetails() {
   console.log("[DEBUG] closeAllMonthlyDetails called");
-  
+
   // Close all expanded monthly detail rows
   const allDetailRows = document.querySelectorAll('.monthly-detail-row');
   const allButtons = document.querySelectorAll('.detail-button.expanded');
   const allChartBars = document.querySelectorAll('.chart-bar.selected');
-  
+
   allDetailRows.forEach(function(row) {
     row.style.display = 'none';
   });
-  
+
   allButtons.forEach(function(btn) {
     btn.classList.remove('expanded');
   });
-  
+
   allChartBars.forEach(function(bar) {
     bar.classList.remove('selected');
   });
-  
+
   console.log("[DEBUG] Closed all monthly detail rows");
 }
 
 function updateHourlyChart(date, metric) {
   console.log("[DEBUG] updateHourlyChart called with date:", date, "metric:", metric);
-  
+
   const container = document.getElementById('hourly-detail-' + date);
   if (!container) return;
-  
+
   // Update active tab
   const tabs = container.querySelectorAll('.chart-tab');
   tabs.forEach(function(tab) {
@@ -1366,7 +1366,7 @@ function updateHourlyChart(date, metric) {
       tab.classList.remove('active');
     }
   });
-  
+
   // Re-render chart
   const chartContainer = document.getElementById('hourly-chart-' + date);
   const hourlyData = window['hourlyData_' + date];
@@ -1378,7 +1378,7 @@ function updateHourlyChart(date, metric) {
 // Sync chart bar selection state
 function syncChartBarSelection(date, isSelected) {
   console.log("[DEBUG] syncChartBarSelection called for date:", date, "selected:", isSelected);
-  
+
   const chartBar = document.querySelector('.chart-bar-container[data-date="' + date + '"] .chart-bar');
   if (chartBar) {
     if (isSelected) {
@@ -1404,24 +1404,24 @@ window.closeAllMonthlyDetails = closeAllMonthlyDetails;
 window.addEventListener('message', function(event) {
   const message = event.data;
   console.log("[DEBUG] Received message from extension:", message);
-  
+
   if (message.command === 'hourlyDataResponse') {
     const container = document.getElementById('hourly-detail-' + message.date);
     if (container && message.data) {
       console.log("[DEBUG] Rendering hourly data for date:", message.date);
       container.innerHTML = renderHourlyData(message.data, message.date);
-      
+
       // Re-bind chart tab events after rendering
       bindChartTabEvents(container);
     }
   }
-  
+
   if (message.command === 'dailyDataResponse') {
     const container = document.getElementById('monthly-detail-' + message.month);
     if (container && message.data) {
       console.log("[DEBUG] Rendering daily data for month:", message.month);
       container.innerHTML = renderDailyData(message.data, message.month);
-      
+
       // Re-bind chart tab events after rendering
       bindChartTabEvents(container);
     }
@@ -1431,19 +1431,19 @@ window.addEventListener('message', function(event) {
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {
   console.log("[DEBUG] Document click event:", event.target);
-  
+
   // Handle chart tab clicks
   if (event.target.classList.contains('chart-tab')) {
     console.log("[DEBUG] Chart tab clicked:", event.target);
-    
+
     event.preventDefault();
     const metric = event.target.dataset.metric;
     console.log("[DEBUG] Chart tab metric:", metric);
-    
+
     // Find the container and determine the context
     const container = event.target.closest('.daily-breakdown') || event.target.closest('.hourly-breakdown');
     console.log("[DEBUG] Chart tab container:", container);
-    
+
     if (container) {
       // Update active tab
       const tabs = container.querySelectorAll('.chart-tab');
@@ -1451,7 +1451,7 @@ document.addEventListener('click', function(event) {
         tab.classList.remove('active');
       });
       event.target.classList.add('active');
-      
+
       // Determine chart type and update accordingly
       if (container.classList.contains('hourly-breakdown')) {
         // This is an hourly detail chart - extract date from the chart content ID
@@ -1468,18 +1468,18 @@ document.addEventListener('click', function(event) {
       }
     }
   }
-  
+
   // Handle chart bar clicks - only for clickable charts
   if (event.target.classList.contains('chart-bar') && event.target.classList.contains('clickable')) {
     console.log("[DEBUG] Clickable chart bar clicked:", event.target);
-    
+
     event.preventDefault();
     const container = event.target.closest('.chart-bar-container');
     if (container) {
       const date = container.dataset.date;
       if (date) {
         console.log("[DEBUG] Chart bar clicked for date:", date);
-        
+
         // Determine if this is a monthly chart or daily chart based on current tab
         const activeTab = document.querySelector('.tab.active');
         if (activeTab && activeTab.id === 'tab-all') {
@@ -1496,16 +1496,16 @@ document.addEventListener('click', function(event) {
 
 function bindChartTabEvents(container) {
   console.log("[DEBUG] Binding chart tab events for container:", container);
-  
+
   const chartTabs = container.querySelectorAll('.chart-tab');
   console.log("[DEBUG] Found chart tabs:", chartTabs.length);
-  
+
   chartTabs.forEach(function(tab, index) {
     console.log("[DEBUG] Processing chart tab", index, ":", tab.dataset.metric);
-    
+
     // Remove existing event listeners to prevent duplicates
     tab.removeEventListener('click', handleChartTabClick);
-    
+
     // Add new event listener
     tab.addEventListener('click', handleChartTabClick);
   });
@@ -1514,10 +1514,10 @@ function bindChartTabEvents(container) {
 function handleChartTabClick(event) {
   console.log("[DEBUG] handleChartTabClick called");
   event.preventDefault();
-  
+
   const metric = this.dataset.metric;
   const container = this.closest('.daily-breakdown') || this.closest('.hourly-breakdown');
-  
+
   if (container) {
     // Update active tab
     const tabs = container.querySelectorAll('.chart-tab');
@@ -1525,7 +1525,7 @@ function handleChartTabClick(event) {
       tab.classList.remove('active');
     });
     this.classList.add('active');
-    
+
     // Update chart based on context
     if (container.classList.contains('hourly-breakdown')) {
       const chartContent = container.querySelector('[id^="hourly-chart-"]');
@@ -1541,7 +1541,7 @@ function handleChartTabClick(event) {
 
 function updateMainChart(metric, container) {
   console.log("[DEBUG] updateMainChart called with metric:", metric, "container:", container);
-  
+
   // If container is provided, use it; otherwise find the active tab content
   let targetContainer = container;
   if (!targetContainer) {
@@ -1551,40 +1551,40 @@ function updateMainChart(metric, container) {
       return;
     }
   }
-  
+
   // Update chart in the target container
   const chartBars = targetContainer.querySelectorAll('.chart-bar');
   if (chartBars.length === 0) {
     console.log("[DEBUG] No chart bars found in target container");
     return;
   }
-  
+
   console.log("[DEBUG] Updating", chartBars.length, "chart bars with metric:", metric);
-  
+
   // Calculate max values for the metric
   const values = Array.from(chartBars).map(function(bar) {
     const value = parseFloat(bar.dataset[getDataAttribute(metric)]) || 0;
     return value;
   });
-  
+
   const maxValue = Math.max(...values);
   const maxHeight = 120;
-  
+
   console.log("[DEBUG] Max value for metric", metric, ":", maxValue);
-  
+
   // Update each bar
   chartBars.forEach(function(bar, index) {
     const value = parseFloat(bar.dataset[getDataAttribute(metric)]) || 0;
     const height = maxValue > 0 ? (value / maxValue) * maxHeight : 2;
-    
+
     // Update height
     bar.style.height = height + 'px';
-    
+
     // Update class - preserve clickable and selected states
     const baseClass = 'chart-bar ' + getBarClass(metric);
     const hasClickable = bar.classList.contains('clickable');
     const hasSelected = bar.classList.contains('selected');
-    
+
     bar.className = baseClass;
     if (hasClickable) {
       bar.classList.add('clickable');
@@ -1592,13 +1592,13 @@ function updateMainChart(metric, container) {
     if (hasSelected) {
       bar.classList.add('selected');
     }
-    
+
     // Update tooltip
     const formattedValue = formatValue(value, metric);
     const container = bar.parentElement;
     const date = container.dataset.date;
     const hour = container.dataset.hour;
-    
+
     if (hour) {
       bar.title = hour + ': ' + formattedValue;
     } else if (date) {
@@ -1642,14 +1642,14 @@ function formatValue(value, metric) {
 
 function renderHourlyData(hourlyData, date) {
   console.log("[DEBUG] renderHourlyData called with data:", hourlyData);
-  
+
   if (!hourlyData || hourlyData.length === 0) {
     return '<div class="no-data">當日無使用資料</div>';
   }
-  
+
   let html = '<div class="hourly-breakdown">';
   html += '<h4>' + new Date(date).toLocaleDateString() + ' ' + I18n.t.popup.hourlyBreakdown + '</h4>';
-  
+
   // Chart tabs
   html += '<div class="chart-tabs">';
   html += '<button class="chart-tab active" data-metric="cost">費用</button>';
@@ -1659,14 +1659,14 @@ function renderHourlyData(hourlyData, date) {
   html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
   html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
   html += '</div>';
-  
+
   // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="hourly-chart-' + date + '">';
   html += renderHourlyChart(hourlyData, 'cost');
   html += '</div>';
   html += '</div>';
-  
+
   // Table
   html += '<div class="daily-table-container">';
   html += '<table class="daily-table">';
@@ -1682,7 +1682,7 @@ function renderHourlyData(hourlyData, date) {
   html += '</tr>';
   html += '</thead>';
   html += '<tbody>';
-  
+
   hourlyData.forEach(function(item) {
     html += '<tr>';
     html += '<td class="date-cell">' + item.hour + '</td>';
@@ -1694,29 +1694,29 @@ function renderHourlyData(hourlyData, date) {
     html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
     html += '</tr>';
   });
-  
+
   html += '</tbody>';
   html += '</table>';
   html += '</div>';
-  
+
   // Store data for chart updates
   window['hourlyData_' + date] = hourlyData;
-  
+
   html += '</div>'; // Close hourly-breakdown
-  
+
   return html;
 }
 
 function renderDailyData(dailyData, monthDate) {
   console.log("[DEBUG] renderDailyData called with data:", dailyData);
-  
+
   if (!dailyData || dailyData.length === 0) {
     return '<div class="no-data">該月無使用資料</div>';
   }
-  
+
   let html = '<div class="daily-breakdown">';
   html += '<h4>' + new Date(monthDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' }) + ' 每日使用量</h4>';
-  
+
   // Chart tabs
   html += '<div class="chart-tabs">';
   html += '<button class="chart-tab active" data-metric="cost">費用</button>';
@@ -1726,14 +1726,14 @@ function renderDailyData(dailyData, monthDate) {
   html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
   html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
   html += '</div>';
-  
+
   // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="daily-chart-' + monthDate + '">';
   html += renderDailyChart(dailyData, 'cost');
   html += '</div>';
   html += '</div>';
-  
+
   // Table
   html += '<div class="daily-table-container">';
   html += '<table class="daily-table">';
@@ -1749,11 +1749,11 @@ function renderDailyData(dailyData, monthDate) {
   html += '</tr>';
   html += '</thead>';
   html += '<tbody>';
-  
+
   dailyData.forEach(function(item) {
     const dateObj = new Date(item.date);
     const formattedDate = dateObj.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
-    
+
     html += '<tr>';
     html += '<td class="date-cell">' + formattedDate + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
@@ -1764,22 +1764,22 @@ function renderDailyData(dailyData, monthDate) {
     html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
     html += '</tr>';
   });
-  
+
   html += '</tbody>';
   html += '</table>';
   html += '</div>';
-  
+
   // Store data for chart updates
   window['dailyData_' + monthDate] = dailyData;
-  
+
   html += '</div>'; // Close daily-breakdown
-  
+
   return html;
 }
 
 function renderDailyChart(dailyData, metric) {
   console.log("[DEBUG] renderDailyChart called with metric:", metric);
-  
+
   const maxValues = {
     cost: Math.max(...dailyData.map(d => d.data.totalCost)),
     inputTokens: Math.max(...dailyData.map(d => d.data.totalInputTokens)),
@@ -1793,11 +1793,11 @@ function renderDailyChart(dailyData, metric) {
   const maxValue = maxValues[metric] || 0;
 
   let html = '<div class="chart-bars">';
-  
+
   dailyData.forEach(function(item) {
     let value = 0;
     let barClass = 'cost-bar';
-    
+
     switch(metric) {
       case 'cost':
         value = item.data.totalCost;
@@ -1824,11 +1824,11 @@ function renderDailyChart(dailyData, metric) {
         barClass = 'messages-bar';
         break;
     }
-    
+
     const height = maxValue > 0 ? Math.max((value / maxValue) * maxHeight, 2) : 2;
     const dateObj = new Date(item.date);
     const shortDate = dateObj.getDate().toString();
-    
+
     html += '<div class="chart-bar-container" data-date="' + item.date + '">';
     html += '<div class="chart-bar ' + barClass + '" ';
     html += 'style="height: ' + height + 'px;" ';
@@ -1843,15 +1843,15 @@ function renderDailyChart(dailyData, metric) {
     html += '<div class="chart-label">' + shortDate + '</div>';
     html += '</div>';
   });
-  
+
   html += '</div>';
-  
+
   return html;
 }
 
 function renderHourlyChart(hourlyData, metric) {
   console.log("[DEBUG] renderHourlyChart called with metric:", metric);
-  
+
   const maxValues = {
     cost: Math.max(...hourlyData.map(d => d.data.totalCost)),
     inputTokens: Math.max(...hourlyData.map(d => d.data.totalInputTokens)),
@@ -1865,11 +1865,11 @@ function renderHourlyChart(hourlyData, metric) {
   const maxValue = maxValues[metric] || 0;
 
   let html = '<div class="chart-bars">';
-  
+
   hourlyData.forEach(function(item) {
     let value = 0;
     let barClass = 'cost-bar';
-    
+
     switch(metric) {
       case 'cost':
         value = item.data.totalCost;
@@ -1896,9 +1896,9 @@ function renderHourlyChart(hourlyData, metric) {
         barClass = 'messages-bar';
         break;
     }
-    
+
     const height = maxValue > 0 ? Math.max((value / maxValue) * maxHeight, 2) : 2;
-    
+
     html += '<div class="chart-bar-container" data-hour="' + item.hour + '">';
     html += '<div class="chart-bar ' + barClass + '" ';
     html += 'style="height: ' + height + 'px;" ';
@@ -1913,9 +1913,9 @@ function renderHourlyChart(hourlyData, metric) {
     html += '<div class="chart-label">' + item.hour + '</div>';
     html += '</div>';
   });
-  
+
   html += '</div>';
-  
+
   return html;
 }
 
