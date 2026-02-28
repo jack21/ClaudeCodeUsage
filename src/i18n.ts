@@ -28,10 +28,16 @@ export interface Translations {
     monthlyBreakdown: string;
     hourlyBreakdown: string;
     date: string;
+    time: string;
     yesterday: string;
     dataDirectory: string;
     noDataMessage: string;
     errorMessage: string;
+    loading: string;
+    showHourlyDetails: string;
+    showDailyDetails: string;
+    clickForHourlyDetails: string;
+    clickForDailyDetails: string;
   };
   settings: {
     title: string;
@@ -71,10 +77,16 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: 'Monthly Usage',
       hourlyBreakdown: 'Hourly Usage',
       date: 'Date',
+      time: 'Time',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
       noDataMessage: 'No usage data found. Make sure Claude Code is running and configured correctly.',
       errorMessage: 'Error loading usage data. Please check your configuration.',
+      loading: 'Loading...',
+      showHourlyDetails: 'Show hourly details',
+      showDailyDetails: 'Show daily details',
+      clickForHourlyDetails: 'Click to view hourly details',
+      clickForDailyDetails: 'Click to view daily details',
     },
     settings: {
       title: 'Claude Code Usage Settings',
@@ -112,12 +124,18 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: "Monats-Nutzungsübersicht",
       hourlyBreakdown: "Stunden-Nutzungsübersicht",
       date: "Datum",
+      time: "Zeit",
       yesterday: "Gestern",
       dataDirectory: "Daten Pfad",
       noDataMessage:
         "Keine Daten gefunden. Stell sicher, dass Claude Code läuft und entsprechend konfiguriert ist.",
       errorMessage:
         "Fehler beim laden der Nutzungsdaten. Bitte prüfe deine Konfiguration.",
+      loading: "Lädt...",
+      showHourlyDetails: "Stündliche Details anzeigen",
+      showDailyDetails: "Tägliche Details anzeigen",
+      clickForHourlyDetails: "Klicken für stündliche Details",
+      clickForDailyDetails: "Klicken für tägliche Details",
     },
     settings: {
       title: "Claude Code Nutzungseinstellungen",
@@ -155,10 +173,16 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: '每月使用量',
       hourlyBreakdown: '每小時使用量',
       date: '日期',
+      time: '時間',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
       noDataMessage: '找不到使用資料。請確認 Claude Code 正在執行且設定正確。',
       errorMessage: '載入使用資料時發生錯誤。請檢查您的設定。',
+      loading: '載入中...',
+      showHourlyDetails: '顯示每小時詳細資料',
+      showDailyDetails: '顯示每日詳細資料',
+      clickForHourlyDetails: '點擊查看每小時詳情',
+      clickForDailyDetails: '點擊查看每日詳情',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -196,10 +220,16 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: '每月使用量',
       hourlyBreakdown: '每小时使用量',
       date: '日期',
+      time: '时间',
       yesterday: '昨日',
       dataDirectory: '数据目录',
       noDataMessage: '找不到使用数据。请确认 Claude Code 正在运行且配置正确。',
       errorMessage: '加载使用数据时发生错误。请检查您的配置。',
+      loading: '加载中...',
+      showHourlyDetails: '显示每小时详细数据',
+      showDailyDetails: '显示每日详细数据',
+      clickForHourlyDetails: '点击查看每小时详情',
+      clickForDailyDetails: '点击查看每日详情',
     },
     settings: {
       title: 'Claude Code 使用量设置',
@@ -237,10 +267,16 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: '月別使用量',
       hourlyBreakdown: '時間別使用量',
       date: '日付',
+      time: '時刻',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
       noDataMessage: '使用データが見つかりません。Claude Code が実行され、正しく設定されていることを確認してください。',
       errorMessage: '使用データの読み込み中にエラーが発生しました。設定を確認してください。',
+      loading: '読み込み中...',
+      showHourlyDetails: '時間別詳細を表示',
+      showDailyDetails: '日別詳細を表示',
+      clickForHourlyDetails: 'クリックして時間別詳細を表示',
+      clickForDailyDetails: 'クリックして日別詳細を表示',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -278,10 +314,16 @@ const translations: Record<SupportedLanguage, Translations> = {
       monthlyBreakdown: '월별 사용량',
       hourlyBreakdown: '시간별 사용량',
       date: '날짜',
+      time: '시간',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',
       noDataMessage: '사용 데이터를 찾을 수 없습니다. Claude Code가 실행 중이고 올바르게 구성되었는지 확인하세요.',
       errorMessage: '사용 데이터를 로드하는 중 오류가 발생했습니다. 구성을 확인하세요.',
+      loading: '로딩 중...',
+      showHourlyDetails: '시간별 상세 보기',
+      showDailyDetails: '일별 상세 보기',
+      clickForHourlyDetails: '클릭하여 시간별 상세 보기',
+      clickForDailyDetails: '클릭하여 일별 상세 보기',
     },
     settings: {
       title: 'Claude Code 사용량 설정',
