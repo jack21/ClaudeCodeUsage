@@ -41,6 +41,7 @@ export interface Translations {
     noChartData: string;
     noUsageRecords: string;
     unknownError: string;
+    clickForDetails: string;
   };
   settings: {
     title: string;
@@ -93,6 +94,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: 'No data available',
       noUsageRecords: 'No usage records found. Make sure Claude Code is running.',
       unknownError: 'Unknown error occurred',
+      clickForDetails: 'Click for detailed breakdown',
     },
     settings: {
       title: 'Claude Code Usage Settings',
@@ -145,6 +147,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: "Keine Daten verfügbar",
       noUsageRecords: "Keine Nutzungsdaten gefunden. Stell sicher, dass Claude Code läuft.",
       unknownError: "Unbekannter Fehler aufgetreten",
+      clickForDetails: "Klicken für detaillierte Aufschlüsselung",
     },
     settings: {
       title: "Claude Code Nutzungseinstellungen",
@@ -195,6 +198,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: '無可用資料',
       noUsageRecords: '找不到使用紀錄。請確認 Claude Code 正在執行。',
       unknownError: '發生未知錯誤',
+      clickForDetails: '點擊查看詳細資訊',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -245,6 +249,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: '无可用数据',
       noUsageRecords: '找不到使用记录。请确认 Claude Code 正在运行。',
       unknownError: '发生未知错误',
+      clickForDetails: '点击查看详细信息',
     },
     settings: {
       title: 'Claude Code 使用量设置',
@@ -295,6 +300,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: 'データがありません',
       noUsageRecords: '使用記録が見つかりません。Claude Code が実行されていることを確認してください。',
       unknownError: '不明なエラーが発生しました',
+      clickForDetails: 'クリックして詳細を表示',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -345,6 +351,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       noChartData: '데이터 없음',
       noUsageRecords: '사용 기록을 찾을 수 없습니다. Claude Code가 실행 중인지 확인하세요.',
       unknownError: '알 수 없는 오류가 발생했습니다',
+      clickForDetails: '클릭하여 상세 정보 보기',
     },
     settings: {
       title: 'Claude Code 사용량 설정',

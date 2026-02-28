@@ -74,7 +74,7 @@ export class StatusBarManager {
       `${I18n.t.popup.outputTokens}: ${I18n.formatNumber(todayData.totalOutputTokens)}`,
       `${I18n.t.popup.messages}: ${I18n.formatNumber(todayData.messageCount)}`,
       '',
-      'Click for detailed breakdown'
+      I18n.t.popup.clickForDetails
     ];
 
     return lines.join('\n');

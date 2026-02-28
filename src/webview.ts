@@ -1770,7 +1770,7 @@ function updateMainChart(metric, container) {
       bar.title = hour + ': ' + formattedValue;
     } else if (date) {
       const dateObj = new Date(date);
-      bar.title = dateObj.toLocaleDateString() + ': ' + formattedValue;
+      bar.title = dateObj.toLocaleDateString(currentLocale) + ': ' + formattedValue;
     }
   });
 }
@@ -1803,7 +1803,7 @@ function formatValue(value, metric) {
   if (metric === 'cost') {
     return '$' + value.toFixed(2);
   } else {
-    return value.toLocaleString();
+    return value.toLocaleString(currentLocale);
   }
 }
 
@@ -1854,11 +1854,11 @@ function renderHourlyData(hourlyData, date) {
     html += '<tr>';
     html += '<td class="date-cell">' + item.hour + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(currentLocale) + '</td>';
     html += '</tr>';
   });
 
@@ -1924,11 +1924,11 @@ function renderDailyData(dailyData, monthDate) {
     html += '<tr>';
     html += '<td class="date-cell">' + formattedDate + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(currentLocale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(currentLocale) + '</td>';
     html += '</tr>';
   });
 
