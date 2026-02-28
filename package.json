@@ -95,12 +95,16 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "mocha --require ts-node/register 'src/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
+    "@types/mocha": "^10.0.1",
     "@types/node": "24.0.15",
     "@types/vscode": "^1.74.0",
+    "mocha": "^10.2.0",
+    "ts-node": "^10.9.1",
     "typescript": "^5.8.3"
   }
 }

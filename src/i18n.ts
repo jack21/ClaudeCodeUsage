@@ -417,4 +417,8 @@ export class I18n {
     };
     return localeMap[this.currentLanguage] || 'en-US';
   }
+
+  static getSupportedLanguages(): SupportedLanguage[] {
+    return Object.keys(translations) as SupportedLanguage[];
+  }
 }
