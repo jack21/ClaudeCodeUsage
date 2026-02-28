@@ -710,7 +710,7 @@ export class UsageWebviewProvider {
 
   private renderDailyChart(): string {
     if (this.dailyDataForMonth.length === 0) {
-      return '<div class="no-chart-data">No data available</div>';
+      return '<div class="no-chart-data">' + I18n.t.popup.noChartData + '</div>';
     }
 
     // Sort data by date (oldest first for chart display)
@@ -748,7 +748,7 @@ export class UsageWebviewProvider {
 
   private renderAllTimeChart(): string {
     if (this.dailyDataForAllTime.length === 0) {
-      return '<div class="no-chart-data">No data available</div>';
+      return '<div class="no-chart-data">' + I18n.t.popup.noChartData + '</div>';
     }
 
     // Sort data by date (oldest first for chart display)
@@ -786,7 +786,7 @@ export class UsageWebviewProvider {
 
   private renderHourlyChart(): string {
     if (this.hourlyDataForToday.length === 0) {
-      return '<div class="no-chart-data">No data available</div>';
+      return '<div class="no-chart-data">' + I18n.t.popup.noChartData + '</div>';
     }
 
     // Sort data by hour (chronological order)
@@ -846,16 +846,7 @@ export class UsageWebviewProvider {
   }
 
   private getLocaleString(): string {
-    const lang = I18n.getCurrentLanguage();
-    const localeMap: Record<string, string> = {
-      'en': 'en-US',
-      'de-DE': 'de-DE',
-      'zh-TW': 'zh-TW',
-      'zh-CN': 'zh-CN',
-      'ja': 'ja-JP',
-      'ko': 'ko-KR',
-    };
-    return localeMap[lang] || 'en-US';
+    return I18n.getLocaleString();
   }
 
   private getStyles(): string {
@@ -1303,6 +1294,7 @@ export class UsageWebviewProvider {
       loading: I18n.t.popup.loading,
       showHourlyDetails: I18n.t.popup.showHourlyDetails,
       showDailyDetails: I18n.t.popup.showDailyDetails,
+      noChartData: I18n.t.popup.noChartData,
     });
     const locale = this.getLocaleString();
 

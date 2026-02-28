@@ -132,7 +132,7 @@ export class ClaudeCodeUsageExtension {
       }
 
       if (records.length === 0) {
-        const error = 'No usage records found. Make sure Claude Code is running.';
+        const error = I18n.t.popup.noUsageRecords;
         this.statusBar.updateUsageData(null, error);
         this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
         return;
@@ -152,7 +152,7 @@ export class ClaudeCodeUsageExtension {
       this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : I18n.t.popup.unknownError;
       console.error('Error refreshing Claude Code usage data:', error);
       
       this.statusBar.updateUsageData(null, errorMessage);

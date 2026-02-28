@@ -38,6 +38,9 @@ export interface Translations {
     showDailyDetails: string;
     clickForHourlyDetails: string;
     clickForDailyDetails: string;
+    noChartData: string;
+    noUsageRecords: string;
+    unknownError: string;
   };
   settings: {
     title: string;
@@ -87,6 +90,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: 'Show daily details',
       clickForHourlyDetails: 'Click to view hourly details',
       clickForDailyDetails: 'Click to view daily details',
+      noChartData: 'No data available',
+      noUsageRecords: 'No usage records found. Make sure Claude Code is running.',
+      unknownError: 'Unknown error occurred',
     },
     settings: {
       title: 'Claude Code Usage Settings',
@@ -101,12 +107,12 @@ const translations: Record<SupportedLanguage, Translations> = {
       loading: "Lädt...",
       noData: "Keine Claude Code Daten",
       notRunning: "Claude Code nicht erreichbar",
-      error: "Error",
-      currentSession: "Session",
+      error: "Fehler",
+      currentSession: "Aktuelle Sitzung",
     },
     popup: {
       title: "Claude Code Nutzung",
-      currentSession: "Current Session",
+      currentSession: "Aktuelle Sitzung",
       today: "Heute",
       thisMonth: "Diesen Monat",
       allTime: "Seit Aufzeichnungsbeginn",
@@ -136,6 +142,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: "Tägliche Details anzeigen",
       clickForHourlyDetails: "Klicken für stündliche Details",
       clickForDailyDetails: "Klicken für tägliche Details",
+      noChartData: "Keine Daten verfügbar",
+      noUsageRecords: "Keine Nutzungsdaten gefunden. Stell sicher, dass Claude Code läuft.",
+      unknownError: "Unbekannter Fehler aufgetreten",
     },
     settings: {
       title: "Claude Code Nutzungseinstellungen",
@@ -183,6 +192,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: '顯示每日詳細資料',
       clickForHourlyDetails: '點擊查看每小時詳情',
       clickForDailyDetails: '點擊查看每日詳情',
+      noChartData: '無可用資料',
+      noUsageRecords: '找不到使用紀錄。請確認 Claude Code 正在執行。',
+      unknownError: '發生未知錯誤',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -230,6 +242,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: '显示每日详细数据',
       clickForHourlyDetails: '点击查看每小时详情',
       clickForDailyDetails: '点击查看每日详情',
+      noChartData: '无可用数据',
+      noUsageRecords: '找不到使用记录。请确认 Claude Code 正在运行。',
+      unknownError: '发生未知错误',
     },
     settings: {
       title: 'Claude Code 使用量设置',
@@ -277,6 +292,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: '日別詳細を表示',
       clickForHourlyDetails: 'クリックして時間別詳細を表示',
       clickForDailyDetails: 'クリックして日別詳細を表示',
+      noChartData: 'データがありません',
+      noUsageRecords: '使用記録が見つかりません。Claude Code が実行されていることを確認してください。',
+      unknownError: '不明なエラーが発生しました',
     },
     settings: {
       title: 'Claude Code 使用量設定',
@@ -324,6 +342,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       showDailyDetails: '일별 상세 보기',
       clickForHourlyDetails: '클릭하여 시간별 상세 보기',
       clickForDailyDetails: '클릭하여 일별 상세 보기',
+      noChartData: '데이터 없음',
+      noUsageRecords: '사용 기록을 찾을 수 없습니다. Claude Code가 실행 중인지 확인하세요.',
+      unknownError: '알 수 없는 오류가 발생했습니다',
     },
     settings: {
       title: 'Claude Code 사용량 설정',
@@ -375,6 +396,18 @@ export class I18n {
   }
 
   static formatNumber(num: number): string {
-    return num.toLocaleString();
+    return num.toLocaleString(this.getLocaleString());
+  }
+
+  static getLocaleString(): string {
+    const localeMap: Record<SupportedLanguage, string> = {
+      'en': 'en-US',
+      'de-DE': 'de-DE',
+      'zh-TW': 'zh-TW',
+      'zh-CN': 'zh-CN',
+      'ja': 'ja-JP',
+      'ko': 'ko-KR',
+    };
+    return localeMap[this.currentLanguage] || 'en-US';
   }
 }
