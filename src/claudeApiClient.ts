@@ -6,6 +6,7 @@ import { ClaudeCredentials, ClaudeApiUsageResponse } from './types';
 export class ClaudeApiClient {
   private credentialsPath: string;
   private credentials: ClaudeCredentials | null = null;
+  private rateLimitedUntil: number = 0;
 
   constructor() {
     const homeDir = os.homedir();
@@ -122,8 +123,25 @@ export class ClaudeApiClient {
    * Fetch usage limits from the Anthropic API
    * Uses api.anthropic.com/api/oauth/usage (NOT claude.ai which has Cloudflare)
    */
+  private async callUsageApi(accessToken: string): Promise<Response> {
+    return fetch('https://api.anthropic.com/api/oauth/usage', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'anthropic-beta': 'oauth-2025-04-20',
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
   async fetchUsageLimits(): Promise<ClaudeApiUsageResponse | null> {
     try {
+      // Respect rate limit backoff
+      if (Date.now() < this.rateLimitedUntil) {
+        console.log('[ClaudeAPI] Rate limited, skipping until', new Date(this.rateLimitedUntil).toISOString());
+        return null;
+      }
+
       const credentials = await this.getValidCredentials();
       if (!credentials) {
         console.warn('[ClaudeAPI] No valid credentials available. Run "claude auth login" first.');
@@ -131,31 +149,24 @@ export class ClaudeApiClient {
       }
 
       console.log('[ClaudeAPI] Fetching usage limits from api.anthropic.com...');
-
-      const response = await fetch('https://api.anthropic.com/api/oauth/usage', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${credentials.claudeAiOauth.accessToken}`,
-          'anthropic-beta': 'oauth-2025-04-20',
-          'Content-Type': 'application/json',
-        },
-      });
-
+      const response = await this.callUsageApi(credentials.claudeAiOauth.accessToken);
       console.log('[ClaudeAPI] Response status:', response.status);
+
+      // Handle rate limiting with backoff
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 5 * 60 * 1000;
+        this.rateLimitedUntil = Date.now() + backoffMs;
+        console.warn(`[ClaudeAPI] Rate limited, backing off for ${backoffMs / 1000}s`);
+        return null;
+      }
 
       // If 401, try refreshing token and retry once
       if (response.status === 401) {
         console.log('[ClaudeAPI] Got 401, attempting token refresh and retry...');
         try {
           const refreshed = await this.refreshAccessToken(credentials);
-          const retryResponse = await fetch('https://api.anthropic.com/api/oauth/usage', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${refreshed.claudeAiOauth.accessToken}`,
-              'anthropic-beta': 'oauth-2025-04-20',
-              'Content-Type': 'application/json',
-            },
-          });
+          const retryResponse = await this.callUsageApi(refreshed.claudeAiOauth.accessToken);
 
           if (!retryResponse.ok) {
             console.error('[ClaudeAPI] Retry failed:', retryResponse.status);

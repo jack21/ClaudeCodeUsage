@@ -138,16 +138,20 @@ export class ClaudeDataLoader {
   static async loadUsageRecords(dataDirectory?: string): Promise<ClaudeUsageRecord[]> {
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
+      console.log('[DataLoader] Loading records from paths:', claudePaths);
       const allFiles: string[] = [];
 
       for (const claudePath of claudePaths) {
         const claudeDir = path.join(claudePath, CLAUDE_PROJECTS_DIR_NAME);
+        console.log('[DataLoader] Checking directory:', claudeDir, 'exists:', fs.existsSync(claudeDir));
         if (fs.existsSync(claudeDir)) {
           const files = await findJsonlFiles(claudeDir);
+          console.log('[DataLoader] Found JSONL files:', files.length);
           allFiles.push(...files);
         }
       }
 
+      console.log('[DataLoader] Total files found:', allFiles.length);
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
       const processedHashes = new Set<string>();
       const records: ClaudeUsageRecord[] = [];
@@ -159,12 +163,14 @@ export class ClaudeDataLoader {
             .trim()
             .split('\n')
             .filter((line) => line.trim() !== '');
+          console.log('[DataLoader] Processing file:', file, 'lines:', lines.length);
 
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line) as unknown;
 
               if (!validateUsageRecord(parsed)) {
+                console.log('[DataLoader] Record validation failed for line in', file);
                 continue;
               }
 
@@ -181,17 +187,18 @@ export class ClaudeDataLoader {
 
               records.push(data as ClaudeUsageRecord);
             } catch (parseError) {
-              console.warn(`Failed to parse line in ${file}:`, parseError);
+              console.warn('[DataLoader] Failed to parse line in', file, ':', parseError);
             }
           }
         } catch (fileError) {
-          console.warn(`Failed to read file ${file}:`, fileError);
+          console.warn('[DataLoader] Failed to read file', file, ':', fileError);
         }
       }
 
+      console.log('[DataLoader] Loaded total records:', records.length);
       return records;
     } catch (error) {
-      console.error('Error loading usage records:', error);
+      console.error('[DataLoader] Error loading usage records:', error);
       return [];
     }
   }

@@ -14,7 +14,8 @@ export class StatusBarManager {
     );
     this.statusBarItem.command = 'claudeCodeUsage.showDetails';
     this.statusBarItem.show();
-    this.updateStatusBar();
+    // Initialize with loading state  
+    this.setLoading(true);
   }
 
   setLoading(loading: boolean): void {
