@@ -71,6 +71,11 @@
           "minimum": 0,
           "maximum": 4,
           "description": "Number of decimal places for cost display"
+        },
+        "claudeCodeUsage.usageLimitTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable usage limit tracking (requires Claude Code authentication via 'claude auth login')"
         }
       }
     },

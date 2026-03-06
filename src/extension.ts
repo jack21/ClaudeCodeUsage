@@ -3,27 +3,34 @@ import { ClaudeDataLoader } from './dataLoader';
 import { StatusBarManager } from './statusBar';
 import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
-import { ExtensionConfig, UsageData, SessionData } from './types';
+import { ClaudeApiClient } from './claudeApiClient';
+import { ExtensionConfig, UsageData, SessionData, ClaudeApiUsageResponse } from './types';
 
 export class ClaudeCodeUsageExtension {
   private statusBar: StatusBarManager;
   private webviewProvider: UsageWebviewProvider;
+  private apiClient: ClaudeApiClient;
   private refreshTimer: NodeJS.Timeout | undefined;
   private cache: {
     records: any[];
     lastUpdate: Date;
     dataDirectory: string | null;
+    usageLimits: ClaudeApiUsageResponse | null;
+    usageLimitsLastUpdate: Date;
   } = {
     records: [],
     lastUpdate: new Date(0),
-    dataDirectory: null
+    dataDirectory: null,
+    usageLimits: null,
+    usageLimitsLastUpdate: new Date(0)
   };
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
     this.statusBar = new StatusBarManager();
     this.webviewProvider = new UsageWebviewProvider(context);
-    
+    this.apiClient = new ClaudeApiClient();
+
     this.setupCommands();
     this.loadConfiguration();
     this.startAutoRefresh();
@@ -107,7 +114,7 @@ export class ClaudeCodeUsageExtension {
       this.webviewProvider.setLoading(true);
 
       const config = this.getConfiguration();
-      
+
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
         config.dataDirectory || undefined
@@ -122,7 +129,7 @@ export class ClaudeCodeUsageExtension {
 
       // Check if we need to reload data
       const shouldReload = this.shouldReloadData(dataDirectory);
-      
+
       let records = this.cache.records;
       if (shouldReload) {
         records = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
@@ -131,10 +138,22 @@ export class ClaudeCodeUsageExtension {
         this.cache.dataDirectory = dataDirectory;
       }
 
+      // Fetch usage limits from API (cache for 2 minutes)
+      const shouldReloadUsageLimits = Date.now() - this.cache.usageLimitsLastUpdate.getTime() > 120000;
+      let usageLimits = this.cache.usageLimits;
+      if (shouldReloadUsageLimits) {
+        const fetchedLimits = await this.apiClient.fetchUsageLimits();
+        if (fetchedLimits) {
+          usageLimits = fetchedLimits;
+          this.cache.usageLimits = usageLimits;
+          this.cache.usageLimitsLastUpdate = new Date();
+        }
+      }
+
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
-        this.statusBar.updateUsageData(null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
+        this.statusBar.updateUsageData(null, error, usageLimits);
+        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory, undefined, usageLimits);
         return;
       }
 
@@ -148,13 +167,13 @@ export class ClaudeCodeUsageExtension {
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
 
       // Update UI
-      this.statusBar.updateUsageData(todayData);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records);
+      this.statusBar.updateUsageData(todayData, undefined, usageLimits);
+      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, usageLimits);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
-      
+
       this.statusBar.updateUsageData(null, errorMessage);
       this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
     }

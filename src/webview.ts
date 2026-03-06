@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
-import { SessionData, UsageData } from './types';
+import { SessionData, UsageData, ClaudeApiUsageResponse } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -17,6 +17,7 @@ export class UsageWebviewProvider {
   private currentTab: string = 'today';
   private hourlyDataCache: Map<string, { hour: string; data: UsageData }[]> = new Map();
   private allRecords: any[] = [];
+  private usageLimits: ClaudeApiUsageResponse | null = null;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -96,7 +97,8 @@ export class UsageWebviewProvider {
     hourlyDataForToday: { hour: string; data: UsageData }[] = [],
     error?: string,
     dataDirectory?: string | null,
-    allRecords?: any[]
+    allRecords?: any[],
+    usageLimits?: ClaudeApiUsageResponse | null
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -110,6 +112,9 @@ export class UsageWebviewProvider {
     this.isLoading = false;
     if (allRecords) {
       this.allRecords = allRecords;
+    }
+    if (usageLimits !== undefined) {
+      this.usageLimits = usageLimits;
     }
 
     if (this.panel) {
@@ -261,6 +266,10 @@ export class UsageWebviewProvider {
       `</button>
             </div>
           </header>
+
+          ` +
+      this.renderUsageLimits() +
+      `
 
           <div class="tabs">
             <button id="tab-today" class="tab ` +
@@ -536,6 +545,90 @@ export class UsageWebviewProvider {
 
       html += '</div></div>';
     }
+
+    return html;
+  }
+
+  private renderUsageLimits(): string {
+    if (!this.usageLimits) {
+      return '';
+    }
+
+    let html = '<div class="usage-limits-section">';
+    html += '<h2>Usage Limits</h2>';
+    html += '<div class="usage-limits-grid">';
+
+    // 5-Hour Session Limit
+    if (this.usageLimits.five_hour) {
+      const limit = this.usageLimits.five_hour;
+      const resetDate = new Date(limit.resets_at);
+      const hoursUntilReset = Math.max(0, (resetDate.getTime() - Date.now()) / (1000 * 60 * 60));
+      const isWarning = limit.utilization >= 80;
+      const isCritical = limit.utilization >= 95;
+      const statusClass = isCritical ? 'critical' : isWarning ? 'warning' : 'normal';
+
+      html += '<div class="limit-card ' + statusClass + '">';
+      html += '<div class="limit-header">';
+      html += '<h3>5-Hour Limit</h3>';
+      html += '<span class="limit-percentage">' + limit.utilization.toFixed(1) + '%</span>';
+      html += '</div>';
+      html += '<div class="limit-bar">';
+      html += '<div class="limit-progress" style="width: ' + Math.min(100, limit.utilization) + '%"></div>';
+      html += '</div>';
+      html += '<div class="limit-footer">';
+      html += '<span>Resets in ' + hoursUntilReset.toFixed(1) + ' hours</span>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // Weekly Limit
+    if (this.usageLimits.seven_day) {
+      const limit = this.usageLimits.seven_day;
+      const resetDate = new Date(limit.resets_at);
+      const daysUntilReset = Math.max(0, (resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      const isWarning = limit.utilization >= 80;
+      const isCritical = limit.utilization >= 95;
+      const statusClass = isCritical ? 'critical' : isWarning ? 'warning' : 'normal';
+
+      html += '<div class="limit-card ' + statusClass + '">';
+      html += '<div class="limit-header">';
+      html += '<h3>Weekly Limit</h3>';
+      html += '<span class="limit-percentage">' + limit.utilization.toFixed(1) + '%</span>';
+      html += '</div>';
+      html += '<div class="limit-bar">';
+      html += '<div class="limit-progress" style="width: ' + Math.min(100, limit.utilization) + '%"></div>';
+      html += '</div>';
+      html += '<div class="limit-footer">';
+      html += '<span>Resets in ' + daysUntilReset.toFixed(1) + ' days</span>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // Sonnet Weekly Limit (Max tier only)
+    if (this.usageLimits.seven_day_sonnet) {
+      const limit = this.usageLimits.seven_day_sonnet;
+      const resetDate = new Date(limit.resets_at);
+      const daysUntilReset = Math.max(0, (resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      const isWarning = limit.utilization >= 80;
+      const isCritical = limit.utilization >= 95;
+      const statusClass = isCritical ? 'critical' : isWarning ? 'warning' : 'normal';
+
+      html += '<div class="limit-card ' + statusClass + '">';
+      html += '<div class="limit-header">';
+      html += '<h3>Sonnet Weekly</h3>';
+      html += '<span class="limit-percentage">' + limit.utilization.toFixed(1) + '%</span>';
+      html += '</div>';
+      html += '<div class="limit-bar">';
+      html += '<div class="limit-progress" style="width: ' + Math.min(100, limit.utilization) + '%"></div>';
+      html += '</div>';
+      html += '<div class="limit-footer">';
+      html += '<span>Resets in ' + daysUntilReset.toFixed(1) + ' days</span>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    html += '</div>';
 
     return html;
   }
@@ -1268,6 +1361,100 @@ export class UsageWebviewProvider {
         text-align: center;
         color: var(--vscode-descriptionForeground);
         padding: 20px;
+      }
+
+      .usage-limits-section {
+        margin-bottom: 24px;
+        padding: 16px;
+        background: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 8px;
+      }
+
+      .usage-limits-section h2 {
+        margin: 0 0 16px 0;
+        font-size: 16px;
+        color: var(--vscode-foreground);
+      }
+
+      .usage-limits-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .limit-card {
+        padding: 16px;
+        background: var(--vscode-input-background);
+        border-radius: 8px;
+        border: 2px solid var(--vscode-input-border);
+      }
+
+      .limit-card.warning {
+        border-color: var(--vscode-editorWarning-foreground);
+        background: rgba(255, 165, 0, 0.1);
+      }
+
+      .limit-card.critical {
+        border-color: var(--vscode-editorError-foreground);
+        background: rgba(255, 0, 0, 0.1);
+      }
+
+      .limit-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .limit-header h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--vscode-foreground);
+      }
+
+      .limit-percentage {
+        font-size: 18px;
+        font-weight: bold;
+        color: var(--vscode-charts-blue);
+      }
+
+      .limit-card.warning .limit-percentage {
+        color: var(--vscode-editorWarning-foreground);
+      }
+
+      .limit-card.critical .limit-percentage {
+        color: var(--vscode-editorError-foreground);
+      }
+
+      .limit-bar {
+        width: 100%;
+        height: 8px;
+        background: var(--vscode-progressBar-background);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+
+      .limit-progress {
+        height: 100%;
+        background: var(--vscode-charts-blue);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+
+      .limit-card.warning .limit-progress {
+        background: var(--vscode-editorWarning-foreground);
+      }
+
+      .limit-card.critical .limit-progress {
+        background: var(--vscode-editorError-foreground);
+      }
+
+      .limit-footer {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
       }
     `;
   }

@@ -53,3 +53,28 @@ export interface ModelPricing {
 }
 
 export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko';
+
+// Claude API Usage Limits
+export interface UsageLimit {
+  utilization: number;  // percentage (0-100)
+  resets_at: string;    // ISO timestamp
+}
+
+export interface ClaudeApiUsageResponse {
+  five_hour?: UsageLimit;
+  seven_day?: UsageLimit;
+  seven_day_sonnet?: UsageLimit;
+  seven_day_opus?: UsageLimit;
+}
+
+export interface ClaudeCredentials {
+  claudeAiOauth: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;  // Unix timestamp in ms
+    scopes: string[];
+    subscriptionType: string | null;
+    rateLimitTier: string | null;
+  };
+  organizationUuid: string;
+}
