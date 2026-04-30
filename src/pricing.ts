@@ -67,7 +67,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   "claude-opus-4-6": {
     input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
     output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
-    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
+    cache_creation_input_token_cost: 6.25 / MILL, // $6 / 1M tokens (5min caching)
     cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
   },
 
@@ -75,7 +75,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   "claude-opus-4-7": {
     input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
     output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
-    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
+    cache_creation_input_token_cost: 6.25 / MILL, // $6 / 1M tokens (5min caching)
     cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
   },
 
