@@ -50,7 +50,8 @@ export class ClaudeCodeUsageExtension {
   private loadConfiguration(): void {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
-    
+    I18n.setDecimalPlaces(config.decimalPlaces);
+
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('claudeCodeUsage')) {
@@ -72,7 +73,8 @@ export class ClaudeCodeUsageExtension {
   private onConfigurationChanged(): void {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
-    
+    I18n.setDecimalPlaces(config.decimalPlaces);
+
     // Restart auto-refresh with new interval
     this.startAutoRefresh();
     
@@ -115,7 +117,7 @@ export class ClaudeCodeUsageExtension {
 
       if (!dataDirectory) {
         const error = 'Claude data directory not found. Please check your configuration.';
-        this.statusBar.updateUsageData(null, error);
+        this.statusBar.updateUsageData(null, null, error);
         this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
         return;
       }
@@ -133,7 +135,7 @@ export class ClaudeCodeUsageExtension {
 
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
-        this.statusBar.updateUsageData(null, error);
+        this.statusBar.updateUsageData(null, null, error);
         this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
         return;
       }
@@ -146,16 +148,18 @@ export class ClaudeCodeUsageExtension {
       const dailyDataForMonth = ClaudeDataLoader.getDailyDataForMonth(records);
       const dailyDataForAllTime = ClaudeDataLoader.getDailyDataForAllTime(records);
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
+      const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
+      const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records);
 
       // Update UI
-      this.statusBar.updateUsageData(todayData);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records);
+      this.statusBar.updateUsageData(todayData, sessionData);
+      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
       
-      this.statusBar.updateUsageData(null, errorMessage);
+      this.statusBar.updateUsageData(null, null, errorMessage);
       this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
     }
   }

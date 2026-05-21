@@ -1,4 +1,8 @@
-// Claude Price calculation by model
+// Price calculation by model.
+//
+// This extension primarily tracks Claude Code, but Claude Code can be pointed at
+// other providers via a proxy, so pricing for common US / Chinese models is also
+// included as a convenience.
 
 import { ModelPricing } from './types';
 
@@ -11,82 +15,218 @@ export interface TokenUsage {
 
 const MILL = 1_000_000;
 
-// Official Price Info (State 2025-11-28)
-// https://platform.claude.com/docs/en/about-claude/models/overview
-// https://platform.claude.com/docs/en/about-claude/pricing
-const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Claude Sonnet 4
-  'claude-sonnet-4-20250514': {
-    input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
-    output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
-    cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 0.3 / MILL, // $0.30 / 1M tokens
-  },
+// =====================================================================
+// Anthropic / Claude pricing
+// Verified 2026-05-21 — https://platform.claude.com/docs/en/about-claude/pricing
+//
+// Cache pricing follows Anthropic's standard multipliers vs base input price:
+//   - 5-minute cache write : 1.25x base input  (what Claude Code writes by default)
+//   - cache read (hit)     : 0.10x base input
+// `cache_creation_input_token_cost` below uses the 5-minute write rate.
+// =====================================================================
 
-  // Claude Opus 4
-  'claude-opus-4-20250514': {
-    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
-    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
-  },
+// Opus 4.5 / 4.6 / 4.7 — current Opus tier ($5 / $25)
+const OPUS_CURRENT: ModelPricing = {
+  input_cost_per_token: 5 / MILL,
+  output_cost_per_token: 25 / MILL,
+  cache_creation_input_token_cost: 6.25 / MILL,
+  cache_read_input_token_cost: 0.5 / MILL,
+};
+
+// Opus 4 / 4.1 — legacy Opus tier ($15 / $75)
+const OPUS_LEGACY: ModelPricing = {
+  input_cost_per_token: 15 / MILL,
+  output_cost_per_token: 75 / MILL,
+  cache_creation_input_token_cost: 18.75 / MILL,
+  cache_read_input_token_cost: 1.5 / MILL,
+};
+
+// Sonnet 3.5 / 4 / 4.5 / 4.6 — Sonnet tier ($3 / $15, <=200K context)
+const SONNET: ModelPricing = {
+  input_cost_per_token: 3 / MILL,
+  output_cost_per_token: 15 / MILL,
+  cache_creation_input_token_cost: 3.75 / MILL,
+  cache_read_input_token_cost: 0.3 / MILL,
+};
+
+// Haiku 4.5 ($1 / $5)
+const HAIKU_45: ModelPricing = {
+  input_cost_per_token: 1 / MILL,
+  output_cost_per_token: 5 / MILL,
+  cache_creation_input_token_cost: 1.25 / MILL,
+  cache_read_input_token_cost: 0.1 / MILL,
+};
+
+// Haiku 3.5 ($0.80 / $4) — retired, kept for historical logs
+const HAIKU_35: ModelPricing = {
+  input_cost_per_token: 0.8 / MILL,
+  output_cost_per_token: 4 / MILL,
+  cache_creation_input_token_cost: 1.0 / MILL,
+  cache_read_input_token_cost: 0.08 / MILL,
+};
+
+/**
+ * Build pricing for non-Anthropic providers, which usually only publish an
+ * input price, an output price, and an optional discounted "cached input" price.
+ * @param inputPerM       Input price per 1M tokens (USD)
+ * @param outputPerM      Output price per 1M tokens (USD)
+ * @param cachedInputPerM Cached/'cache hit' input price per 1M tokens (USD).
+ *                        Defaults to 10% of the input price when omitted.
+ */
+function priced(inputPerM: number, outputPerM: number, cachedInputPerM?: number): ModelPricing {
+  return {
+    input_cost_per_token: inputPerM / MILL,
+    output_cost_per_token: outputPerM / MILL,
+    // These providers do not charge extra to *write* a cache entry — a cache-write
+    // token is billed like a normal input token.
+    cache_creation_input_token_cost: inputPerM / MILL,
+    cache_read_input_token_cost: (cachedInputPerM != null ? cachedInputPerM : inputPerM * 0.1) / MILL,
+  };
+}
+
+// =====================================================================
+// Non-Claude reference pricing (USD per 1M tokens)
+// Last checked 2026-05. OpenAI / Gemini / DeepSeek from vendor docs; Chinese
+// models converted from published RMB prices at ~7.2 RMB/USD and are approximate
+// — treat these as estimates and re-verify before relying on them.
+// =====================================================================
+const NON_CLAUDE_PRICING: Record<string, ModelPricing> = {
+  // --- OpenAI --- https://openai.com/api/pricing/
+  'gpt-5.5': priced(5, 30, 0.5),
+  'gpt-5.4': priced(2.5, 15, 0.25),
+  'gpt-5': priced(1.25, 10, 0.125),
+  'gpt-5-mini': priced(0.25, 2, 0.025),
+  'gpt-5-nano': priced(0.05, 0.4, 0.005),
+  'gpt-4.1': priced(2, 8, 0.5),
+  'gpt-4.1-mini': priced(0.4, 1.6, 0.1),
+  'gpt-4.1-nano': priced(0.1, 0.4, 0.025),
+  'gpt-4o': priced(2.5, 10, 1.25),
+  'gpt-4o-mini': priced(0.15, 0.6, 0.075),
+  'o3': priced(2, 8, 0.5),
+  'o4-mini': priced(1.1, 4.4, 0.275),
+
+  // --- Google Gemini --- https://ai.google.dev/gemini-api/docs/pricing (<=200K tier)
+  'gemini-2.5-pro': priced(1.25, 10, 0.125),
+  'gemini-2.5-flash': priced(0.3, 2.5, 0.03),
+  'gemini-2.5-flash-lite': priced(0.1, 0.4, 0.01),
+  'gemini-2.0-flash': priced(0.1, 0.4, 0.025),
+
+  // --- DeepSeek --- https://api-docs.deepseek.com (cache-hit price applied to cache reads)
+  'deepseek-chat': priced(0.14, 0.28, 0.0028),
+  'deepseek-reasoner': priced(0.14, 0.28, 0.0028),
+  'deepseek-v4-flash': priced(0.14, 0.28, 0.0028),
+
+  // --- Moonshot / Kimi --- prices published in USD by Moonshot
+  'kimi-k2-6': priced(0.95, 4.0, 0.16),
+  'kimi-k2-5': priced(0.6, 2.5),
+  'kimi-k2': priced(0.6, 2.5),
+  'moonshot-v1-128k': priced(0.6, 2.5),
+
+  // --- Zhipu GLM --- approximate, converted from published RMB pricing
+  'glm-4.6': priced(0.6, 2.2),
+  'glm-4.5': priced(0.6, 2.2),
+  'glm-4.5-air': priced(0.2, 1.1),
+
+  // --- Alibaba Qwen --- approximate, converted from RMB (DashScope, <=32K tier)
+  'qwen-max': priced(0.35, 1.39),
+  'qwen-plus': priced(0.11, 0.67),
+  'qwen-turbo': priced(0.042, 0.083),
+  'qwen-long': priced(0.069, 0.278),
+};
+
+// Exact model-id -> pricing map. Both dated snapshots and short aliases are listed
+// so direct lookups stay fast; anything not listed is resolved by getModelPricing()'s
+// family-aware fallback below.
+const MODEL_PRICING: Record<string, ModelPricing> = {
+  // Claude Opus 4.7 / 4.6
+  'claude-opus-4-7': OPUS_CURRENT,
+  'claude-opus-4-6': OPUS_CURRENT,
+
+  // Claude Opus 4.5 (2025-11)
+  'claude-opus-4-5-20251101': OPUS_CURRENT,
+  'claude-opus-4-5': OPUS_CURRENT,
 
   // Claude Opus 4.1 (2025-08-05)
-  'claude-opus-4-1-20250805': {
-    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
-    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
-  },
+  'claude-opus-4-1-20250805': OPUS_LEGACY,
+  'claude-opus-4-1': OPUS_LEGACY,
 
-  // Claude Opus 4.1 (alias)
-  'claude-opus-4-1': {
-    input_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
-    output_cost_per_token: 75 / MILL, // $75.00 / 1M tokens
-    cache_creation_input_token_cost: 18.75 / MILL, // $18.75 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 1.5 / MILL, // $1.50 / 1M tokens
-  },
+  // Claude Opus 4 (2025-05-14)
+  'claude-opus-4-20250514': OPUS_LEGACY,
 
-  // Claude Opus 4.5 (2025-11 v01)
-  'claude-opus-4-5-20251101': {
-    input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
-    output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
-    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
-  },
+  // Claude Sonnet 4.6
+  'claude-sonnet-4-6': SONNET,
 
-  // Claude Opus 4.5 (alias)
-  'claude-opus-4-5': {
-    input_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
-    output_cost_per_token: 25 / MILL, // $25.00 / 1M tokens
-    cache_creation_input_token_cost: 6 / MILL, // $6 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 0.5 / MILL, // $0.50 / 1M tokens
-  },
+  // Claude Sonnet 4.5 (2025-09-29)
+  'claude-sonnet-4-5-20250929': SONNET,
+  'claude-sonnet-4-5': SONNET,
+
+  // Claude Sonnet 4 (2025-05-14)
+  'claude-sonnet-4-20250514': SONNET,
 
   // Claude Sonnet 3.5 (2024-10-22)
-  'claude-3-5-sonnet-20241022': {
-    input_cost_per_token: 3 / MILL, // $3.00 / 1M tokens
-    output_cost_per_token: 15 / MILL, // $15.00 / 1M tokens
-    cache_creation_input_token_cost: 3.75 / MILL, // $3.75 / 1M tokens (5min caching)
-    cache_read_input_token_cost: 0.3 / MILL, // $0.30 / 1M tokens
-  },
+  'claude-3-5-sonnet-20241022': SONNET,
 
-  // Claude Haiku 3.5 (Not used anymore)
-  'claude-3-5-haiku-20241022': {
-    input_cost_per_token: 0.8 / MILL, // $0.8 / 1M tokens
-    output_cost_per_token: 4 / MILL, // $4.00 / 1M tokens
-    cache_creation_input_token_cost: 1.6 / MILL, // $1.6 / 1M tokens
-    cache_read_input_token_cost: 0.08 / MILL, // $0.08 / 1M tokens
-  },
+  // Claude Haiku 4.5 (2025-10)
+  'claude-haiku-4-5-20251001': HAIKU_45,
+  'claude-haiku-4-5': HAIKU_45,
 
-  // Claude Haiku 4.5 (2025-10 v01)
-  'claude-haiku-4-5-20251001': {
-    input_cost_per_token: 1 / MILL, // $1.00 / 1M tokens
-    output_cost_per_token: 5 / MILL, // $5.00 / 1M tokens
-    cache_creation_input_token_cost: 1.25 / MILL, // $1.25 / 1M tokens
-    cache_read_input_token_cost: 0.1 / MILL, // $0.10 / 1M tokens
-  },
+  // Claude Haiku 3.5 (2024-10-22) — retired
+  'claude-3-5-haiku-20241022': HAIKU_35,
+
+  // Common US / Chinese models (see NON_CLAUDE_PRICING above)
+  ...NON_CLAUDE_PRICING,
 };
+
+/**
+ * Resolve pricing for an unknown model id by detecting its family.
+ *
+ * Vendors ship new dated snapshots frequently, so a hardcoded table always lags.
+ * Rather than charging every unknown model the wrong rate, map by family to a
+ * sensible current model of that family.
+ *
+ * @returns pricing + a human-readable family label, or null if no family matched
+ */
+function inferPricingByFamily(modelName: string): { pricing: ModelPricing; family: string } | null {
+  const name = modelName.toLowerCase();
+
+  // --- Anthropic / Claude ---
+  if (name.includes('haiku')) {
+    if (name.includes('haiku-3') || name.includes('-3-5-haiku') || name.includes('-3-haiku')) {
+      return { pricing: HAIKU_35, family: 'Haiku 3.5' };
+    }
+    return { pricing: HAIKU_45, family: 'Haiku 4.5' };
+  }
+  if (name.includes('opus')) {
+    // Legacy Opus (4 / 4.1) is always in the exact map, so an unknown opus is
+    // almost certainly a new-tier model.
+    return { pricing: OPUS_CURRENT, family: 'Opus (current tier)' };
+  }
+  if (name.includes('sonnet')) {
+    return { pricing: SONNET, family: 'Sonnet' };
+  }
+
+  // --- Other providers ---
+  if (name.includes('gpt') || /(^|[^a-z])o[1-9]([^a-z]|$)/.test(name)) {
+    return { pricing: NON_CLAUDE_PRICING['gpt-5'], family: 'OpenAI GPT' };
+  }
+  if (name.includes('gemini')) {
+    return { pricing: NON_CLAUDE_PRICING['gemini-2.5-flash'], family: 'Google Gemini' };
+  }
+  if (name.includes('deepseek')) {
+    return { pricing: NON_CLAUDE_PRICING['deepseek-chat'], family: 'DeepSeek' };
+  }
+  if (name.includes('kimi') || name.includes('moonshot')) {
+    return { pricing: NON_CLAUDE_PRICING['kimi-k2-6'], family: 'Moonshot Kimi' };
+  }
+  if (name.includes('glm')) {
+    return { pricing: NON_CLAUDE_PRICING['glm-4.6'], family: 'Zhipu GLM' };
+  }
+  if (name.includes('qwen') || name.includes('tongyi')) {
+    return { pricing: NON_CLAUDE_PRICING['qwen-plus'], family: 'Alibaba Qwen' };
+  }
+
+  return null;
+}
 
 /**
  * Get pricing information for a model
@@ -112,9 +252,16 @@ export function getModelPricing(modelName: string | undefined): ModelPricing | n
     }
   }
 
-  // If unknown model, use Sonnet 4 pricing as default
-  console.warn(`Unknown model: ${modelName}, using Sonnet 4 pricing as fallback`);
-  return MODEL_PRICING['claude-sonnet-4-20250514'];
+  // Family-aware fallback for unrecognised (typically newer) snapshots.
+  const inferred = inferPricingByFamily(modelName);
+  if (inferred) {
+    console.warn(`Unknown model: ${modelName}, using ${inferred.family} pricing as fallback`);
+    return inferred.pricing;
+  }
+
+  // Truly unknown model (no family keyword) — fall back to Sonnet, the most common default.
+  console.warn(`Unknown model: ${modelName}, using Sonnet pricing as fallback`);
+  return SONNET;
 }
 
 /**

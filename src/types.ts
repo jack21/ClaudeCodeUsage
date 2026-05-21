@@ -14,6 +14,11 @@ export interface ClaudeUsageRecord {
   costUSD?: number;
   requestId?: string;
   isApiErrorMessage?: boolean;
+  // --- Fields populated by the loader from each record's source .jsonl file ---
+  // (a single .jsonl file == a single Claude Code conversation/session)
+  _sessionId?: string;
+  _projectName?: string;
+  _projectPath?: string;
 }
 
 export interface UsageData {
@@ -36,6 +41,29 @@ export interface UsageData {
 export interface SessionData extends UsageData {
   sessionStart: Date;
   sessionEnd: Date;
+}
+
+// Per-conversation breakdown: one entry per Claude Code session (.jsonl file).
+export interface SessionUsage {
+  sessionId: string;
+  projectName: string;
+  projectPath: string;
+  startTime: Date;
+  endTime: Date;
+  data: UsageData;
+  // Largest context window observed in the session
+  // (input + cache read + cache creation tokens of a single request).
+  peakContextTokens: number;
+}
+
+// Per-project breakdown: usage aggregated across every session of a project.
+export interface ProjectUsage {
+  projectName: string;
+  projectPath: string;
+  sessionCount: number;
+  firstSeen: Date;
+  lastSeen: Date;
+  data: UsageData;
 }
 
 export interface ExtensionConfig {

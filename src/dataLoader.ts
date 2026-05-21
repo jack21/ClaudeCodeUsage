@@ -5,7 +5,7 @@ import * as path from 'path';
 // Removed tinyglobby dependency - using native fs instead
 // Removed zod dependency - using native validation instead
 import { calculateCostFromTokens } from './pricing';
-import { ClaudeUsageRecord, SessionData, UsageData } from './types';
+import { ClaudeUsageRecord, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 // Constants
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
@@ -160,6 +160,9 @@ export class ClaudeDataLoader {
             .split('\n')
             .filter((line) => line.trim() !== '');
 
+          // Each .jsonl file is one Claude Code conversation/session.
+          const sessionInfo = this.parseSessionInfo(file);
+
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line) as unknown;
@@ -179,7 +182,20 @@ export class ClaudeDataLoader {
                 processedHashes.add(uniqueHash);
               }
 
-              records.push(data as ClaudeUsageRecord);
+              // Tag the record with the session/project it came from.
+              // Prefer the real working directory (`cwd`) recorded in the log line
+              // over the lossy, dash-encoded folder name when it is available.
+              const record = data as ClaudeUsageRecord;
+              record._sessionId = sessionInfo.sessionId;
+              const cwd = (parsed as { cwd?: unknown }).cwd;
+              if (typeof cwd === 'string' && cwd.trim() !== '') {
+                record._projectPath = cwd;
+                record._projectName = this.lastPathSegment(cwd);
+              } else {
+                record._projectPath = sessionInfo.projectPath;
+                record._projectName = sessionInfo.projectName;
+              }
+              records.push(record);
             } catch (parseError) {
               console.warn(`Failed to parse line in ${file}:`, parseError);
             }
@@ -205,6 +221,36 @@ export class ClaudeDataLoader {
     }
 
     return `${messageId || 'no-msg'}-${requestId || 'no-req'}`;
+  }
+
+  /**
+   * Derive session + project info from a usage log file path.
+   * Claude Code stores logs as: <claudeDir>/projects/<encoded-cwd>/<session-id>.jsonl
+   * The encoded-cwd folder is the working directory with path separators replaced by '-'.
+   */
+  private static parseSessionInfo(filePath: string): { sessionId: string; projectName: string; projectPath: string } {
+    const sessionId = path.basename(filePath, '.jsonl');
+    const projectPath = path.basename(path.dirname(filePath));
+    // Use the last meaningful segment of the encoded path as a friendly project name.
+    const segments = projectPath.split('-').filter((s) => s.length > 0);
+    const projectName = segments.length > 0 ? segments[segments.length - 1] : projectPath || 'unknown';
+    return { sessionId, projectName, projectPath };
+  }
+
+  /** Last segment of a path, handling both '/' and '\\' separators. */
+  private static lastPathSegment(p: string): string {
+    const parts = p.split(/[\\/]/).filter((s) => s.length > 0);
+    return parts.length > 0 ? parts[parts.length - 1] : p;
+  }
+
+  /**
+   * Context-window size for a single request: every token on the input side
+   * (fresh input + cache reads + cache writes). Mirrors what Claude Code's
+   * /context command summarises.
+   */
+  private static recordContextTokens(record: ClaudeUsageRecord): number {
+    const usage = record.message.usage;
+    return (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
   }
 
   private static async getEarliestTimestamp(filePath: string): Promise<Date | null> {
@@ -401,6 +447,91 @@ export class ClaudeDataLoader {
 
   static getAllTimeData(records: ClaudeUsageRecord[]): UsageData {
     return this.calculateUsageData(records);
+  }
+
+  /**
+   * Group records by their source session (.jsonl file) and aggregate usage per session.
+   * Returns sessions with billable usage, sorted by most recent activity first.
+   * @param records All loaded usage records
+   * @param limit Maximum number of sessions to return (default 50)
+   */
+  static getSessionBreakdown(records: ClaudeUsageRecord[], limit: number = 50): SessionUsage[] {
+    const recordsBySession: Record<string, ClaudeUsageRecord[]> = {};
+
+    for (const record of records) {
+      const sessionId = record._sessionId || 'unknown';
+      if (!recordsBySession[sessionId]) {
+        recordsBySession[sessionId] = [];
+      }
+      recordsBySession[sessionId].push(record);
+    }
+
+    const sessions: SessionUsage[] = Object.entries(recordsBySession).map(([sessionId, sessionRecords]) => {
+      const timestamps = sessionRecords
+        .map((r) => new Date(r.timestamp).getTime())
+        .filter((t) => !isNaN(t));
+      const startTime = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0);
+      const endTime = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0);
+      const first = sessionRecords[0];
+      const peakContextTokens = sessionRecords.reduce((peak, r) => Math.max(peak, this.recordContextTokens(r)), 0);
+
+      return {
+        sessionId,
+        projectName: first._projectName || 'unknown',
+        projectPath: first._projectPath || '',
+        startTime,
+        endTime,
+        data: this.calculateUsageData(sessionRecords),
+        peakContextTokens,
+      };
+    });
+
+    return sessions
+      .filter((s) => s.data.messageCount > 0)
+      .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())
+      .slice(0, limit);
+  }
+
+  /**
+   * Group records by project (working directory) and aggregate usage per project.
+   * Returns projects with billable usage, sorted by most recent activity first.
+   * @param records All loaded usage records
+   * @param limit Maximum number of projects to return (default 50)
+   */
+  static getProjectBreakdown(records: ClaudeUsageRecord[], limit: number = 50): ProjectUsage[] {
+    const recordsByProject: Record<string, ClaudeUsageRecord[]> = {};
+
+    for (const record of records) {
+      const key = record._projectPath || record._projectName || 'unknown';
+      if (!recordsByProject[key]) {
+        recordsByProject[key] = [];
+      }
+      recordsByProject[key].push(record);
+    }
+
+    const projects: ProjectUsage[] = Object.entries(recordsByProject).map(([projectPath, projectRecords]) => {
+      const timestamps = projectRecords
+        .map((r) => new Date(r.timestamp).getTime())
+        .filter((t) => !isNaN(t));
+      const firstSeen = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0);
+      const lastSeen = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0);
+      const sessionCount = new Set(projectRecords.map((r) => r._sessionId || 'unknown')).size;
+      const first = projectRecords[0];
+
+      return {
+        projectName: first._projectName || 'unknown',
+        projectPath: first._projectPath || projectPath,
+        sessionCount,
+        firstSeen,
+        lastSeen,
+        data: this.calculateUsageData(projectRecords),
+      };
+    });
+
+    return projects
+      .filter((p) => p.data.messageCount > 0)
+      .sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime())
+      .slice(0, limit);
   }
 
   static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {

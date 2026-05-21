@@ -27,6 +27,17 @@ export interface Translations {
     dailyBreakdown: string;
     monthlyBreakdown: string;
     hourlyBreakdown: string;
+    sessions: string;
+    sessionBreakdown: string;
+    project: string;
+    startTime: string;
+    duration: string;
+    projects: string;
+    projectBreakdown: string;
+    fullPath: string;
+    peakContext: string;
+    tokenComposition: string;
+    lastActive: string;
     date: string;
     yesterday: string;
     dataDirectory: string;
@@ -70,6 +81,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: 'Daily Usage',
       monthlyBreakdown: 'Monthly Usage',
       hourlyBreakdown: 'Hourly Usage',
+      sessions: 'Sessions',
+      sessionBreakdown: 'Session Usage',
+      project: 'Project',
+      startTime: 'Start Time',
+      duration: 'Duration',
+      projects: 'Projects',
+      projectBreakdown: 'Project Usage',
+      fullPath: 'Full Path',
+      peakContext: 'Peak Context',
+      tokenComposition: 'Token Composition',
+      lastActive: 'Last Active',
       date: 'Date',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
@@ -111,6 +133,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: "Tages-Nutzungsübersicht",
       monthlyBreakdown: "Monats-Nutzungsübersicht",
       hourlyBreakdown: "Stunden-Nutzungsübersicht",
+      sessions: "Sitzungen",
+      sessionBreakdown: "Nutzung nach Sitzung",
+      project: "Projekt",
+      startTime: "Startzeit",
+      duration: "Dauer",
+      projects: "Projekte",
+      projectBreakdown: "Nutzung nach Projekt",
+      fullPath: "Vollständiger Pfad",
+      peakContext: "Größter Kontext",
+      tokenComposition: "Token-Zusammensetzung",
+      lastActive: "Zuletzt aktiv",
       date: "Datum",
       yesterday: "Gestern",
       dataDirectory: "Daten Pfad",
@@ -154,6 +187,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: '每日使用量',
       monthlyBreakdown: '每月使用量',
       hourlyBreakdown: '每小時使用量',
+      sessions: '會話',
+      sessionBreakdown: '各會話使用量',
+      project: '專案',
+      startTime: '開始時間',
+      duration: '時長',
+      projects: '專案',
+      projectBreakdown: '各專案使用量',
+      fullPath: '完整路徑',
+      peakContext: '峰值上下文',
+      tokenComposition: 'Token 組成',
+      lastActive: '最近活動',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
@@ -195,6 +239,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: '每日使用量',
       monthlyBreakdown: '每月使用量',
       hourlyBreakdown: '每小时使用量',
+      sessions: '会话',
+      sessionBreakdown: '各会话使用量',
+      project: '项目',
+      startTime: '开始时间',
+      duration: '时长',
+      projects: '项目',
+      projectBreakdown: '各项目使用量',
+      fullPath: '完整路径',
+      peakContext: '峰值上下文',
+      tokenComposition: 'Token 组成',
+      lastActive: '最近活动',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '数据目录',
@@ -236,6 +291,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: '日別使用量',
       monthlyBreakdown: '月別使用量',
       hourlyBreakdown: '時間別使用量',
+      sessions: 'セッション',
+      sessionBreakdown: 'セッション別使用量',
+      project: 'プロジェクト',
+      startTime: '開始時刻',
+      duration: '期間',
+      projects: 'プロジェクト',
+      projectBreakdown: 'プロジェクト別使用量',
+      fullPath: 'フルパス',
+      peakContext: '最大コンテキスト',
+      tokenComposition: 'トークン構成',
+      lastActive: '最終アクティブ',
       date: '日付',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
@@ -277,6 +343,17 @@ const translations: Record<SupportedLanguage, Translations> = {
       dailyBreakdown: '일별 사용량',
       monthlyBreakdown: '월별 사용량',
       hourlyBreakdown: '시간별 사용량',
+      sessions: '세션',
+      sessionBreakdown: '세션별 사용량',
+      project: '프로젝트',
+      startTime: '시작 시간',
+      duration: '사용 시간',
+      projects: '프로젝트',
+      projectBreakdown: '프로젝트별 사용량',
+      fullPath: '전체 경로',
+      peakContext: '최대 컨텍스트',
+      tokenComposition: '토큰 구성',
+      lastActive: '마지막 활동',
       date: '날짜',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',
@@ -295,6 +372,14 @@ const translations: Record<SupportedLanguage, Translations> = {
 
 export class I18n {
   private static currentLanguage: SupportedLanguage = 'en';
+  private static currentDecimalPlaces: number = 2;
+
+  /** Set the number of decimal places used by formatCurrency (claudeCodeUsage.decimalPlaces). */
+  static setDecimalPlaces(places: number): void {
+    if (typeof places === 'number' && isFinite(places) && places >= 0 && places <= 4) {
+      this.currentDecimalPlaces = Math.floor(places);
+    }
+  }
 
   static setLanguage(lang: SupportedLanguage | 'auto'): void {
     if (lang === 'auto') {
@@ -328,8 +413,9 @@ export class I18n {
     return 'en';
   }
 
-  static formatCurrency(amount: number, decimalPlaces: number = 2): string {
-    return `$${amount.toFixed(decimalPlaces)}`;
+  static formatCurrency(amount: number, decimalPlaces?: number): string {
+    const places = decimalPlaces != null ? decimalPlaces : this.currentDecimalPlaces;
+    return `$${amount.toFixed(places)}`;
   }
 
   static formatNumber(num: number): string {

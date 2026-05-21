@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { UsageData } from './types';
+import { SessionData, UsageData } from './types';
 import { I18n } from './i18n';
 
 export class StatusBarManager {
@@ -21,9 +21,9 @@ export class StatusBarManager {
     this.updateStatusBar();
   }
 
-  updateUsageData(todayData: UsageData | null, error?: string): void {
+  updateUsageData(todayData: UsageData | null, sessionData?: SessionData | null, error?: string): void {
     this.isLoading = false;
-    
+
     if (error) {
       this.showError(error);
       return;
@@ -34,7 +34,7 @@ export class StatusBarManager {
       return;
     }
 
-    this.showTodayData(todayData);
+    this.showTodayData(todayData, sessionData ?? null);
   }
 
   private updateStatusBar(): void {
@@ -45,12 +45,17 @@ export class StatusBarManager {
     }
   }
 
-  private showTodayData(todayData: UsageData): void {
-    const cost = I18n.formatCurrency(todayData.totalCost);
-    this.statusBarItem.text = `$(pulse) ${cost}`;
-    
-    const tooltip = this.createTooltip(todayData);
-    this.statusBarItem.tooltip = tooltip;
+  private showTodayData(todayData: UsageData, sessionData: SessionData | null): void {
+    const todayCost = I18n.formatCurrency(todayData.totalCost);
+    // Primary number = today's cost. When an active session exists, show its
+    // cost as a secondary value so per-session spend is visible at a glance.
+    let text = `$(pulse) ${todayCost}`;
+    if (sessionData && sessionData.messageCount > 0) {
+      text += ` $(history) ${I18n.formatCurrency(sessionData.totalCost)}`;
+    }
+    this.statusBarItem.text = text;
+
+    this.statusBarItem.tooltip = this.createTooltip(todayData, sessionData);
     this.statusBarItem.backgroundColor = undefined;
   }
 
@@ -66,16 +71,28 @@ export class StatusBarManager {
     this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
   }
 
-  private createTooltip(todayData: UsageData): string {
-    const lines = [
-      `${I18n.t.popup.today}:`,
-      `${I18n.t.popup.cost}: ${I18n.formatCurrency(todayData.totalCost)}`,
-      `${I18n.t.popup.inputTokens}: ${I18n.formatNumber(todayData.totalInputTokens)}`,
-      `${I18n.t.popup.outputTokens}: ${I18n.formatNumber(todayData.totalOutputTokens)}`,
-      `${I18n.t.popup.messages}: ${I18n.formatNumber(todayData.messageCount)}`,
-      '',
-      'Click for detailed breakdown'
+  private createTooltip(todayData: UsageData, sessionData: SessionData | null): string {
+    const t = I18n.t.popup;
+    const lines: string[] = [
+      `${t.today} ($(pulse)): ${I18n.formatCurrency(todayData.totalCost)}`,
+      `  ${t.inputTokens}: ${I18n.formatNumber(todayData.totalInputTokens)}`,
+      `  ${t.outputTokens}: ${I18n.formatNumber(todayData.totalOutputTokens)}`,
+      `  ${t.cacheCreation}: ${I18n.formatNumber(todayData.totalCacheCreationTokens)}`,
+      `  ${t.cacheRead}: ${I18n.formatNumber(todayData.totalCacheReadTokens)}`,
+      `  ${t.messages}: ${I18n.formatNumber(todayData.messageCount)}`,
     ];
+
+    if (sessionData && sessionData.messageCount > 0) {
+      lines.push('');
+      lines.push(`${I18n.t.statusBar.currentSession} ($(history)): ${I18n.formatCurrency(sessionData.totalCost)}`);
+      lines.push(`  ${t.inputTokens}: ${I18n.formatNumber(sessionData.totalInputTokens)}`);
+      lines.push(`  ${t.outputTokens}: ${I18n.formatNumber(sessionData.totalOutputTokens)}`);
+      lines.push(`  ${t.cacheRead}: ${I18n.formatNumber(sessionData.totalCacheReadTokens)}`);
+      lines.push(`  ${t.messages}: ${I18n.formatNumber(sessionData.messageCount)}`);
+    }
+
+    lines.push('');
+    lines.push('Click for detailed breakdown');
 
     return lines.join('\n');
   }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
-import { SessionData, UsageData } from './types';
+import { ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -17,6 +17,8 @@ export class UsageWebviewProvider {
   private currentTab: string = 'today';
   private hourlyDataCache: Map<string, { hour: string; data: UsageData }[]> = new Map();
   private allRecords: any[] = [];
+  private sessionBreakdown: SessionUsage[] = [];
+  private projectBreakdown: ProjectUsage[] = [];
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -96,7 +98,9 @@ export class UsageWebviewProvider {
     hourlyDataForToday: { hour: string; data: UsageData }[] = [],
     error?: string,
     dataDirectory?: string | null,
-    allRecords?: any[]
+    allRecords?: any[],
+    sessionBreakdown: SessionUsage[] = [],
+    projectBreakdown: ProjectUsage[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -111,6 +115,8 @@ export class UsageWebviewProvider {
     if (allRecords) {
       this.allRecords = allRecords;
     }
+    this.sessionBreakdown = sessionBreakdown;
+    this.projectBreakdown = projectBreakdown;
 
     if (this.panel) {
       this.updateWebview();
@@ -227,10 +233,14 @@ export class UsageWebviewProvider {
     const today = I18n.t.popup.today;
     const thisMonth = I18n.t.popup.thisMonth;
     const allTime = I18n.t.popup.allTime;
+    const sessions = I18n.t.popup.sessions;
+    const projects = I18n.t.popup.projects;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
     const allActive = this.currentTab === 'all' ? 'active' : '';
+    const sessionsActive = this.currentTab === 'sessions' ? 'active' : '';
+    const projectsActive = this.currentTab === 'projects' ? 'active' : '';
 
     return (
       `
@@ -278,6 +288,16 @@ export class UsageWebviewProvider {
       `" onclick="showTab('all')">` +
       allTime +
       `</button>
+            <button id="tab-sessions" class="tab ` +
+      sessionsActive +
+      `" onclick="showTab('sessions')">` +
+      sessions +
+      `</button>
+            <button id="tab-projects" class="tab ` +
+      projectsActive +
+      `" onclick="showTab('projects')">` +
+      projects +
+      `</button>
           </div>
 
           <div id="today" class="tab-content ` +
@@ -301,6 +321,22 @@ export class UsageWebviewProvider {
       `">
             ` +
       this.renderAllTimeData() +
+      `
+          </div>
+
+          <div id="sessions" class="tab-content ` +
+      sessionsActive +
+      `">
+            ` +
+      this.renderSessionData() +
+      `
+          </div>
+
+          <div id="projects" class="tab-content ` +
+      projectsActive +
+      `">
+            ` +
+      this.renderProjectData() +
       `
           </div>
         </div>
@@ -387,6 +423,11 @@ export class UsageWebviewProvider {
         this.renderHourlyChart() +
         '</div>' +
         '</div>' +
+        this.renderCompositionChart(
+          [...this.hourlyDataForToday]
+            .sort((a, b) => a.hour.localeCompare(b.hour))
+            .map((h) => ({ label: h.hour, data: h.data }))
+        ) +
         '<div class="daily-table-container">' +
         '<table class="daily-table">' +
         '<thead>' +
@@ -570,6 +611,12 @@ export class UsageWebviewProvider {
           </div>
         </div>
 
+        ${this.renderCompositionChart(
+          [...this.dailyDataForMonth]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((d) => ({ label: this.getShortDate(d.date), data: d.data }))
+        )}
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -654,6 +701,12 @@ export class UsageWebviewProvider {
           </div>
         </div>
 
+        ${this.renderCompositionChart(
+          [...this.dailyDataForAllTime]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((d) => ({ label: this.getShortDate(d.date), data: d.data }))
+        )}
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -706,6 +759,290 @@ export class UsageWebviewProvider {
         : '';
 
     return allTimeSummary + dailyBreakdown;
+  }
+
+  private renderSessionData(): string {
+    if (!this.sessionBreakdown || this.sessionBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    let rows = '';
+    this.sessionBreakdown.forEach((s) => {
+      rows +=
+        '<tr>' +
+        '<td class="date-cell" title="' + this.escapeHtml(s.sessionId) + '">' +
+        this.escapeHtml(this.formatDateTime(s.startTime)) +
+        '</td>' +
+        this.renderProjectCell(s.projectName, s.projectPath) +
+        '<td class="cost-cell">' +
+        I18n.formatCurrency(s.data.totalCost) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.data.totalInputTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.data.totalOutputTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.data.totalCacheCreationTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.data.totalCacheReadTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.peakContextTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(s.data.messageCount) +
+        '</td>' +
+        '<td class="number-cell">' +
+        this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) +
+        '</td>' +
+        '</tr>';
+    });
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' +
+      t.sessionBreakdown +
+      '</h3>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table">' +
+      '<thead><tr>' +
+      '<th>' +
+      t.startTime +
+      '</th>' +
+      '<th>' +
+      t.project +
+      '</th>' +
+      '<th>' +
+      t.cost +
+      '</th>' +
+      '<th>' +
+      t.inputTokens +
+      '</th>' +
+      '<th>' +
+      t.outputTokens +
+      '</th>' +
+      '<th>' +
+      t.cacheCreation +
+      '</th>' +
+      '<th>' +
+      t.cacheRead +
+      '</th>' +
+      '<th>' +
+      t.peakContext +
+      '</th>' +
+      '<th>' +
+      t.messages +
+      '</th>' +
+      '<th>' +
+      t.duration +
+      '</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+      rows +
+      '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  private formatDateTime(date: Date): string {
+    if (!date || isNaN(date.getTime()) || date.getTime() === 0) {
+      return '-';
+    }
+    return date.toLocaleString();
+  }
+
+  private formatDuration(start: Date, end: Date): string {
+    if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return '-';
+    }
+    const ms = end.getTime() - start.getTime();
+    if (ms <= 0) {
+      return '<1m';
+    }
+    const totalMinutes = Math.round(ms / 60000);
+    if (totalMinutes < 1) {
+      return '<1m';
+    }
+    if (totalMinutes < 60) {
+      return totalMinutes + 'm';
+    }
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return minutes > 0 ? hours + 'h ' + minutes + 'm' : hours + 'h';
+  }
+
+  /** A table cell showing the project's friendly name with its full path beneath. */
+  private renderProjectCell(name: string, fullPath: string): string {
+    const safeName = this.escapeHtml(name || 'unknown');
+    const safePath = this.escapeHtml(fullPath || '');
+    const pathLine = safePath ? '<div class="project-path" title="' + safePath + '">' + safePath + '</div>' : '';
+    return '<td class="project-cell"><div class="project-name">' + safeName + '</div>' + pathLine + '</td>';
+  }
+
+  private renderProjectData(): string {
+    if (!this.projectBreakdown || this.projectBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    let rows = '';
+    this.projectBreakdown.forEach((p) => {
+      rows +=
+        '<tr>' +
+        this.renderProjectCell(p.projectName, p.projectPath) +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.sessionCount) +
+        '</td>' +
+        '<td class="cost-cell">' +
+        I18n.formatCurrency(p.data.totalCost) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.data.totalInputTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.data.totalOutputTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.data.totalCacheCreationTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.data.totalCacheReadTokens) +
+        '</td>' +
+        '<td class="number-cell">' +
+        I18n.formatNumber(p.data.messageCount) +
+        '</td>' +
+        '<td class="date-cell">' +
+        this.escapeHtml(this.formatDateTime(p.lastSeen)) +
+        '</td>' +
+        '</tr>';
+    });
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' +
+      t.projectBreakdown +
+      '</h3>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table">' +
+      '<thead><tr>' +
+      '<th>' +
+      t.project +
+      '</th>' +
+      '<th>' +
+      t.sessions +
+      '</th>' +
+      '<th>' +
+      t.cost +
+      '</th>' +
+      '<th>' +
+      t.inputTokens +
+      '</th>' +
+      '<th>' +
+      t.outputTokens +
+      '</th>' +
+      '<th>' +
+      t.cacheCreation +
+      '</th>' +
+      '<th>' +
+      t.cacheRead +
+      '</th>' +
+      '<th>' +
+      t.messages +
+      '</th>' +
+      '<th>' +
+      t.lastActive +
+      '</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+      rows +
+      '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Static stacked-bar chart breaking each period into input / cache-read /
+   * cache-write / output tokens — a finer view than the single-metric chart.
+   */
+  private renderCompositionChart(items: { label: string; data: UsageData }[]): string {
+    if (!items || items.length === 0) {
+      return '';
+    }
+
+    const t = I18n.t.popup;
+    const maxHeight = 120;
+    const totals = items.map(
+      (it) =>
+        it.data.totalInputTokens + it.data.totalOutputTokens + it.data.totalCacheCreationTokens + it.data.totalCacheReadTokens
+    );
+    const maxTotal = Math.max(...totals, 1);
+
+    let bars = '';
+    items.forEach((it, idx) => {
+      const d = it.data;
+      const total = totals[idx];
+      const barHeight = (total / maxTotal) * maxHeight;
+      const seg = (value: number, cls: string, label: string): string => {
+        const h = total > 0 ? (value / total) * barHeight : 0;
+        return (
+          '<div class="stack-seg ' +
+          cls +
+          '" style="height: ' +
+          h +
+          'px;" title="' +
+          this.escapeHtml(label) +
+          ': ' +
+          I18n.formatNumber(value) +
+          '"></div>'
+        );
+      };
+      bars +=
+        '<div class="chart-bar-container">' +
+        '<div class="stack-bar" title="' +
+        this.escapeHtml(it.label) +
+        ': ' +
+        I18n.formatNumber(total) +
+        '">' +
+        seg(d.totalInputTokens, 'seg-input', t.inputTokens) +
+        seg(d.totalCacheReadTokens, 'seg-cache-read', t.cacheRead) +
+        seg(d.totalCacheCreationTokens, 'seg-cache-creation', t.cacheCreation) +
+        seg(d.totalOutputTokens, 'seg-output', t.outputTokens) +
+        '</div>' +
+        '<div class="chart-label">' +
+        this.escapeHtml(it.label) +
+        '</div>' +
+        '</div>';
+    });
+
+    const dot = (cls: string, label: string): string =>
+      '<span class="legend-item"><span class="legend-dot ' + cls + '"></span>' + label + '</span>';
+
+    return (
+      '<div class="composition-chart">' +
+      '<h4>' +
+      t.tokenComposition +
+      '</h4>' +
+      '<div class="stack-legend">' +
+      dot('seg-input', t.inputTokens) +
+      dot('seg-cache-read', t.cacheRead) +
+      dot('seg-cache-creation', t.cacheCreation) +
+      dot('seg-output', t.outputTokens) +
+      '</div>' +
+      '<div class="chart-container"><div class="chart-content"><div class="chart-bars">' +
+      bars +
+      '</div></div></div>' +
+      '</div>'
+    );
   }
 
   private renderDailyChart(): string {
@@ -1268,6 +1605,83 @@ export class UsageWebviewProvider {
         text-align: center;
         color: var(--vscode-descriptionForeground);
         padding: 20px;
+      }
+
+      .project-cell {
+        max-width: 340px;
+      }
+
+      .project-name {
+        font-weight: bold;
+        color: var(--vscode-symbolIcon-functionForeground);
+      }
+
+      .project-path {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        word-break: break-all;
+        margin-top: 2px;
+      }
+
+      .composition-chart {
+        margin: 12px 0 20px;
+      }
+
+      .composition-chart h4 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+      }
+
+      .stack-legend {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+
+      .stack-bar {
+        width: 24px;
+        display: flex;
+        flex-direction: column-reverse;
+        border-radius: 2px 2px 0 0;
+        overflow: hidden;
+        margin-bottom: 8px;
+        min-height: 2px;
+      }
+
+      .stack-seg {
+        width: 100%;
+      }
+
+      .seg-input {
+        background: var(--vscode-charts-blue);
+      }
+
+      .seg-output {
+        background: var(--vscode-charts-orange);
+      }
+
+      .seg-cache-creation {
+        background: var(--vscode-charts-purple);
+      }
+
+      .seg-cache-read {
+        background: var(--vscode-charts-green);
       }
     `;
   }
