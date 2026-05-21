@@ -103,10 +103,14 @@ export interface ExtensionConfig {
   dataDirectory: string;
   language: string;
   decimalPlaces: number;
-  // Optional quota ceilings (USD cost) for the rolling 5-hour and 7-day windows.
+  // Optional quota ceilings (USD cost) for the 5-hour and weekly windows.
   // 0 disables the corresponding quota indicator.
   quota5hLimit: number;
   quotaWeeklyLimit: number;
+  // Weekly quota reset anchor. quotaWeeklyResetDay: 0=Sunday..6=Saturday, or -1
+  // to fall back to a rolling 7-day window. quotaWeeklyResetHour: 0-23.
+  quotaWeeklyResetDay: number;
+  quotaWeeklyResetHour: number;
 }
 
 export interface ModelPricing {

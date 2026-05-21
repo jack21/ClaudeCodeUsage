@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -82,7 +82,21 @@
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "description": "Cost ceiling (USD) for the rolling 7-day quota window shown in the status bar. 0 hides the weekly indicator. Calibrate against Claude Code's /usage command."
+          "description": "Cost ceiling (USD) for the weekly quota window shown in the status bar. 0 hides the weekly indicator. Calibrate against Claude Code's /usage command."
+        },
+        "claudeCodeUsage.quotaWeeklyResetDay": {
+          "type": "number",
+          "default": -1,
+          "minimum": -1,
+          "maximum": 6,
+          "description": "Day of week the weekly quota resets (0=Sunday … 6=Saturday). -1 uses a rolling 7-day window instead. Check Claude Code's /usage for your reset day."
+        },
+        "claudeCodeUsage.quotaWeeklyResetHour": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 23,
+          "description": "Hour of day (0-23, local time) the weekly quota resets. Only used when quotaWeeklyResetDay is set."
         }
       }
     },

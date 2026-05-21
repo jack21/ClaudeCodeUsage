@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import { SessionData, UsageData } from './types';
 import { I18n } from './i18n';
 
-// Rolling-window usage vs. (optional) configured ceilings.
+// Quota-window usage vs. (optional) configured ceilings, with reset times.
 export interface QuotaInfo {
   cost5h: number;
   limit5h: number;
+  reset5h: Date | null;
   costWeek: number;
   limitWeek: number;
+  resetWeek: Date | null;
 }
 
 export class StatusBarManager {
@@ -95,7 +97,7 @@ export class StatusBarManager {
     if (quota.limitWeek > 0) {
       const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
       worstPct = Math.max(worstPct, pct);
-      parts.push(`7d ${pct}%`);
+      parts.push(`wk ${pct}%`);
     }
 
     this.quotaItem.text = `$(dashboard) ${parts.join(' · ')}`;
@@ -180,24 +182,50 @@ export class StatusBarManager {
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
     md.appendMarkdown(`**${t.quota}**\n\n`);
-    md.appendMarkdown(`| ${t.quotaWindow} | ${t.cost} | ${t.quotaLimit} | % |\n`);
-    md.appendMarkdown(`|:--|--:|--:|--:|\n`);
+    md.appendMarkdown(`| ${t.quotaWindow} | ${t.cost} | ${t.quotaLimit} | % | ${t.resets} |\n`);
+    md.appendMarkdown(`|:--|--:|--:|--:|--:|\n`);
 
     if (quota.limit5h > 0) {
       const pct = Math.round((quota.cost5h / quota.limit5h) * 100);
+      const resets = quota.reset5h ? this.formatCountdown(quota.reset5h) : '—';
       md.appendMarkdown(
-        `| ${t.quota5h} | ${I18n.formatCurrency(quota.cost5h)} | ${I18n.formatCurrency(quota.limit5h)} | ${pct}% |\n`
+        `| ${t.quota5h} | ${I18n.formatCurrency(quota.cost5h)} | ${I18n.formatCurrency(quota.limit5h)} | ${pct}% | ${resets} |\n`
       );
     }
     if (quota.limitWeek > 0) {
       const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
+      const resets = quota.resetWeek ? this.formatWeeklyReset(quota.resetWeek) : '—';
       md.appendMarkdown(
-        `| ${t.quotaWeekly} | ${I18n.formatCurrency(quota.costWeek)} | ${I18n.formatCurrency(quota.limitWeek)} | ${pct}% |\n`
+        `| ${t.quotaWeekly} | ${I18n.formatCurrency(quota.costWeek)} | ${I18n.formatCurrency(quota.limitWeek)} | ${pct}% | ${resets} |\n`
       );
     }
 
     md.appendMarkdown(`\n\n*${t.quotaHint}*`);
     return md;
+  }
+
+  /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
+  private formatCountdown(target: Date): string {
+    const ms = target.getTime() - Date.now();
+    if (ms <= 0) {
+      return '0m';
+    }
+    const totalMinutes = Math.floor(ms / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours >= 24) {
+      return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+    }
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  }
+
+  /** Localised weekday + time of a weekly reset, e.g. "Wed 03:00". */
+  private formatWeeklyReset(target: Date): string {
+    try {
+      return target.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return target.toISOString();
+    }
   }
 
   dispose(): void {

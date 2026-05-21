@@ -86,7 +86,9 @@ export class ClaudeCodeUsageExtension {
       language: config.get('language', 'auto'),
       decimalPlaces: config.get('decimalPlaces', 2),
       quota5hLimit: config.get('quota5hLimit', 0),
-      quotaWeeklyLimit: config.get('quotaWeeklyLimit', 0)
+      quotaWeeklyLimit: config.get('quotaWeeklyLimit', 0),
+      quotaWeeklyResetDay: config.get('quotaWeeklyResetDay', -1),
+      quotaWeeklyResetHour: config.get('quotaWeeklyResetHour', 0)
     };
   }
 
@@ -174,15 +176,20 @@ export class ClaudeCodeUsageExtension {
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
       const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records);
-      const rolling5h = ClaudeDataLoader.getRollingWindowData(records, 5);
-      const rollingWeek = ClaudeDataLoader.getRollingWindowData(records, 24 * 7);
+      const window5h = ClaudeDataLoader.getAnchored5hWindow(records);
+      const useWeeklyAnchor = config.quotaWeeklyResetDay >= 0 && config.quotaWeeklyResetDay <= 6;
+      const weekly = useWeeklyAnchor
+        ? ClaudeDataLoader.getWeeklyWindow(records, config.quotaWeeklyResetDay, config.quotaWeeklyResetHour)
+        : { data: ClaudeDataLoader.getRollingWindowData(records, 24 * 7), resetAt: null as Date | null };
 
       // Update UI
       this.statusBar.updateUsageData(todayData, sessionData, undefined, {
-        cost5h: rolling5h.totalCost,
+        cost5h: window5h.data.totalCost,
         limit5h: config.quota5hLimit,
-        costWeek: rollingWeek.totalCost,
-        limitWeek: config.quotaWeeklyLimit
+        reset5h: window5h.resetAt,
+        costWeek: weekly.data.totalCost,
+        limitWeek: config.quotaWeeklyLimit,
+        resetWeek: weekly.resetAt
       });
       this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis);
 

@@ -497,6 +497,10 @@ export class UsageWebviewProvider {
     const pricing = I18n.t.popup.pricing;
     const refreshPricing = I18n.t.popup.refreshPricing;
 
+    // Cache hit rate: share of input-side tokens served cheaply from cache.
+    const inputSideTokens = data.totalInputTokens + data.totalCacheCreationTokens + data.totalCacheReadTokens;
+    const cacheHitRate = inputSideTokens > 0 ? (data.totalCacheReadTokens / inputSideTokens) * 100 : 0;
+
     let html =
       '<div class="usage-summary">' +
       '<div class="summary-grid">' +
@@ -547,6 +551,14 @@ export class UsageWebviewProvider {
       '<div class="value">' +
       I18n.formatNumber(data.totalCacheReadTokens) +
       '</div>' +
+      '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      I18n.t.popup.cacheHitRate +
+      '</div>' +
+      '<div class="value">' +
+      cacheHitRate.toFixed(0) +
+      '%</div>' +
       '</div>' +
       '</div>' +
       '</div>';
@@ -1117,7 +1129,7 @@ export class UsageWebviewProvider {
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
       '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span></div>' +
-      '<p class="table-hint">' + t.estimatedNote + '</p>' +
+      '<p class="table-hint">' + t.last30days + ' · ' + t.estimatedNote + '</p>' +
       '<div class="cbar-list">' + catRows + '</div>' +
       toolSection +
       '</div>'

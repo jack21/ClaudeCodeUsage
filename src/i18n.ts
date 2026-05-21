@@ -59,6 +59,9 @@ export interface Translations {
     catToolResults: string;
     estTokens: string;
     share: string;
+    resets: string;
+    cacheHitRate: string;
+    last30days: string;
     date: string;
     yesterday: string;
     dataDirectory: string;
@@ -134,6 +137,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: 'Tool results',
       estTokens: 'Est. tokens',
       share: 'Share',
+      resets: 'Resets',
+      cacheHitRate: 'Cache Hit Rate',
+      last30days: 'Last 30 days',
       date: 'Date',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
@@ -207,6 +213,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: "Tool-Ergebnisse",
       estTokens: "Gesch. Token",
       share: "Anteil",
+      resets: "Reset",
+      cacheHitRate: "Cache-Trefferrate",
+      last30days: "Letzte 30 Tage",
       date: "Datum",
       yesterday: "Gestern",
       dataDirectory: "Daten Pfad",
@@ -282,6 +291,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: '工具結果',
       estTokens: '估算 Token',
       share: '佔比',
+      resets: '重置',
+      cacheHitRate: '快取命中率',
+      last30days: '近 30 天',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
@@ -355,6 +367,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: '工具结果',
       estTokens: '估算 Token',
       share: '占比',
+      resets: '重置',
+      cacheHitRate: '缓存命中率',
+      last30days: '近 30 天',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '数据目录',
@@ -428,6 +443,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: 'ツール結果',
       estTokens: '推定トークン',
       share: '割合',
+      resets: 'リセット',
+      cacheHitRate: 'キャッシュヒット率',
+      last30days: '過去 30 日',
       date: '日付',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
@@ -501,6 +519,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       catToolResults: '도구 결과',
       estTokens: '추정 토큰',
       share: '비율',
+      resets: '재설정',
+      cacheHitRate: '캐시 적중률',
+      last30days: '최근 30일',
       date: '날짜',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',

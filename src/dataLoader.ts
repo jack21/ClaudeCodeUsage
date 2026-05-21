@@ -102,10 +102,12 @@ interface AnalysisAcc {
   tools: Record<string, AnalysisBucket>;
   toolIdToName: Record<string, string>;
   seenUuids: Set<string>;
+  cutoffMs: number;
 }
 
-function newAnalysisAcc(): AnalysisAcc {
-  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>() };
+// cutoffMs: ignore log lines older than this (0 = no cutoff).
+function newAnalysisAcc(cutoffMs: number): AnalysisAcc {
+  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>(), cutoffMs };
 }
 
 // Rough token estimate from text length (CJK characters are denser than ASCII).
@@ -162,6 +164,13 @@ function addToBucket(map: Record<string, AnalysisBucket>, key: string, text: str
 function analyzeLine(parsed: any, acc: AnalysisAcc): void {
   if (!parsed || typeof parsed !== 'object') {
     return;
+  }
+  // Scope the analysis to a recent window so it reflects current habits.
+  if (acc.cutoffMs > 0) {
+    const ts = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) : NaN;
+    if (!isNaN(ts) && ts < acc.cutoffMs) {
+      return;
+    }
   }
   const uuid = typeof parsed.uuid === 'string' ? parsed.uuid : null;
   if (uuid) {
@@ -308,7 +317,8 @@ export class ClaudeDataLoader {
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
       const processedHashes = new Set<string>();
       const records: ClaudeUsageRecord[] = [];
-      const analysis = newAnalysisAcc();
+      // Content analysis covers the last 30 days — recent enough to reflect habits.
+      const analysis = newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
       for (const file of sortedFiles) {
         try {
@@ -369,7 +379,7 @@ export class ClaudeDataLoader {
       return { records, contentAnalysis: finalizeAnalysis(analysis) };
     } catch (error) {
       console.error('Error loading usage records:', error);
-      return { records: [], contentAnalysis: finalizeAnalysis(newAnalysisAcc()) };
+      return { records: [], contentAnalysis: finalizeAnalysis(newAnalysisAcc(0)) };
     }
   }
 
@@ -836,6 +846,74 @@ export class ClaudeDataLoader {
       return !isNaN(t) && t >= cutoff;
     });
     return this.calculateUsageData(windowRecords);
+  }
+
+  /**
+   * Usage in the current anchored 5-hour quota window. Claude Code's 5-hour
+   * limit window opens at the first message and lasts exactly 5 hours; the next
+   * window opens at the first message after the previous one expired.
+   * @returns window usage and when it resets (resetAt null if no active window)
+   */
+  static getAnchored5hWindow(records: ClaudeUsageRecord[]): { data: UsageData; resetAt: Date | null } {
+    const WINDOW_MS = 5 * 60 * 60 * 1000;
+    const times = records
+      .map((r) => new Date(r.timestamp).getTime())
+      .filter((t) => !isNaN(t))
+      .sort((a, b) => a - b);
+
+    if (times.length === 0) {
+      return { data: this.calculateUsageData([]), resetAt: null };
+    }
+
+    let windowStart = times[0];
+    for (const t of times) {
+      if (t >= windowStart + WINDOW_MS) {
+        windowStart = t;
+      }
+    }
+    const resetMs = windowStart + WINDOW_MS;
+    if (Date.now() >= resetMs) {
+      // The last window has already expired — no active window right now.
+      return { data: this.calculateUsageData([]), resetAt: null };
+    }
+
+    const windowRecords = records.filter((record) => {
+      const t = new Date(record.timestamp).getTime();
+      return !isNaN(t) && t >= windowStart && t < resetMs;
+    });
+    return { data: this.calculateUsageData(windowRecords), resetAt: new Date(resetMs) };
+  }
+
+  /**
+   * Usage in the current weekly quota window, anchored to a fixed weekday/hour.
+   * @param resetDay 0=Sunday … 6=Saturday
+   * @param resetHour 0-23 (local time)
+   */
+  static getWeeklyWindow(
+    records: ClaudeUsageRecord[],
+    resetDay: number,
+    resetHour: number
+  ): { data: UsageData; resetAt: Date } {
+    const now = new Date();
+    // Most recent reset boundary at or before now.
+    const boundary = new Date(now);
+    boundary.setHours(resetHour, 0, 0, 0);
+    let dayDiff = boundary.getDay() - resetDay;
+    if (dayDiff < 0) {
+      dayDiff += 7;
+    }
+    boundary.setDate(boundary.getDate() - dayDiff);
+    if (boundary.getTime() > now.getTime()) {
+      boundary.setDate(boundary.getDate() - 7);
+    }
+
+    const windowStart = boundary.getTime();
+    const resetAt = new Date(windowStart + 7 * 24 * 60 * 60 * 1000);
+    const windowRecords = records.filter((record) => {
+      const t = new Date(record.timestamp).getTime();
+      return !isNaN(t) && t >= windowStart;
+    });
+    return { data: this.calculateUsageData(windowRecords), resetAt };
   }
 
   static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {
