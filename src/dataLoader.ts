@@ -5,7 +5,7 @@ import * as path from 'path';
 // Removed tinyglobby dependency - using native fs instead
 // Removed zod dependency - using native validation instead
 import { calculateCostFromTokens } from './pricing';
-import { ClaudeUsageRecord, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { ClaudeUsageRecord, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 // Constants
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
@@ -492,44 +492,118 @@ export class ClaudeDataLoader {
       .slice(0, limit);
   }
 
+  /** Normalise a path for case-insensitive comparison and grouping. */
+  private static normalizePath(p: string): string {
+    return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  }
+
+  /** Number of leading path segments shared by every segment list. */
+  private static commonPrefixLength(lists: string[][]): number {
+    if (lists.length === 0) {
+      return 0;
+    }
+    const first = lists[0];
+    let len = 0;
+    for (let i = 0; i < first.length; i++) {
+      if (lists.every((l) => i < l.length && l[i] === first[i])) {
+        len++;
+      } else {
+        break;
+      }
+    }
+    return len;
+  }
+
+  /** Original-casing display path for a group, derived from a child's path. */
+  private static deriveGroupDisplayPath(childOriginalPath: string, groupKey: string): string {
+    const groupSegCount = groupKey.split('/').filter((s) => s.length > 0).length;
+    const sep = childOriginalPath.includes('\\') ? '\\' : '/';
+    const originalSegments = childOriginalPath.split(/[\\/]/).filter((s) => s.length > 0);
+    return originalSegments.slice(0, groupSegCount).join(sep);
+  }
+
   /**
-   * Group records by project (working directory) and aggregate usage per project.
-   * Returns projects with billable usage, sorted by most recent activity first.
+   * Group records by project (working directory), then group those projects by
+   * their top-level project folder. Paths that differ only in case are merged.
    * @param records All loaded usage records
-   * @param limit Maximum number of projects to return (default 50)
+   * @param limit Maximum number of project groups to return (default 60)
    */
-  static getProjectBreakdown(records: ClaudeUsageRecord[], limit: number = 50): ProjectUsage[] {
-    const recordsByProject: Record<string, ClaudeUsageRecord[]> = {};
+  static getProjectBreakdown(records: ClaudeUsageRecord[], limit: number = 60): ProjectGroup[] {
+    // 1. Group records per project, merging paths that differ only in case.
+    const recordsByKey: Record<string, ClaudeUsageRecord[]> = {};
+    const displayPathByKey: Record<string, string> = {};
 
     for (const record of records) {
-      const key = record._projectPath || record._projectName || 'unknown';
-      if (!recordsByProject[key]) {
-        recordsByProject[key] = [];
+      const rawPath = record._projectPath || record._projectName || 'unknown';
+      const key = this.normalizePath(rawPath);
+      if (!recordsByKey[key]) {
+        recordsByKey[key] = [];
+        displayPathByKey[key] = rawPath;
       }
-      recordsByProject[key].push(record);
+      recordsByKey[key].push(record);
     }
 
-    const projects: ProjectUsage[] = Object.entries(recordsByProject).map(([projectPath, projectRecords]) => {
-      const timestamps = projectRecords
-        .map((r) => new Date(r.timestamp).getTime())
-        .filter((t) => !isNaN(t));
-      const firstSeen = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0);
-      const lastSeen = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0);
-      const sessionCount = new Set(projectRecords.map((r) => r._sessionId || 'unknown')).size;
+    const keys = Object.keys(recordsByKey);
+    if (keys.length === 0) {
+      return [];
+    }
+
+    // 2. Find the common root so each project can be grouped by the folder
+    //    immediately below it (its top-level project folder).
+    const segmentLists = keys.map((k) => k.split('/').filter((s) => s.length > 0));
+    const commonRootLen = this.commonPrefixLength(segmentLists);
+
+    // 3. Build a project per key and assign it to a group.
+    const groups: Record<string, { records: ClaudeUsageRecord[]; children: ProjectUsage[] }> = {};
+
+    keys.forEach((key, idx) => {
+      const projectRecords = recordsByKey[key];
+      const segments = segmentLists[idx];
+      // When projects share no common root, don't merge (each is its own group).
+      const groupLen = commonRootLen === 0 ? segments.length : Math.min(segments.length, commonRootLen + 1);
+      const groupKey = segments.slice(0, groupLen).join('/');
+
+      const timestamps = projectRecords.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
       const first = projectRecords[0];
+      const project: ProjectUsage = {
+        projectName: first._projectName || 'unknown',
+        projectPath: displayPathByKey[key],
+        sessionCount: new Set(projectRecords.map((r) => r._sessionId || 'unknown')).size,
+        firstSeen: timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0),
+        lastSeen: timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0),
+        data: this.calculateUsageData(projectRecords),
+      };
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = { records: [], children: [] };
+      }
+      groups[groupKey].records.push(...projectRecords);
+      groups[groupKey].children.push(project);
+    });
+
+    // 4. Aggregate each group.
+    const result: ProjectGroup[] = Object.entries(groups).map(([groupKey, g]) => {
+      const timestamps = g.records.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
+      const sessionCount = new Set(g.records.map((r) => r._sessionId || 'unknown')).size;
+      const children = g.children.sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
+      const groupPath = this.deriveGroupDisplayPath(children[0].projectPath, groupKey);
+      const pathSegments = groupPath.split(/[\\/]/).filter((s) => s.length > 0);
+      const groupName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : groupPath;
 
       return {
-        projectName: first._projectName || 'unknown',
-        projectPath: first._projectPath || projectPath,
+        groupName,
+        groupPath,
+        projectCount: children.length,
         sessionCount,
-        firstSeen,
-        lastSeen,
-        data: this.calculateUsageData(projectRecords),
+        firstSeen: timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0),
+        lastSeen: timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0),
+        data: this.calculateUsageData(g.records),
+        children,
       };
     });
 
-    return projects
-      .filter((p) => p.data.messageCount > 0)
+    return result
+      .filter((g) => g.data.messageCount > 0)
       .sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime())
       .slice(0, limit);
   }

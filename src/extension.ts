@@ -3,6 +3,7 @@ import { ClaudeDataLoader } from './dataLoader';
 import { StatusBarManager } from './statusBar';
 import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
+import { fetchLatestPricing } from './pricing';
 import { ExtensionConfig, UsageData, SessionData } from './types';
 
 export class ClaudeCodeUsageExtension {
@@ -41,10 +42,25 @@ export class ClaudeCodeUsageExtension {
       }),
       vscode.commands.registerCommand('claudeCodeUsage.openSettings', () => {
         vscode.commands.executeCommand('workbench.action.openSettings', 'claudeCodeUsage');
+      }),
+      vscode.commands.registerCommand('claudeCodeUsage.refreshPricing', () => {
+        this.refreshPricing();
       })
     ];
 
     commands.forEach(command => this.context.subscriptions.push(command));
+  }
+
+  private async refreshPricing(): Promise<void> {
+    try {
+      const result = await fetchLatestPricing();
+      vscode.window.showInformationMessage(`${I18n.t.popup.pricingUpdated} (${result.updated})`);
+      // Costs are recomputed on every refresh, so this picks up the new prices.
+      this.refreshData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`${I18n.t.popup.pricingUpdateFailed}: ${message}`);
+    }
   }
 
   private loadConfiguration(): void {

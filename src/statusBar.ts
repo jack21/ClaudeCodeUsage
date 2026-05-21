@@ -71,30 +71,63 @@ export class StatusBarManager {
     this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
   }
 
-  private createTooltip(todayData: UsageData, sessionData: SessionData | null): string {
+  /**
+   * Build the hover tooltip as a Markdown table so figures line up in neat,
+   * right-aligned columns (a plain-text tooltip cannot align reliably).
+   */
+  private createTooltip(todayData: UsageData, sessionData: SessionData | null): vscode.MarkdownString {
     const t = I18n.t.popup;
-    const lines: string[] = [
-      `${t.today} ($(pulse)): ${I18n.formatCurrency(todayData.totalCost)}`,
-      `  ${t.inputTokens}: ${I18n.formatNumber(todayData.totalInputTokens)}`,
-      `  ${t.outputTokens}: ${I18n.formatNumber(todayData.totalOutputTokens)}`,
-      `  ${t.cacheCreation}: ${I18n.formatNumber(todayData.totalCacheCreationTokens)}`,
-      `  ${t.cacheRead}: ${I18n.formatNumber(todayData.totalCacheReadTokens)}`,
-      `  ${t.messages}: ${I18n.formatNumber(todayData.messageCount)}`,
-    ];
+    const session = sessionData && sessionData.messageCount > 0 ? sessionData : null;
 
-    if (sessionData && sessionData.messageCount > 0) {
-      lines.push('');
-      lines.push(`${I18n.t.statusBar.currentSession} ($(history)): ${I18n.formatCurrency(sessionData.totalCost)}`);
-      lines.push(`  ${t.inputTokens}: ${I18n.formatNumber(sessionData.totalInputTokens)}`);
-      lines.push(`  ${t.outputTokens}: ${I18n.formatNumber(sessionData.totalOutputTokens)}`);
-      lines.push(`  ${t.cacheRead}: ${I18n.formatNumber(sessionData.totalCacheReadTokens)}`);
-      lines.push(`  ${t.messages}: ${I18n.formatNumber(sessionData.messageCount)}`);
+    const md = new vscode.MarkdownString();
+    md.supportThemeIcons = true;
+
+    if (session) {
+      md.appendMarkdown(`| | $(pulse) ${t.today} | $(history) ${I18n.t.statusBar.currentSession} |\n`);
+      md.appendMarkdown(`|:--|--:|--:|\n`);
+    } else {
+      md.appendMarkdown(`| | $(pulse) ${t.today} |\n`);
+      md.appendMarkdown(`|:--|--:|\n`);
     }
 
-    lines.push('');
-    lines.push('Click for detailed breakdown');
+    const row = (label: string, todayValue: string, sessionValue: string): void => {
+      md.appendMarkdown(session ? `| ${label} | ${todayValue} | ${sessionValue} |\n` : `| ${label} | ${todayValue} |\n`);
+    };
 
-    return lines.join('\n');
+    row(
+      t.cost,
+      I18n.formatCurrency(todayData.totalCost),
+      session ? I18n.formatCurrency(session.totalCost) : ''
+    );
+    row(
+      t.inputTokens,
+      I18n.formatNumber(todayData.totalInputTokens),
+      session ? I18n.formatNumber(session.totalInputTokens) : ''
+    );
+    row(
+      t.outputTokens,
+      I18n.formatNumber(todayData.totalOutputTokens),
+      session ? I18n.formatNumber(session.totalOutputTokens) : ''
+    );
+    row(
+      t.cacheCreation,
+      I18n.formatNumber(todayData.totalCacheCreationTokens),
+      session ? I18n.formatNumber(session.totalCacheCreationTokens) : ''
+    );
+    row(
+      t.cacheRead,
+      I18n.formatNumber(todayData.totalCacheReadTokens),
+      session ? I18n.formatNumber(session.totalCacheReadTokens) : ''
+    );
+    row(
+      t.messages,
+      I18n.formatNumber(todayData.messageCount),
+      session ? I18n.formatNumber(session.messageCount) : ''
+    );
+
+    md.appendMarkdown(`\n\n*Click for detailed breakdown*`);
+
+    return md;
   }
 
   dispose(): void {

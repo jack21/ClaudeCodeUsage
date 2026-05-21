@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -88,6 +88,11 @@
       {
         "command": "claudeCodeUsage.openSettings",
         "title": "Open Settings",
+        "category": "Claude Code Usage"
+      },
+      {
+        "command": "claudeCodeUsage.refreshPricing",
+        "title": "Refresh Model Pricing",
         "category": "Claude Code Usage"
       }
     ]

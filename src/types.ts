@@ -66,6 +66,19 @@ export interface ProjectUsage {
   data: UsageData;
 }
 
+// A group of projects that share a top-level project folder. Projects whose
+// paths differ only in case are merged into a single child.
+export interface ProjectGroup {
+  groupName: string;
+  groupPath: string;
+  projectCount: number;
+  sessionCount: number;
+  firstSeen: Date;
+  lastSeen: Date;
+  data: UsageData;
+  children: ProjectUsage[];
+}
+
 export interface ExtensionConfig {
   refreshInterval: number;
   dataDirectory: string;

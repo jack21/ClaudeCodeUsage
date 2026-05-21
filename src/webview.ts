@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
-import { ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { getModelRatesPerMillion } from './pricing';
+import { ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -18,7 +19,7 @@ export class UsageWebviewProvider {
   private hourlyDataCache: Map<string, { hour: string; data: UsageData }[]> = new Map();
   private allRecords: any[] = [];
   private sessionBreakdown: SessionUsage[] = [];
-  private projectBreakdown: ProjectUsage[] = [];
+  private projectBreakdown: ProjectGroup[] = [];
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -48,6 +49,9 @@ export class UsageWebviewProvider {
           break;
         case 'openSettings':
           vscode.commands.executeCommand('claudeCodeUsage.openSettings');
+          break;
+        case 'refreshPricing':
+          vscode.commands.executeCommand('claudeCodeUsage.refreshPricing');
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
@@ -100,7 +104,7 @@ export class UsageWebviewProvider {
     dataDirectory?: string | null,
     allRecords?: any[],
     sessionBreakdown: SessionUsage[] = [],
-    projectBreakdown: ProjectUsage[] = []
+    projectBreakdown: ProjectGroup[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -418,11 +422,7 @@ export class UsageWebviewProvider {
         messages +
         '</button>' +
         '</div>' +
-        '<div class="chart-container">' +
-        '<div class="chart-content" id="hourlyChart">' +
         this.renderHourlyChart() +
-        '</div>' +
-        '</div>' +
         this.renderCompositionChart(
           [...this.hourlyDataForToday]
             .sort((a, b) => a.hour.localeCompare(b.hour))
@@ -476,6 +476,8 @@ export class UsageWebviewProvider {
     const cacheCreation = I18n.t.popup.cacheCreation;
     const cacheRead = I18n.t.popup.cacheRead;
     const modelBreakdown = I18n.t.popup.modelBreakdown;
+    const pricing = I18n.t.popup.pricing;
+    const refreshPricing = I18n.t.popup.refreshPricing;
 
     let html =
       '<div class="usage-summary">' +
@@ -532,9 +534,43 @@ export class UsageWebviewProvider {
       '</div>';
 
     if (Object.keys(data.modelBreakdown).length > 0) {
-      html += '<div class="model-breakdown">' + '<h3>' + modelBreakdown + '</h3>' + '<div class="model-list">';
+      html +=
+        '<div class="model-breakdown">' +
+        '<div class="section-header">' +
+        '<h3>' +
+        modelBreakdown +
+        '</h3>' +
+        '<button class="btn-secondary btn-small" onclick="refreshPricing()" title="' +
+        this.escapeHtml(refreshPricing) +
+        '">↻ ' +
+        refreshPricing +
+        '</button>' +
+        '</div>' +
+        '<div class="model-list">';
 
       Object.entries(data.modelBreakdown).forEach(([model, modelData]) => {
+        const rates = getModelRatesPerMillion(model);
+        const pricingLine = rates
+          ? '<div class="model-pricing">' +
+            pricing +
+            ' (/1M): ' +
+            inputTokens +
+            ' ' +
+            this.formatRate(rates.input) +
+            ' · ' +
+            outputTokens +
+            ' ' +
+            this.formatRate(rates.output) +
+            ' · ' +
+            cacheCreation +
+            ' ' +
+            this.formatRate(rates.cacheWrite) +
+            ' · ' +
+            cacheRead +
+            ' ' +
+            this.formatRate(rates.cacheRead) +
+            '</div>'
+          : '';
         html +=
           '<div class="model-item">' +
           '<div class="model-header">' +
@@ -572,6 +608,7 @@ export class UsageWebviewProvider {
           I18n.formatNumber(modelData.count) +
           '</span>' +
           '</div>' +
+          pricingLine +
           '</div>';
       });
 
@@ -770,92 +807,98 @@ export class UsageWebviewProvider {
 
     let rows = '';
     this.sessionBreakdown.forEach((s) => {
+      const d = s.data;
       rows +=
-        '<tr>' +
+        '<tr class="sort-row"' +
+        ' data-sort-time="' + s.startTime.getTime() + '"' +
+        ' data-sort-project="' + this.escapeHtml((s.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-context="' + s.peakContextTokens + '"' +
+        ' data-sort-duration="' + (s.endTime.getTime() - s.startTime.getTime()) + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
         '<td class="date-cell" title="' + this.escapeHtml(s.sessionId) + '">' +
         this.escapeHtml(this.formatDateTime(s.startTime)) +
         '</td>' +
         this.renderProjectCell(s.projectName, s.projectPath) +
-        '<td class="cost-cell">' +
-        I18n.formatCurrency(s.data.totalCost) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.data.totalInputTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.data.totalOutputTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.data.totalCacheCreationTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.data.totalCacheReadTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.peakContextTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(s.data.messageCount) +
-        '</td>' +
-        '<td class="number-cell">' +
-        this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) +
-        '</td>' +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(s.peakContextTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
+        '<td class="number-cell">' + this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) + '</td>' +
         '</tr>';
     });
 
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
     return (
       '<div class="daily-breakdown">' +
-      '<h3>' +
-      t.sessionBreakdown +
-      '</h3>' +
+      '<h3>' + t.sessionBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
       '<div class="daily-table-container">' +
-      '<table class="daily-table">' +
+      '<table class="daily-table sortable-table">' +
       '<thead><tr>' +
-      '<th>' +
-      t.startTime +
-      '</th>' +
-      '<th>' +
-      t.project +
-      '</th>' +
-      '<th>' +
-      t.cost +
-      '</th>' +
-      '<th>' +
-      t.inputTokens +
-      '</th>' +
-      '<th>' +
-      t.outputTokens +
-      '</th>' +
-      '<th>' +
-      t.cacheCreation +
-      '</th>' +
-      '<th>' +
-      t.cacheRead +
-      '</th>' +
-      '<th>' +
-      t.peakContext +
-      '</th>' +
-      '<th>' +
-      t.messages +
-      '</th>' +
-      '<th>' +
-      t.duration +
-      '</th>' +
+      th('time', t.startTime) +
+      th('project', t.project) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('context', t.peakContext) +
+      th('messages', t.messages) +
+      th('duration', t.duration) +
       '</tr></thead>' +
-      '<tbody>' +
-      rows +
-      '</tbody>' +
+      '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
       '</div>'
     );
   }
 
+  /** Reading-friendly date/time: "Today HH:MM", "Yesterday HH:MM", "MM-DD HH:MM" or "YYYY-MM-DD". */
   private formatDateTime(date: Date): string {
     if (!date || isNaN(date.getTime()) || date.getTime() === 0) {
       return '-';
     }
-    return date.toLocaleString();
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const hm = pad(date.getHours()) + ':' + pad(date.getMinutes());
+    const sameDay = (a: Date, b: Date): boolean =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (sameDay(date, now)) {
+      return I18n.t.popup.today + ' ' + hm;
+    }
+    if (sameDay(date, yesterday)) {
+      return I18n.t.popup.yesterday + ' ' + hm;
+    }
+    if (date.getFullYear() === now.getFullYear()) {
+      return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + hm;
+    }
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+
+  /** USD per-1M-token rate, trimmed of trailing zeros for compact display. */
+  private formatRate(n: number): string {
+    return '$' + parseFloat(n.toFixed(4)).toString();
+  }
+
+  /** data-sort-* attributes for the token/cost columns shared by both tables. */
+  private usageSortAttrs(d: UsageData): string {
+    return (
+      ' data-sort-cost="' + d.totalCost +
+      '" data-sort-input="' + d.totalInputTokens +
+      '" data-sort-output="' + d.totalOutputTokens +
+      '" data-sort-cachecreate="' + d.totalCacheCreationTokens +
+      '" data-sort-cacheread="' + d.totalCacheReadTokens +
+      '" data-sort-messages="' + d.messageCount + '"'
+    );
   }
 
   private formatDuration(start: Date, end: Date): string {
@@ -893,77 +936,91 @@ export class UsageWebviewProvider {
 
     const t = I18n.t.popup;
 
+    const usageCells = (d: UsageData): string =>
+      '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>';
+
     let rows = '';
-    this.projectBreakdown.forEach((p) => {
-      rows +=
-        '<tr>' +
-        this.renderProjectCell(p.projectName, p.projectPath) +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.sessionCount) +
-        '</td>' +
-        '<td class="cost-cell">' +
-        I18n.formatCurrency(p.data.totalCost) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.data.totalInputTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.data.totalOutputTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.data.totalCacheCreationTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.data.totalCacheReadTokens) +
-        '</td>' +
-        '<td class="number-cell">' +
-        I18n.formatNumber(p.data.messageCount) +
-        '</td>' +
-        '<td class="date-cell">' +
-        this.escapeHtml(this.formatDateTime(p.lastSeen)) +
-        '</td>' +
-        '</tr>';
+    this.projectBreakdown.forEach((group, idx) => {
+      const groupId = 'pg' + idx;
+      const sortAttrs =
+        ' data-sort-name="' + this.escapeHtml(group.groupName.toLowerCase()) + '"' +
+        ' data-sort-sessions="' + group.sessionCount + '"' +
+        ' data-sort-lastactive="' + group.lastSeen.getTime() + '"' +
+        this.usageSortAttrs(group.data);
+
+      if (group.children.length <= 1) {
+        // A single project — render as one plain, sortable row.
+        const only = group.children[0];
+        const name = only ? only.projectName : group.groupName;
+        const path = only ? only.projectPath : group.groupPath;
+        rows +=
+          '<tr class="sort-row"' + sortAttrs + '>' +
+          this.renderProjectCell(name, path) +
+          '<td class="number-cell">' + I18n.formatNumber(group.sessionCount) + '</td>' +
+          usageCells(group.data) +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(group.lastSeen)) + '</td>' +
+          '</tr>';
+      } else {
+        // Several projects under one folder — an expandable group row.
+        rows +=
+          '<tr class="sort-row project-group-row" data-group="' + groupId + '"' + sortAttrs + '>' +
+          '<td class="project-cell">' +
+          '<div class="project-name">' +
+          '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
+          this.escapeHtml(group.groupName) +
+          ' <span class="group-count">(' + group.projectCount + ')</span>' +
+          '</div>' +
+          '<div class="project-path" title="' + this.escapeHtml(group.groupPath) + '">' +
+          this.escapeHtml(group.groupPath) +
+          '</div>' +
+          '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(group.sessionCount) + '</td>' +
+          usageCells(group.data) +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(group.lastSeen)) + '</td>' +
+          '</tr>';
+        group.children.forEach((child) => {
+          rows +=
+            '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+            '<td class="project-cell project-child-cell">' +
+            '<div class="project-name">' + this.escapeHtml(child.projectName) + '</div>' +
+            '<div class="project-path" title="' + this.escapeHtml(child.projectPath) + '">' +
+            this.escapeHtml(child.projectPath) +
+            '</div>' +
+            '</td>' +
+            '<td class="number-cell">' + I18n.formatNumber(child.sessionCount) + '</td>' +
+            usageCells(child.data) +
+            '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(child.lastSeen)) + '</td>' +
+            '</tr>';
+        });
+      }
     });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
 
     return (
       '<div class="daily-breakdown">' +
-      '<h3>' +
-      t.projectBreakdown +
-      '</h3>' +
+      '<h3>' + t.projectBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
       '<div class="daily-table-container">' +
-      '<table class="daily-table">' +
+      '<table class="daily-table sortable-table">' +
       '<thead><tr>' +
-      '<th>' +
-      t.project +
-      '</th>' +
-      '<th>' +
-      t.sessions +
-      '</th>' +
-      '<th>' +
-      t.cost +
-      '</th>' +
-      '<th>' +
-      t.inputTokens +
-      '</th>' +
-      '<th>' +
-      t.outputTokens +
-      '</th>' +
-      '<th>' +
-      t.cacheCreation +
-      '</th>' +
-      '<th>' +
-      t.cacheRead +
-      '</th>' +
-      '<th>' +
-      t.messages +
-      '</th>' +
-      '<th>' +
-      t.lastActive +
-      '</th>' +
+      th('name', t.project) +
+      th('sessions', t.sessions) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('messages', t.messages) +
+      th('lastactive', t.lastActive) +
       '</tr></thead>' +
-      '<tbody>' +
-      rows +
-      '</tbody>' +
+      '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
       '</div>'
@@ -1121,42 +1178,60 @@ export class UsageWebviewProvider {
     `;
   }
 
+  /**
+   * Today's hourly chart. Unlike the other charts it has a Y-axis, two dashed
+   * reference lines and a value label on top of every bar, so figures are
+   * readable without hovering.
+   */
   private renderHourlyChart(): string {
     if (this.hourlyDataForToday.length === 0) {
       return '<div class="no-chart-data">No data available</div>';
     }
 
-    // Sort data by hour (chronological order)
     const sortedData = [...this.hourlyDataForToday].sort((a, b) => a.hour.localeCompare(b.hour));
+    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost), 0);
+    const maxHeight = 120; // Plot height in pixels — kept in sync with updateMainChart.
 
-    // Generate chart bars for cost (default metric)
-    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost));
-    const maxHeight = 120; // Max height in pixels
+    const bars = sortedData
+      .map(({ hour, data }) => {
+        const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
+        return (
+          '<div class="hc-col" data-hour="' + hour + '">' +
+          '<div class="hc-barval">' + I18n.formatCurrency(data.totalCost) + '</div>' +
+          '<div class="chart-bar cost-bar" style="height: ' + height + 'px;" ' +
+          'data-cost="' + data.totalCost + '" ' +
+          'data-input="' + data.totalInputTokens + '" ' +
+          'data-output="' + data.totalOutputTokens + '" ' +
+          'data-cache-creation="' + data.totalCacheCreationTokens + '" ' +
+          'data-cache-read="' + data.totalCacheReadTokens + '" ' +
+          'data-messages="' + data.messageCount + '" ' +
+          'title="' + I18n.formatCurrency(data.totalCost) + '"></div>' +
+          '</div>'
+        );
+      })
+      .join('');
 
-    return `
-      <div class="chart-bars">
-        ${sortedData
-          .map(({ hour, data }) => {
-            const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
-            return `
-            <div class="chart-bar-container" data-hour="${hour}">
-              <div class="chart-bar cost-bar"
-                   style="height: ${height}px;"
-                   data-cost="${data.totalCost}"
-                   data-input="${data.totalInputTokens}"
-                   data-output="${data.totalOutputTokens}"
-                   data-cache-creation="${data.totalCacheCreationTokens}"
-                   data-cache-read="${data.totalCacheReadTokens}"
-                   data-messages="${data.messageCount}"
-                   title="${hour}: ${I18n.formatCurrency(data.totalCost)}">
-              </div>
-              <div class="chart-label">${hour}</div>
-            </div>
-          `;
-          })
-          .join('')}
-      </div>
-    `;
+    const xlabels = sortedData.map(({ hour }) => '<div class="hc-xlabel">' + hour + '</div>').join('');
+
+    return (
+      '<div class="hc-wrap">' +
+      '<div class="hc-yaxis">' +
+      '<span class="hc-yval">' + I18n.formatCurrency(maxCost) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatCurrency(maxCost / 2) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatCurrency(0) + '</span>' +
+      '</div>' +
+      '<div class="hc-main">' +
+      '<div class="hc-scroll">' +
+      '<div class="hc-plot" id="hourlyChart">' +
+      '<div class="hc-grid hc-grid-top"></div>' +
+      '<div class="hc-grid hc-grid-mid"></div>' +
+      '<div class="hc-bars">' + bars + '</div>' +
+      '</div>' +
+      '<div class="hc-xlabels">' + xlabels + '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>'
+    );
   }
 
   private getShortDate(dateString: string): string {
@@ -1683,6 +1758,186 @@ export class UsageWebviewProvider {
       .seg-cache-read {
         background: var(--vscode-charts-green);
       }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 12px;
+      }
+
+      .section-header h3 {
+        margin: 0;
+      }
+
+      .btn-small {
+        padding: 4px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .model-pricing {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--vscode-panel-border);
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        word-break: break-word;
+      }
+
+      .table-hint {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin: 0 0 8px 0;
+      }
+
+      th.sortable {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+
+      th.sortable:hover {
+        color: var(--vscode-focusBorder);
+      }
+
+      th.sortable.sorted-asc::after {
+        content: ' \\25B2';
+        font-size: 9px;
+      }
+
+      th.sortable.sorted-desc::after {
+        content: ' \\25BC';
+        font-size: 9px;
+      }
+
+      .group-toggle {
+        display: inline-block;
+        width: 14px;
+        cursor: pointer;
+        color: var(--vscode-descriptionForeground);
+        transition: transform 0.15s ease;
+      }
+
+      .group-toggle.expanded {
+        transform: rotate(90deg);
+      }
+
+      .group-count {
+        font-weight: normal;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .project-child-cell {
+        padding-left: 28px;
+      }
+
+      .project-child-row {
+        background: var(--vscode-input-background);
+      }
+
+      .hc-wrap {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 20px;
+        padding-top: 18px;
+      }
+
+      .hc-yaxis {
+        width: 62px;
+        height: 120px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        text-align: right;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .hc-yval {
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .hc-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .hc-scroll {
+        overflow-x: auto;
+        overflow-y: visible;
+      }
+
+      .hc-plot {
+        position: relative;
+        height: 120px;
+        min-width: fit-content;
+        border-bottom: 1px solid var(--vscode-panel-border);
+      }
+
+      .hc-grid {
+        position: absolute;
+        left: 0;
+        right: 0;
+        border-top: 1px dashed var(--vscode-panel-border);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .hc-grid-top {
+        top: 0;
+      }
+
+      .hc-grid-mid {
+        top: 50%;
+      }
+
+      .hc-bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 120px;
+        min-width: fit-content;
+      }
+
+      .hc-col {
+        width: 38px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .hc-col .chart-bar {
+        margin-bottom: 0;
+      }
+
+      .hc-barval {
+        font-size: 9px;
+        color: var(--vscode-descriptionForeground);
+        margin-bottom: 2px;
+        white-space: nowrap;
+      }
+
+      .hc-xlabels {
+        display: flex;
+        gap: 4px;
+        min-width: fit-content;
+        margin-top: 4px;
+      }
+
+      .hc-xlabel {
+        width: 38px;
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+      }
     `;
   }
 
@@ -1703,6 +1958,74 @@ function refresh() {
 function openSettings() {
   console.log("[DEBUG] openSettings called");
   vscode.postMessage({ command: 'openSettings' });
+}
+
+function refreshPricing() {
+  console.log("[DEBUG] refreshPricing called");
+  vscode.postMessage({ command: 'refreshPricing' });
+}
+
+function toggleProjectGroup(groupId) {
+  var groupRow = document.querySelector('.project-group-row[data-group="' + groupId + '"]');
+  var childRows = document.querySelectorAll('.project-child-row[data-group="' + groupId + '"]');
+  var toggle = groupRow ? groupRow.querySelector('.group-toggle') : null;
+  var expanded = toggle && toggle.classList.contains('expanded');
+  childRows.forEach(function(r) {
+    r.style.display = expanded ? 'none' : 'table-row';
+  });
+  if (toggle) {
+    toggle.classList.toggle('expanded');
+    toggle.textContent = expanded ? '▶' : '▼';
+  }
+}
+
+// Sort a table by a column key. Rows with class "sort-child" travel with the
+// preceding "sort-row" (used for expandable project groups).
+function sortTable(table, key, th) {
+  var tbody = table.querySelector('tbody');
+  if (!tbody) { return; }
+  var allRows = Array.prototype.slice.call(tbody.children);
+
+  var units = [];
+  var current = null;
+  allRows.forEach(function(row) {
+    if (row.classList.contains('sort-child') && current) {
+      current.rows.push(row);
+    } else {
+      current = { lead: row, rows: [row] };
+      units.push(current);
+    }
+  });
+
+  // First click on a column sorts descending; clicking again flips direction.
+  var ascending = th.getAttribute('data-sortdir') === 'desc';
+
+  table.querySelectorAll('th.sortable').forEach(function(h) {
+    h.removeAttribute('data-sortdir');
+    h.classList.remove('sorted-asc', 'sorted-desc');
+  });
+  th.setAttribute('data-sortdir', ascending ? 'asc' : 'desc');
+  th.classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
+
+  units.sort(function(a, b) {
+    var va = a.lead.getAttribute('data-sort-' + key);
+    var vb = b.lead.getAttribute('data-sort-' + key);
+    if (va === null) { va = ''; }
+    if (vb === null) { vb = ''; }
+    var na = parseFloat(va);
+    var nb = parseFloat(vb);
+    var cmp;
+    if (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb)) {
+      cmp = na - nb;
+    } else {
+      cmp = String(va).localeCompare(String(vb));
+    }
+    return ascending ? cmp : -cmp;
+  });
+
+  units.forEach(function(u) {
+    u.rows.forEach(function(r) { tbody.appendChild(r); });
+  });
 }
 
 function showTab(tabName) {
@@ -1945,6 +2268,9 @@ function syncChartBarSelection(date, isSelected) {
 // Make functions available globally
 window.refresh = refresh;
 window.openSettings = openSettings;
+window.refreshPricing = refreshPricing;
+window.toggleProjectGroup = toggleProjectGroup;
+window.sortTable = sortTable;
 window.showTab = showTab;
 window.toggleHourlyDetail = toggleHourlyDetail;
 window.toggleMonthlyDetail = toggleMonthlyDetail;
@@ -1984,6 +2310,17 @@ window.addEventListener('message', function(event) {
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {
   console.log("[DEBUG] Document click event:", event.target);
+
+  // Handle sortable table header clicks
+  var sortableTh = event.target.closest ? event.target.closest('th.sortable') : null;
+  if (sortableTh) {
+    var sortTableEl = sortableTh.closest('table');
+    var sortKey = sortableTh.getAttribute('data-sortkey');
+    if (sortTableEl && sortKey) {
+      sortTable(sortTableEl, sortKey, sortableTh);
+    }
+    return;
+  }
 
   // Handle chart tab clicks
   if (event.target.classList.contains('chart-tab')) {
@@ -2146,19 +2483,33 @@ function updateMainChart(metric, container) {
       bar.classList.add('selected');
     }
 
-    // Update tooltip
+    // Update tooltip + on-bar value label
     const formattedValue = formatValue(value, metric);
     const container = bar.parentElement;
     const date = container.dataset.date;
     const hour = container.dataset.hour;
 
     if (hour) {
-      bar.title = hour + ': ' + formattedValue;
+      // Hourly chart: tooltip shows the value only (the hour is on the x-axis).
+      bar.title = formattedValue;
     } else if (date) {
       const dateObj = new Date(date);
       bar.title = dateObj.toLocaleDateString() + ': ' + formattedValue;
     }
+
+    const barVal = container.querySelector('.hc-barval');
+    if (barVal) {
+      barVal.textContent = formattedValue;
+    }
   });
+
+  // Update the hourly chart's Y-axis reference labels, if present.
+  const yvals = targetContainer.querySelectorAll('.hc-yaxis .hc-yval');
+  if (yvals.length === 3) {
+    yvals[0].textContent = formatValue(maxValue, metric);
+    yvals[1].textContent = formatValue(maxValue / 2, metric);
+    yvals[2].textContent = formatValue(0, metric);
+  }
 }
 
 function getDataAttribute(metric) {

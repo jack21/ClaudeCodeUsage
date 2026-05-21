@@ -4,6 +4,8 @@
 // other providers via a proxy, so pricing for common US / Chinese models is also
 // included as a convenience.
 
+import * as https from 'https';
+
 import { ModelPricing } from './types';
 
 export interface TokenUsage {
@@ -177,6 +179,12 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   ...NON_CLAUDE_PRICING,
 };
 
+// Runtime pricing overrides fetched on demand from LiteLLM's public pricing
+// dataset (see fetchLatestPricing). These take precedence over the built-in
+// table, letting users pull fresh prices without waiting for an extension update.
+const runtimePricingOverrides: Record<string, ModelPricing> = {};
+let lastPricingFetch: { time: number; count: number } | null = null;
+
 /**
  * Resolve pricing for an unknown model id by detecting its family.
  *
@@ -238,14 +246,17 @@ export function getModelPricing(modelName: string | undefined): ModelPricing | n
     return null;
   }
 
-  // Direct match
-  if (MODEL_PRICING[modelName]) {
-    return MODEL_PRICING[modelName];
-  }
-
   // Try different variation matches (similar to ccusage logic)
   const variations = [modelName, `anthropic/${modelName}`, `claude-3-5-${modelName}`, `claude-3-${modelName}`, `claude-${modelName}`];
 
+  // Runtime overrides (fetched from LiteLLM) take precedence over the built-in table.
+  for (const variation of variations) {
+    if (runtimePricingOverrides[variation]) {
+      return runtimePricingOverrides[variation];
+    }
+  }
+
+  // Built-in table.
   for (const variation of variations) {
     if (MODEL_PRICING[variation]) {
       return MODEL_PRICING[variation];
@@ -310,4 +321,93 @@ export function calculateCostFromTokens(tokens: TokenUsage, modelName: string | 
   }
 
   return calculateCostFromPricing(tokens, pricing);
+}
+
+/**
+ * Per-million-token rates for a model, intended for display in the UI so users
+ * can sanity-check the figures behind a cost.
+ * @returns rates in USD per 1M tokens, or null if the model is unknown
+ */
+export function getModelRatesPerMillion(
+  modelName: string | undefined
+): { input: number; output: number; cacheWrite: number; cacheRead: number } | null {
+  const pricing = getModelPricing(modelName);
+  if (!pricing) {
+    return null;
+  }
+  return {
+    input: (pricing.input_cost_per_token || 0) * MILL,
+    output: (pricing.output_cost_per_token || 0) * MILL,
+    cacheWrite: (pricing.cache_creation_input_token_cost || 0) * MILL,
+    cacheRead: (pricing.cache_read_input_token_cost || 0) * MILL,
+  };
+}
+
+/** Metadata about the most recent successful fetchLatestPricing() call. */
+export function getPricingLastFetched(): { time: number; count: number } | null {
+  return lastPricingFetch;
+}
+
+const LITELLM_PRICING_URL =
+  'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+
+/**
+ * Fetch the latest model prices from LiteLLM's public pricing dataset and apply
+ * them as runtime overrides. The dataset uses the same per-token fields as
+ * ModelPricing, so entries map directly. Overrides live in memory for the
+ * current session only.
+ * @returns the number of models updated
+ */
+export function fetchLatestPricing(): Promise<{ updated: number }> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(LITELLM_PRICING_URL, { timeout: 15000 }, (response) => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        reject(new Error(`HTTP ${response.statusCode}`));
+        return;
+      }
+
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        body += chunk;
+      });
+      response.on('end', () => {
+        try {
+          const json = JSON.parse(body) as Record<string, unknown>;
+          let updated = 0;
+
+          for (const [name, raw] of Object.entries(json)) {
+            if (raw == null || typeof raw !== 'object') {
+              continue;
+            }
+            const info = raw as Record<string, unknown>;
+            if (typeof info.input_cost_per_token !== 'number') {
+              continue;
+            }
+            runtimePricingOverrides[name] = {
+              input_cost_per_token: info.input_cost_per_token,
+              output_cost_per_token:
+                typeof info.output_cost_per_token === 'number' ? info.output_cost_per_token : undefined,
+              cache_creation_input_token_cost:
+                typeof info.cache_creation_input_token_cost === 'number' ? info.cache_creation_input_token_cost : undefined,
+              cache_read_input_token_cost:
+                typeof info.cache_read_input_token_cost === 'number' ? info.cache_read_input_token_cost : undefined,
+            };
+            updated++;
+          }
+
+          lastPricingFetch = { time: Date.now(), count: updated };
+          resolve({ updated });
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    });
+
+    request.on('timeout', () => {
+      request.destroy(new Error('Request timed out'));
+    });
+    request.on('error', reject);
+  });
 }
