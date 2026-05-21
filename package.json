@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -71,6 +71,18 @@
           "minimum": 0,
           "maximum": 4,
           "description": "Number of decimal places for cost display"
+        },
+        "claudeCodeUsage.quota5hLimit": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Cost ceiling (USD) for the rolling 5-hour quota window shown in the status bar. 0 hides the 5h indicator. Calibrate against Claude Code's /usage command."
+        },
+        "claudeCodeUsage.quotaWeeklyLimit": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Cost ceiling (USD) for the rolling 7-day quota window shown in the status bar. 0 hides the weekly indicator. Calibrate against Claude Code's /usage command."
         }
       }
     },

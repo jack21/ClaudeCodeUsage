@@ -66,11 +66,13 @@ export interface ProjectUsage {
   data: UsageData;
 }
 
-// A group of projects that share a top-level project folder. Projects whose
+// A group of projects. Projects are grouped by their enclosing git repository
+// when one exists, otherwise by their top-level project folder. Projects whose
 // paths differ only in case are merged into a single child.
 export interface ProjectGroup {
   groupName: string;
   groupPath: string;
+  isGitRepo: boolean;
   projectCount: number;
   sessionCount: number;
   firstSeen: Date;
@@ -79,11 +81,32 @@ export interface ProjectGroup {
   children: ProjectUsage[];
 }
 
+// One slice of the content-consumption analysis (a category, or a single tool).
+export interface ContentSlice {
+  key: string;
+  estimatedTokens: number;
+  charCount: number;
+  count: number;
+}
+
+// Estimated breakdown of which conversation content consumes tokens. Token
+// figures are estimated from character counts, so treat them as approximate —
+// the relative shares are the reliable signal.
+export interface ContentAnalysis {
+  categories: ContentSlice[];
+  toolResultBreakdown: ContentSlice[];
+  totalEstimatedTokens: number;
+}
+
 export interface ExtensionConfig {
   refreshInterval: number;
   dataDirectory: string;
   language: string;
   decimalPlaces: number;
+  // Optional quota ceilings (USD cost) for the rolling 5-hour and 7-day windows.
+  // 0 disables the corresponding quota indicator.
+  quota5hLimit: number;
+  quotaWeeklyLimit: number;
 }
 
 export interface ModelPricing {

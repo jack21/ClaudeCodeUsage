@@ -5,7 +5,16 @@ import * as path from 'path';
 // Removed tinyglobby dependency - using native fs instead
 // Removed zod dependency - using native validation instead
 import { calculateCostFromTokens } from './pricing';
-import { ClaudeUsageRecord, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import {
+  ClaudeUsageRecord,
+  ContentAnalysis,
+  ContentSlice,
+  ProjectGroup,
+  ProjectUsage,
+  SessionData,
+  SessionUsage,
+  UsageData,
+} from './types';
 
 // Constants
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
@@ -77,6 +86,152 @@ function validateUsageRecord(data: any): data is ClaudeUsageRecord {
   return true;
 }
 
+// --- Content-consumption analysis helpers ---
+// These estimate which conversation content uses tokens. Token figures are
+// derived from character counts, so they are approximate; the relative shares
+// between categories are the dependable signal.
+
+interface AnalysisBucket {
+  tokens: number;
+  chars: number;
+  count: number;
+}
+
+interface AnalysisAcc {
+  cat: Record<string, AnalysisBucket>;
+  tools: Record<string, AnalysisBucket>;
+  toolIdToName: Record<string, string>;
+  seenUuids: Set<string>;
+}
+
+function newAnalysisAcc(): AnalysisAcc {
+  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>() };
+}
+
+// Rough token estimate from text length (CJK characters are denser than ASCII).
+function estimateTokens(text: string): number {
+  const len = text.length;
+  if (len === 0) {
+    return 0;
+  }
+  if (len > 200000) {
+    return Math.round(len / 4);
+  }
+  let cjk = 0;
+  for (let i = 0; i < len; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0x3000 && code <= 0x9fff) {
+      cjk++;
+    }
+  }
+  return Math.round(cjk / 1.5 + (len - cjk) / 4);
+}
+
+// Flatten a content value (string, or array of blocks) to plain text.
+function blockText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    let text = '';
+    for (const block of content) {
+      if (typeof block === 'string') {
+        text += block;
+      } else if (block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string') {
+        text += (block as { text: string }).text;
+      }
+    }
+    return text;
+  }
+  return '';
+}
+
+function addToBucket(map: Record<string, AnalysisBucket>, key: string, text: string): void {
+  if (!text) {
+    return;
+  }
+  if (!map[key]) {
+    map[key] = { tokens: 0, chars: 0, count: 0 };
+  }
+  map[key].tokens += estimateTokens(text);
+  map[key].chars += text.length;
+  map[key].count += 1;
+}
+
+// Accumulate one raw log line into the content analysis.
+function analyzeLine(parsed: any, acc: AnalysisAcc): void {
+  if (!parsed || typeof parsed !== 'object') {
+    return;
+  }
+  const uuid = typeof parsed.uuid === 'string' ? parsed.uuid : null;
+  if (uuid) {
+    if (acc.seenUuids.has(uuid)) {
+      return;
+    }
+    acc.seenUuids.add(uuid);
+  }
+
+  const message = parsed.message;
+  if (!message || typeof message !== 'object') {
+    return;
+  }
+  const role = message.role || parsed.type;
+  const content = message.content;
+
+  if (role === 'assistant') {
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (!block || typeof block !== 'object') {
+          continue;
+        }
+        if (block.type === 'text' && typeof block.text === 'string') {
+          addToBucket(acc.cat, 'assistantText', block.text);
+        } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
+          addToBucket(acc.cat, 'assistantThinking', block.thinking);
+        } else if (block.type === 'tool_use') {
+          if (typeof block.id === 'string' && typeof block.name === 'string') {
+            acc.toolIdToName[block.id] = block.name;
+          }
+          addToBucket(acc.cat, 'toolCalls', JSON.stringify(block.input || {}));
+        }
+      }
+    } else if (typeof content === 'string') {
+      addToBucket(acc.cat, 'assistantText', content);
+    }
+  } else if (role === 'user') {
+    if (typeof content === 'string') {
+      addToBucket(acc.cat, 'userPrompts', content);
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (!block || typeof block !== 'object') {
+          continue;
+        }
+        if (block.type === 'tool_result') {
+          const text = blockText(block.content);
+          addToBucket(acc.cat, 'toolResults', text);
+          addToBucket(acc.tools, acc.toolIdToName[block.tool_use_id] || 'unknown', text);
+        } else if (block.type === 'text' && typeof block.text === 'string') {
+          addToBucket(acc.cat, 'userPrompts', block.text);
+        }
+      }
+    }
+  }
+}
+
+function finalizeAnalysis(acc: AnalysisAcc): ContentAnalysis {
+  const toSlices = (map: Record<string, AnalysisBucket>): ContentSlice[] =>
+    Object.keys(map)
+      .map((key) => ({ key, estimatedTokens: map[key].tokens, charCount: map[key].chars, count: map[key].count }))
+      .sort((a, b) => b.estimatedTokens - a.estimatedTokens);
+
+  const categories = toSlices(acc.cat);
+  return {
+    categories,
+    toolResultBreakdown: toSlices(acc.tools),
+    totalEstimatedTokens: categories.reduce((sum, c) => sum + c.estimatedTokens, 0),
+  };
+}
+
 export class ClaudeDataLoader {
   static getClaudePaths(): string[] {
     const paths: string[] = [];
@@ -135,7 +290,9 @@ export class ClaudeDataLoader {
     return claudePaths.length > 0 ? claudePaths[0] : null;
   }
 
-  static async loadUsageRecords(dataDirectory?: string): Promise<ClaudeUsageRecord[]> {
+  static async loadUsageRecords(
+    dataDirectory?: string
+  ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis }> {
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
       const allFiles: string[] = [];
@@ -151,6 +308,7 @@ export class ClaudeDataLoader {
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
       const processedHashes = new Set<string>();
       const records: ClaudeUsageRecord[] = [];
+      const analysis = newAnalysisAcc();
 
       for (const file of sortedFiles) {
         try {
@@ -166,6 +324,9 @@ export class ClaudeDataLoader {
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line) as unknown;
+
+              // Feed every line into the content analysis (not only usage records).
+              analyzeLine(parsed, analysis);
 
               if (!validateUsageRecord(parsed)) {
                 continue;
@@ -205,10 +366,10 @@ export class ClaudeDataLoader {
         }
       }
 
-      return records;
+      return { records, contentAnalysis: finalizeAnalysis(analysis) };
     } catch (error) {
       console.error('Error loading usage records:', error);
-      return [];
+      return { records: [], contentAnalysis: finalizeAnalysis(newAnalysisAcc()) };
     }
   }
 
@@ -522,9 +683,47 @@ export class ClaudeDataLoader {
     return originalSegments.slice(0, groupSegCount).join(sep);
   }
 
+  /** Resolve the enclosing git repository root for a path, or null. Walks up the tree. */
+  private static resolveGitRoot(startPath: string, cache: Map<string, string | null>): string | null {
+    const visited: string[] = [];
+    let dir = startPath;
+    for (let i = 0; i < 80; i++) {
+      if (cache.has(dir)) {
+        const cached = cache.get(dir) ?? null;
+        for (const v of visited) {
+          cache.set(v, cached);
+        }
+        return cached;
+      }
+      visited.push(dir);
+      let isRepo = false;
+      try {
+        isRepo = fs.existsSync(path.join(dir, '.git'));
+      } catch {
+        isRepo = false;
+      }
+      if (isRepo) {
+        for (const v of visited) {
+          cache.set(v, dir);
+        }
+        return dir;
+      }
+      const parent = path.dirname(dir);
+      if (!parent || parent === dir) {
+        break;
+      }
+      dir = parent;
+    }
+    for (const v of visited) {
+      cache.set(v, null);
+    }
+    return null;
+  }
+
   /**
    * Group records by project (working directory), then group those projects by
-   * their top-level project folder. Paths that differ only in case are merged.
+   * their enclosing git repository — or, when a project is not inside a repo, by
+   * its top-level project folder. Paths that differ only in case are merged.
    * @param records All loaded usage records
    * @param limit Maximum number of project groups to return (default 60)
    */
@@ -548,20 +747,37 @@ export class ClaudeDataLoader {
       return [];
     }
 
-    // 2. Find the common root so each project can be grouped by the folder
-    //    immediately below it (its top-level project folder).
+    // 2. Common root — the grouping fallback for projects not inside a git repo.
     const segmentLists = keys.map((k) => k.split('/').filter((s) => s.length > 0));
     const commonRootLen = this.commonPrefixLength(segmentLists);
 
-    // 3. Build a project per key and assign it to a group.
-    const groups: Record<string, { records: ClaudeUsageRecord[]; children: ProjectUsage[] }> = {};
+    // 3. Build a project per key and assign it to a group (git repo, else folder).
+    const groups: Record<
+      string,
+      { records: ClaudeUsageRecord[]; children: ProjectUsage[]; displayPath: string; isGitRepo: boolean }
+    > = {};
+    const gitCache = new Map<string, string | null>();
 
     keys.forEach((key, idx) => {
       const projectRecords = recordsByKey[key];
+      const originalPath = displayPathByKey[key];
       const segments = segmentLists[idx];
-      // When projects share no common root, don't merge (each is its own group).
-      const groupLen = commonRootLen === 0 ? segments.length : Math.min(segments.length, commonRootLen + 1);
-      const groupKey = segments.slice(0, groupLen).join('/');
+
+      let groupKey: string;
+      let groupDisplayPath: string;
+      let isGitRepo: boolean;
+      const gitRoot = this.resolveGitRoot(originalPath, gitCache);
+      if (gitRoot) {
+        groupKey = this.normalizePath(gitRoot);
+        groupDisplayPath = gitRoot;
+        isGitRepo = true;
+      } else {
+        // Not in a repo: fall back to the top-level project folder.
+        const groupLen = commonRootLen === 0 ? segments.length : Math.min(segments.length, commonRootLen + 1);
+        groupKey = segments.slice(0, groupLen).join('/');
+        groupDisplayPath = this.deriveGroupDisplayPath(originalPath, groupKey);
+        isGitRepo = false;
+      }
 
       const timestamps = projectRecords.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
       const first = projectRecords[0];
@@ -575,24 +791,24 @@ export class ClaudeDataLoader {
       };
 
       if (!groups[groupKey]) {
-        groups[groupKey] = { records: [], children: [] };
+        groups[groupKey] = { records: [], children: [], displayPath: groupDisplayPath, isGitRepo };
       }
       groups[groupKey].records.push(...projectRecords);
       groups[groupKey].children.push(project);
     });
 
     // 4. Aggregate each group.
-    const result: ProjectGroup[] = Object.entries(groups).map(([groupKey, g]) => {
+    const result: ProjectGroup[] = Object.values(groups).map((g) => {
       const timestamps = g.records.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
       const sessionCount = new Set(g.records.map((r) => r._sessionId || 'unknown')).size;
       const children = g.children.sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
-      const groupPath = this.deriveGroupDisplayPath(children[0].projectPath, groupKey);
-      const pathSegments = groupPath.split(/[\\/]/).filter((s) => s.length > 0);
-      const groupName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : groupPath;
+      const pathSegments = g.displayPath.split(/[\\/]/).filter((s) => s.length > 0);
+      const groupName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : g.displayPath;
 
       return {
         groupName,
-        groupPath,
+        groupPath: g.displayPath,
+        isGitRepo: g.isGitRepo,
         projectCount: children.length,
         sessionCount,
         firstSeen: timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0),
@@ -606,6 +822,20 @@ export class ClaudeDataLoader {
       .filter((g) => g.data.messageCount > 0)
       .sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime())
       .slice(0, limit);
+  }
+
+  /**
+   * Aggregate usage over a rolling time window ending at the current moment.
+   * @param records All loaded usage records
+   * @param hours Window length in hours
+   */
+  static getRollingWindowData(records: ClaudeUsageRecord[], hours: number): UsageData {
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    const windowRecords = records.filter((record) => {
+      const t = new Date(record.timestamp).getTime();
+      return !isNaN(t) && t >= cutoff;
+    });
+    return this.calculateUsageData(windowRecords);
   }
 
   static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {

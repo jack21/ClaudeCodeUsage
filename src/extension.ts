@@ -4,7 +4,7 @@ import { StatusBarManager } from './statusBar';
 import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
-import { ExtensionConfig, UsageData, SessionData } from './types';
+import { ContentAnalysis, ExtensionConfig, UsageData, SessionData } from './types';
 
 export class ClaudeCodeUsageExtension {
   private statusBar: StatusBarManager;
@@ -12,10 +12,12 @@ export class ClaudeCodeUsageExtension {
   private refreshTimer: NodeJS.Timeout | undefined;
   private cache: {
     records: any[];
+    contentAnalysis: ContentAnalysis | null;
     lastUpdate: Date;
     dataDirectory: string | null;
   } = {
     records: [],
+    contentAnalysis: null,
     lastUpdate: new Date(0),
     dataDirectory: null
   };
@@ -82,7 +84,9 @@ export class ClaudeCodeUsageExtension {
       refreshInterval: config.get('refreshInterval', 60),
       dataDirectory: config.get('dataDirectory', ''),
       language: config.get('language', 'auto'),
-      decimalPlaces: config.get('decimalPlaces', 2)
+      decimalPlaces: config.get('decimalPlaces', 2),
+      quota5hLimit: config.get('quota5hLimit', 0),
+      quotaWeeklyLimit: config.get('quotaWeeklyLimit', 0)
     };
   }
 
@@ -142,9 +146,13 @@ export class ClaudeCodeUsageExtension {
       const shouldReload = this.shouldReloadData(dataDirectory);
       
       let records = this.cache.records;
+      let contentAnalysis = this.cache.contentAnalysis;
       if (shouldReload) {
-        records = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
+        const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
+        records = loaded.records;
+        contentAnalysis = loaded.contentAnalysis;
         this.cache.records = records;
+        this.cache.contentAnalysis = contentAnalysis;
         this.cache.lastUpdate = new Date();
         this.cache.dataDirectory = dataDirectory;
       }
@@ -166,10 +174,17 @@ export class ClaudeCodeUsageExtension {
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
       const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records);
+      const rolling5h = ClaudeDataLoader.getRollingWindowData(records, 5);
+      const rollingWeek = ClaudeDataLoader.getRollingWindowData(records, 24 * 7);
 
       // Update UI
-      this.statusBar.updateUsageData(todayData, sessionData);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown);
+      this.statusBar.updateUsageData(todayData, sessionData, undefined, {
+        cost5h: rolling5h.totalCost,
+        limit5h: config.quota5hLimit,
+        costWeek: rollingWeek.totalCost,
+        limitWeek: config.quotaWeeklyLimit
+      });
+      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

@@ -2,17 +2,28 @@ import * as vscode from 'vscode';
 import { SessionData, UsageData } from './types';
 import { I18n } from './i18n';
 
+// Rolling-window usage vs. (optional) configured ceilings.
+export interface QuotaInfo {
+  cost5h: number;
+  limit5h: number;
+  costWeek: number;
+  limitWeek: number;
+}
+
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
+  private quotaItem: vscode.StatusBarItem;
   private isLoading: boolean = false;
 
   constructor() {
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      100
-    );
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.statusBarItem.command = 'claudeCodeUsage.showDetails';
     this.statusBarItem.show();
+
+    // A second, quieter item for the rolling quota indicator.
+    this.quotaItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    this.quotaItem.command = 'claudeCodeUsage.showDetails';
+
     this.updateStatusBar();
   }
 
@@ -21,20 +32,28 @@ export class StatusBarManager {
     this.updateStatusBar();
   }
 
-  updateUsageData(todayData: UsageData | null, sessionData?: SessionData | null, error?: string): void {
+  updateUsageData(
+    todayData: UsageData | null,
+    sessionData?: SessionData | null,
+    error?: string,
+    quota?: QuotaInfo
+  ): void {
     this.isLoading = false;
 
     if (error) {
       this.showError(error);
+      this.quotaItem.hide();
       return;
     }
 
     if (!todayData) {
       this.showNoData();
+      this.quotaItem.hide();
       return;
     }
 
     this.showTodayData(todayData, sessionData ?? null);
+    this.updateQuota(quota);
   }
 
   private updateStatusBar(): void {
@@ -59,6 +78,41 @@ export class StatusBarManager {
     this.statusBarItem.backgroundColor = undefined;
   }
 
+  /** Update the quota indicator. Hidden unless at least one limit is configured. */
+  private updateQuota(quota?: QuotaInfo): void {
+    if (!quota || (quota.limit5h <= 0 && quota.limitWeek <= 0)) {
+      this.quotaItem.hide();
+      return;
+    }
+
+    const parts: string[] = [];
+    let worstPct = 0;
+    if (quota.limit5h > 0) {
+      const pct = Math.round((quota.cost5h / quota.limit5h) * 100);
+      worstPct = Math.max(worstPct, pct);
+      parts.push(`5h ${pct}%`);
+    }
+    if (quota.limitWeek > 0) {
+      const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
+      worstPct = Math.max(worstPct, pct);
+      parts.push(`7d ${pct}%`);
+    }
+
+    this.quotaItem.text = `$(dashboard) ${parts.join(' · ')}`;
+
+    // Stay quiet until usage actually gets high.
+    if (worstPct >= 100) {
+      this.quotaItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    } else if (worstPct >= 80) {
+      this.quotaItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    } else {
+      this.quotaItem.backgroundColor = undefined;
+    }
+
+    this.quotaItem.tooltip = this.createQuotaTooltip(quota);
+    this.quotaItem.show();
+  }
+
   private showNoData(): void {
     this.statusBarItem.text = `$(circle-slash) ${I18n.t.statusBar.noData}`;
     this.statusBarItem.tooltip = I18n.t.statusBar.notRunning;
@@ -72,8 +126,8 @@ export class StatusBarManager {
   }
 
   /**
-   * Build the hover tooltip as a Markdown table so figures line up in neat,
-   * right-aligned columns (a plain-text tooltip cannot align reliably).
+   * Hover tooltip as a Markdown table so figures line up in neat, right-aligned
+   * columns (a plain-text tooltip cannot align reliably).
    */
   private createTooltip(todayData: UsageData, sessionData: SessionData | null): vscode.MarkdownString {
     const t = I18n.t.popup;
@@ -94,11 +148,7 @@ export class StatusBarManager {
       md.appendMarkdown(session ? `| ${label} | ${todayValue} | ${sessionValue} |\n` : `| ${label} | ${todayValue} |\n`);
     };
 
-    row(
-      t.cost,
-      I18n.formatCurrency(todayData.totalCost),
-      session ? I18n.formatCurrency(session.totalCost) : ''
-    );
+    row(t.cost, I18n.formatCurrency(todayData.totalCost), session ? I18n.formatCurrency(session.totalCost) : '');
     row(
       t.inputTokens,
       I18n.formatNumber(todayData.totalInputTokens),
@@ -119,18 +169,39 @@ export class StatusBarManager {
       I18n.formatNumber(todayData.totalCacheReadTokens),
       session ? I18n.formatNumber(session.totalCacheReadTokens) : ''
     );
-    row(
-      t.messages,
-      I18n.formatNumber(todayData.messageCount),
-      session ? I18n.formatNumber(session.messageCount) : ''
-    );
+    row(t.messages, I18n.formatNumber(todayData.messageCount), session ? I18n.formatNumber(session.messageCount) : '');
 
     md.appendMarkdown(`\n\n*Click for detailed breakdown*`);
+    return md;
+  }
 
+  private createQuotaTooltip(quota: QuotaInfo): vscode.MarkdownString {
+    const t = I18n.t.popup;
+    const md = new vscode.MarkdownString();
+    md.supportThemeIcons = true;
+    md.appendMarkdown(`**${t.quota}**\n\n`);
+    md.appendMarkdown(`| ${t.quotaWindow} | ${t.cost} | ${t.quotaLimit} | % |\n`);
+    md.appendMarkdown(`|:--|--:|--:|--:|\n`);
+
+    if (quota.limit5h > 0) {
+      const pct = Math.round((quota.cost5h / quota.limit5h) * 100);
+      md.appendMarkdown(
+        `| ${t.quota5h} | ${I18n.formatCurrency(quota.cost5h)} | ${I18n.formatCurrency(quota.limit5h)} | ${pct}% |\n`
+      );
+    }
+    if (quota.limitWeek > 0) {
+      const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
+      md.appendMarkdown(
+        `| ${t.quotaWeekly} | ${I18n.formatCurrency(quota.costWeek)} | ${I18n.formatCurrency(quota.limitWeek)} | ${pct}% |\n`
+      );
+    }
+
+    md.appendMarkdown(`\n\n*${t.quotaHint}*`);
     return md;
   }
 
   dispose(): void {
     this.statusBarItem.dispose();
+    this.quotaItem.dispose();
   }
 }

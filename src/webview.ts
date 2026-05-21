@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -20,6 +20,7 @@ export class UsageWebviewProvider {
   private allRecords: any[] = [];
   private sessionBreakdown: SessionUsage[] = [];
   private projectBreakdown: ProjectGroup[] = [];
+  private contentAnalysis: ContentAnalysis | null = null;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -104,7 +105,8 @@ export class UsageWebviewProvider {
     dataDirectory?: string | null,
     allRecords?: any[],
     sessionBreakdown: SessionUsage[] = [],
-    projectBreakdown: ProjectGroup[] = []
+    projectBreakdown: ProjectGroup[] = [],
+    contentAnalysis: ContentAnalysis | null = null
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -121,6 +123,7 @@ export class UsageWebviewProvider {
     }
     this.sessionBreakdown = sessionBreakdown;
     this.projectBreakdown = projectBreakdown;
+    this.contentAnalysis = contentAnalysis;
 
     if (this.panel) {
       this.updateWebview();
@@ -239,12 +242,14 @@ export class UsageWebviewProvider {
     const allTime = I18n.t.popup.allTime;
     const sessions = I18n.t.popup.sessions;
     const projects = I18n.t.popup.projects;
+    const contentTab = I18n.t.popup.contentAnalysis;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
     const allActive = this.currentTab === 'all' ? 'active' : '';
     const sessionsActive = this.currentTab === 'sessions' ? 'active' : '';
     const projectsActive = this.currentTab === 'projects' ? 'active' : '';
+    const contentActive = this.currentTab === 'content' ? 'active' : '';
 
     return (
       `
@@ -302,6 +307,11 @@ export class UsageWebviewProvider {
       `" onclick="showTab('projects')">` +
       projects +
       `</button>
+            <button id="tab-content" class="tab ` +
+      contentActive +
+      `" onclick="showTab('content')">` +
+      contentTab +
+      `</button>
           </div>
 
           <div id="today" class="tab-content ` +
@@ -341,6 +351,14 @@ export class UsageWebviewProvider {
       `">
             ` +
       this.renderProjectData() +
+      `
+          </div>
+
+          <div id="content" class="tab-content ` +
+      contentActive +
+      `">
+            ` +
+      this.renderContentData() +
       `
           </div>
         </div>
@@ -972,6 +990,7 @@ export class UsageWebviewProvider {
           '<td class="project-cell">' +
           '<div class="project-name">' +
           '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
+          (group.isGitRepo ? '<span class="git-badge">git</span> ' : '') +
           this.escapeHtml(group.groupName) +
           ' <span class="group-count">(' + group.projectCount + ')</span>' +
           '</div>' +
@@ -1023,6 +1042,84 @@ export class UsageWebviewProvider {
       '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * "Content" tab: an estimated breakdown of which conversation content consumes
+   * tokens (your prompts vs. tool results vs. assistant output), to help spot
+   * habits worth optimising. Token figures are estimated from text length.
+   */
+  private renderContentData(): string {
+    const t = I18n.t.popup;
+    const analysis = this.contentAnalysis;
+    if (!analysis || analysis.categories.length === 0 || analysis.totalEstimatedTokens === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const total = analysis.totalEstimatedTokens;
+
+    const catLabel = (key: string): string => {
+      switch (key) {
+        case 'userPrompts':
+          return t.catUserPrompts;
+        case 'assistantText':
+          return t.catAssistantText;
+        case 'assistantThinking':
+          return t.catAssistantThinking;
+        case 'toolCalls':
+          return t.catToolCalls;
+        case 'toolResults':
+          return t.catToolResults;
+        default:
+          return key;
+      }
+    };
+    const catColor: Record<string, string> = {
+      userPrompts: 'cf-1',
+      assistantText: 'cf-2',
+      assistantThinking: 'cf-3',
+      toolCalls: 'cf-4',
+      toolResults: 'cf-5',
+    };
+
+    const barRow = (label: string, tokens: number, barMax: number, colorClass: string): string => {
+      const pct = total > 0 ? (tokens / total) * 100 : 0;
+      const width = barMax > 0 ? (tokens / barMax) * 100 : 0;
+      return (
+        '<div class="cbar-row">' +
+        '<div class="cbar-label" title="' + this.escapeHtml(label) + '">' + this.escapeHtml(label) + '</div>' +
+        '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' + width.toFixed(1) + '%;"></div></div>' +
+        '<div class="cbar-val">' + I18n.formatNumber(tokens) + '</div>' +
+        '<div class="cbar-pct">' + pct.toFixed(1) + '%</div>' +
+        '</div>'
+      );
+    };
+
+    const maxCat = Math.max(...analysis.categories.map((c) => c.estimatedTokens), 1);
+    let catRows = '';
+    analysis.categories.forEach((c) => {
+      catRows += barRow(catLabel(c.key), c.estimatedTokens, maxCat, catColor[c.key] || 'cf-1');
+    });
+
+    let toolSection = '';
+    if (analysis.toolResultBreakdown.length > 0) {
+      const maxTool = Math.max(...analysis.toolResultBreakdown.map((s) => s.estimatedTokens), 1);
+      let toolRows = '';
+      analysis.toolResultBreakdown.forEach((s) => {
+        toolRows += barRow(s.key, s.estimatedTokens, maxTool, 'cf-4');
+      });
+      toolSection = '<h4 class="cbar-subhead">' + t.byTool + '</h4><div class="cbar-list">' + toolRows + '</div>';
+    }
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
+      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span></div>' +
+      '<p class="table-hint">' + t.estimatedNote + '</p>' +
+      '<div class="cbar-list">' + catRows + '</div>' +
+      toolSection +
       '</div>'
     );
   }
@@ -1937,6 +2034,100 @@ export class UsageWebviewProvider {
         text-align: center;
         font-size: 10px;
         color: var(--vscode-descriptionForeground);
+      }
+
+      .git-badge {
+        display: inline-block;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: var(--vscode-badge-background);
+        color: var(--vscode-badge-foreground);
+        vertical-align: middle;
+      }
+
+      .cbar-total {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .cbar-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 8px 0 16px;
+      }
+
+      .cbar-subhead {
+        margin: 16px 0 4px;
+        font-size: 14px;
+      }
+
+      .cbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+
+      .cbar-label {
+        width: 160px;
+        flex-shrink: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cbar-track {
+        flex: 1;
+        height: 16px;
+        min-width: 40px;
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .cbar-fill {
+        height: 100%;
+        border-radius: 2px;
+        min-width: 1px;
+      }
+
+      .cbar-val {
+        width: 96px;
+        flex-shrink: 0;
+        text-align: right;
+        font-family: var(--vscode-editor-font-family);
+      }
+
+      .cbar-pct {
+        width: 52px;
+        flex-shrink: 0;
+        text-align: right;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .cf-1 {
+        background: var(--vscode-charts-blue);
+      }
+
+      .cf-2 {
+        background: var(--vscode-charts-orange);
+      }
+
+      .cf-3 {
+        background: var(--vscode-charts-purple);
+      }
+
+      .cf-4 {
+        background: var(--vscode-charts-green);
+      }
+
+      .cf-5 {
+        background: var(--vscode-charts-red);
       }
     `;
   }
