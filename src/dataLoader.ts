@@ -6,6 +6,7 @@ import * as path from 'path';
 // Removed zod dependency - using native validation instead
 import { calculateCostFromTokens } from './pricing';
 import {
+  BranchUsage,
   ClaudeUsageRecord,
   ContentAnalysis,
   ContentSlice,
@@ -319,6 +320,7 @@ export class ClaudeDataLoader {
       const records: ClaudeUsageRecord[] = [];
       // Content analysis covers the last 30 days — recent enough to reflect habits.
       const analysis = newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      let fileIndex = 0;
 
       for (const file of sortedFiles) {
         try {
@@ -366,6 +368,8 @@ export class ClaudeDataLoader {
                 record._projectPath = sessionInfo.projectPath;
                 record._projectName = sessionInfo.projectName;
               }
+              const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
+              record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
               records.push(record);
             } catch (parseError) {
               console.warn(`Failed to parse line in ${file}:`, parseError);
@@ -373,6 +377,12 @@ export class ClaudeDataLoader {
           }
         } catch (fileError) {
           console.warn(`Failed to read file ${file}:`, fileError);
+        }
+
+        // Yield to the event loop every so often so a large history does not
+        // block the extension host (keeps VS Code and Claude Code responsive).
+        if (++fileIndex % 25 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
 
@@ -835,85 +845,71 @@ export class ClaudeDataLoader {
   }
 
   /**
-   * Aggregate usage over a rolling time window ending at the current moment.
+   * Group records by git branch (within each project) and aggregate usage.
+   * Returns branches with billable usage, sorted by cost descending.
    * @param records All loaded usage records
-   * @param hours Window length in hours
+   * @param limit Maximum number of branches to return (default 60)
    */
-  static getRollingWindowData(records: ClaudeUsageRecord[], hours: number): UsageData {
-    const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    const windowRecords = records.filter((record) => {
-      const t = new Date(record.timestamp).getTime();
-      return !isNaN(t) && t >= cutoff;
-    });
-    return this.calculateUsageData(windowRecords);
-  }
-
-  /**
-   * Usage in the current anchored 5-hour quota window. Claude Code's 5-hour
-   * limit window opens at the first message and lasts exactly 5 hours; the next
-   * window opens at the first message after the previous one expired.
-   * @returns window usage and when it resets (resetAt null if no active window)
-   */
-  static getAnchored5hWindow(records: ClaudeUsageRecord[]): { data: UsageData; resetAt: Date | null } {
-    const WINDOW_MS = 5 * 60 * 60 * 1000;
-    const times = records
-      .map((r) => new Date(r.timestamp).getTime())
-      .filter((t) => !isNaN(t))
-      .sort((a, b) => a - b);
-
-    if (times.length === 0) {
-      return { data: this.calculateUsageData([]), resetAt: null };
-    }
-
-    let windowStart = times[0];
-    for (const t of times) {
-      if (t >= windowStart + WINDOW_MS) {
-        windowStart = t;
+  static getBranchBreakdown(records: ClaudeUsageRecord[], limit: number = 60): BranchUsage[] {
+    const byKey: Record<string, ClaudeUsageRecord[]> = {};
+    for (const record of records) {
+      const branch = record._gitBranch && record._gitBranch.trim() !== '' ? record._gitBranch : '-';
+      const key = (record._projectName || 'unknown') + ' ' + branch;
+      if (!byKey[key]) {
+        byKey[key] = [];
       }
-    }
-    const resetMs = windowStart + WINDOW_MS;
-    if (Date.now() >= resetMs) {
-      // The last window has already expired — no active window right now.
-      return { data: this.calculateUsageData([]), resetAt: null };
+      byKey[key].push(record);
     }
 
-    const windowRecords = records.filter((record) => {
-      const t = new Date(record.timestamp).getTime();
-      return !isNaN(t) && t >= windowStart && t < resetMs;
+    const result: BranchUsage[] = Object.values(byKey).map((recs) => {
+      const first = recs[0];
+      const branch = first._gitBranch && first._gitBranch.trim() !== '' ? first._gitBranch : '-';
+      const timestamps = recs.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
+      return {
+        branch,
+        projectName: first._projectName || 'unknown',
+        projectPath: first._projectPath || '',
+        sessionCount: new Set(recs.map((r) => r._sessionId || 'unknown')).size,
+        lastSeen: timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0),
+        data: this.calculateUsageData(recs),
+      };
     });
-    return { data: this.calculateUsageData(windowRecords), resetAt: new Date(resetMs) };
+
+    return result
+      .filter((b) => b.data.messageCount > 0)
+      .sort((a, b) => b.data.totalCost - a.data.totalCost)
+      .slice(0, limit);
   }
 
   /**
-   * Usage in the current weekly quota window, anchored to a fixed weekday/hour.
-   * @param resetDay 0=Sunday … 6=Saturday
-   * @param resetHour 0-23 (local time)
+   * Newest modification time (ms) across all usage log files. Used to skip
+   * pointless reloads when nothing has changed since the last load.
    */
-  static getWeeklyWindow(
-    records: ClaudeUsageRecord[],
-    resetDay: number,
-    resetHour: number
-  ): { data: UsageData; resetAt: Date } {
-    const now = new Date();
-    // Most recent reset boundary at or before now.
-    const boundary = new Date(now);
-    boundary.setHours(resetHour, 0, 0, 0);
-    let dayDiff = boundary.getDay() - resetDay;
-    if (dayDiff < 0) {
-      dayDiff += 7;
+  static async getLatestModifiedTime(dataDirectory?: string): Promise<number> {
+    try {
+      const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
+      let latest = 0;
+      for (const claudePath of claudePaths) {
+        const claudeDir = path.join(claudePath, CLAUDE_PROJECTS_DIR_NAME);
+        if (!fs.existsSync(claudeDir)) {
+          continue;
+        }
+        const files = await findJsonlFiles(claudeDir);
+        for (const file of files) {
+          try {
+            const stat = await fs.promises.stat(file);
+            if (stat.mtimeMs > latest) {
+              latest = stat.mtimeMs;
+            }
+          } catch {
+            // Ignore unreadable files.
+          }
+        }
+      }
+      return latest;
+    } catch {
+      return 0;
     }
-    boundary.setDate(boundary.getDate() - dayDiff);
-    if (boundary.getTime() > now.getTime()) {
-      boundary.setDate(boundary.getDate() - 7);
-    }
-
-    const windowStart = boundary.getTime();
-    const resetAt = new Date(windowStart + 7 * 24 * 60 * 60 * 1000);
-    const windowRecords = records.filter((record) => {
-      const t = new Date(record.timestamp).getTime();
-      return !isNaN(t) && t >= windowStart;
-    });
-    return { data: this.calculateUsageData(windowRecords), resetAt };
   }
 
   static getDailyDataForSpecificMonth(records: ClaudeUsageRecord[], monthDateString: string): { date: string; data: UsageData }[] {

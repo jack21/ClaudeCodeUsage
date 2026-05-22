@@ -19,6 +19,7 @@ export interface ClaudeUsageRecord {
   _sessionId?: string;
   _projectName?: string;
   _projectPath?: string;
+  _gitBranch?: string;
 }
 
 export interface UsageData {
@@ -103,14 +104,13 @@ export interface ExtensionConfig {
   dataDirectory: string;
   language: string;
   decimalPlaces: number;
-  // Optional quota ceilings (USD cost) for the 5-hour and weekly windows.
-  // 0 disables the corresponding quota indicator.
-  quota5hLimit: number;
-  quotaWeeklyLimit: number;
-  // Weekly quota reset anchor. quotaWeeklyResetDay: 0=Sunday..6=Saturday, or -1
-  // to fall back to a rolling 7-day window. quotaWeeklyResetHour: 0-23.
-  quotaWeeklyResetDay: number;
-  quotaWeeklyResetHour: number;
+  compactNumbers: boolean;
+  // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
+  usageLimitTracking: boolean;
+  // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).
+  adviceApiKey: string;
+  adviceApiUrl: string;
+  adviceModel: string;
 }
 
 export interface ModelPricing {
@@ -121,3 +121,35 @@ export interface ModelPricing {
 }
 
 export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko';
+
+// Per-git-branch usage aggregate.
+export interface BranchUsage {
+  branch: string;
+  projectName: string;
+  projectPath: string;
+  sessionCount: number;
+  lastSeen: Date;
+  data: UsageData;
+}
+
+// OAuth credentials written by Claude Code at ~/.claude/.credentials.json.
+export interface ClaudeCredentials {
+  claudeAiOauth: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+  };
+}
+
+// One limit window from api.anthropic.com/api/oauth/usage.
+export interface ClaudeUsageLimit {
+  utilization: number; // 0-100
+  resets_at: string; // ISO timestamp
+}
+
+// Response from the OAuth usage endpoint (mirrors what /usage shows).
+export interface ClaudeApiUsageResponse {
+  five_hour?: ClaudeUsageLimit;
+  seven_day?: ClaudeUsageLimit;
+  seven_day_opus?: ClaudeUsageLimit;
+}

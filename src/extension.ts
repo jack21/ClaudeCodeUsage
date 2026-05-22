@@ -4,29 +4,37 @@ import { StatusBarManager } from './statusBar';
 import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
-import { ContentAnalysis, ExtensionConfig, UsageData, SessionData } from './types';
+import { ClaudeApiClient } from './claudeApiClient';
+import { getUsageAdvice } from './advisor';
+import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
 
 export class ClaudeCodeUsageExtension {
   private statusBar: StatusBarManager;
   private webviewProvider: UsageWebviewProvider;
+  private apiClient: ClaudeApiClient;
   private refreshTimer: NodeJS.Timeout | undefined;
   private cache: {
     records: any[];
     contentAnalysis: ContentAnalysis | null;
     lastUpdate: Date;
     dataDirectory: string | null;
+    usageLimits: ClaudeApiUsageResponse | null;
+    usageLimitsLastUpdate: Date;
   } = {
     records: [],
     contentAnalysis: null,
     lastUpdate: new Date(0),
-    dataDirectory: null
+    dataDirectory: null,
+    usageLimits: null,
+    usageLimitsLastUpdate: new Date(0)
   };
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
     this.statusBar = new StatusBarManager();
     this.webviewProvider = new UsageWebviewProvider(context);
-    
+    this.apiClient = new ClaudeApiClient();
+
     this.setupCommands();
     this.loadConfiguration();
     this.startAutoRefresh();
@@ -47,6 +55,9 @@ export class ClaudeCodeUsageExtension {
       }),
       vscode.commands.registerCommand('claudeCodeUsage.refreshPricing', () => {
         this.refreshPricing();
+      }),
+      vscode.commands.registerCommand('claudeCodeUsage.getAdvice', () => {
+        this.getAdvice();
       })
     ];
 
@@ -57,7 +68,8 @@ export class ClaudeCodeUsageExtension {
     try {
       const result = await fetchLatestPricing();
       vscode.window.showInformationMessage(`${I18n.t.popup.pricingUpdated} (${result.updated})`);
-      // Costs are recomputed on every refresh, so this picks up the new prices.
+      // Force a full recompute so the new prices take effect.
+      this.cache.lastUpdate = new Date(0);
       this.refreshData();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -65,10 +77,85 @@ export class ClaudeCodeUsageExtension {
     }
   }
 
+  /** Build a compact, aggregate-only summary to send to the advice model. */
+  private buildAdviceSummary(): string | null {
+    const records = this.cache.records;
+    const analysis = this.cache.contentAnalysis;
+    if (!records || records.length === 0 || !analysis) {
+      return null;
+    }
+
+    const allTime = ClaudeDataLoader.getAllTimeData(records);
+    const lines: string[] = [];
+    lines.push('Claude Code usage summary');
+    lines.push(
+      `All-time: cost $${allTime.totalCost.toFixed(2)}, input ${allTime.totalInputTokens}, ` +
+        `output ${allTime.totalOutputTokens}, cache-write ${allTime.totalCacheCreationTokens}, ` +
+        `cache-read ${allTime.totalCacheReadTokens}, messages ${allTime.messageCount}`
+    );
+    lines.push('');
+    lines.push(`Content token breakdown (last 30 days, estimated, total ~${analysis.totalEstimatedTokens} tokens):`);
+    for (const c of analysis.categories) {
+      const pct =
+        analysis.totalEstimatedTokens > 0
+          ? ((c.estimatedTokens / analysis.totalEstimatedTokens) * 100).toFixed(1)
+          : '0';
+      lines.push(`- ${c.key}: ${c.estimatedTokens} (${pct}%)`);
+    }
+    if (analysis.toolResultBreakdown.length > 0) {
+      lines.push('Tool results by tool:');
+      for (const s of analysis.toolResultBreakdown.slice(0, 12)) {
+        lines.push(`- ${s.key}: ${s.estimatedTokens}`);
+      }
+    }
+    lines.push('');
+    lines.push(`Models used: ${Object.keys(allTime.modelBreakdown).join(', ')}`);
+    lines.push('');
+    lines.push('Please give concrete, actionable advice to reduce token consumption and use Claude Code more efficiently.');
+    return lines.join('\n');
+  }
+
+  private async getAdvice(): Promise<void> {
+    const config = this.getConfiguration();
+    if (!config.adviceApiKey || config.adviceApiKey.trim() === '') {
+      const open = await vscode.window.showWarningMessage(I18n.t.popup.adviceNeedsKey, I18n.t.popup.settings);
+      if (open) {
+        vscode.commands.executeCommand('claudeCodeUsage.openSettings');
+      }
+      return;
+    }
+
+    const summary = this.buildAdviceSummary();
+    if (!summary) {
+      vscode.window.showWarningMessage(I18n.t.popup.noDataMessage);
+      return;
+    }
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: I18n.t.popup.adviceGenerating },
+      async () => {
+        try {
+          const advice = await getUsageAdvice({
+            apiKey: config.adviceApiKey,
+            apiUrl: config.adviceApiUrl,
+            model: config.adviceModel,
+            summary
+          });
+          const doc = await vscode.workspace.openTextDocument({ content: advice, language: 'markdown' });
+          await vscode.window.showTextDocument(doc);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`${I18n.t.popup.adviceFailed}: ${message}`);
+        }
+      }
+    );
+  }
+
   private loadConfiguration(): void {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
     I18n.setDecimalPlaces(config.decimalPlaces);
+    I18n.setCompactNumbers(config.compactNumbers);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -85,10 +172,11 @@ export class ClaudeCodeUsageExtension {
       dataDirectory: config.get('dataDirectory', ''),
       language: config.get('language', 'auto'),
       decimalPlaces: config.get('decimalPlaces', 2),
-      quota5hLimit: config.get('quota5hLimit', 0),
-      quotaWeeklyLimit: config.get('quotaWeeklyLimit', 0),
-      quotaWeeklyResetDay: config.get('quotaWeeklyResetDay', -1),
-      quotaWeeklyResetHour: config.get('quotaWeeklyResetHour', 0)
+      compactNumbers: config.get('compactNumbers', false),
+      usageLimitTracking: config.get('usageLimitTracking', true),
+      adviceApiKey: config.get('adviceApiKey', ''),
+      adviceApiUrl: config.get('adviceApiUrl', 'https://api.deepseek.com/v1/chat/completions'),
+      adviceModel: config.get('adviceModel', 'deepseek-chat')
     };
   }
 
@@ -96,17 +184,18 @@ export class ClaudeCodeUsageExtension {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
     I18n.setDecimalPlaces(config.decimalPlaces);
+    I18n.setCompactNumbers(config.compactNumbers);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();
-    
+
     // Clear cache if data directory changed
     if (config.dataDirectory !== this.cache.dataDirectory) {
       this.cache.records = [];
       this.cache.lastUpdate = new Date(0);
       this.cache.dataDirectory = config.dataDirectory;
     }
-    
+
     // Refresh data immediately
     this.refreshData();
   }
@@ -125,13 +214,29 @@ export class ClaudeCodeUsageExtension {
     }, intervalMs);
   }
 
+  /** Fetch real usage limits via OAuth, cached for 2 minutes. */
+  private async maybeFetchUsageLimits(config: ExtensionConfig): Promise<ClaudeApiUsageResponse | null> {
+    if (!config.usageLimitTracking) {
+      return null;
+    }
+    const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
+    if (this.cache.usageLimits && age < 120000) {
+      return this.cache.usageLimits;
+    }
+    const fetched = await this.apiClient.fetchUsageLimits();
+    if (fetched) {
+      this.cache.usageLimits = fetched;
+      this.cache.usageLimitsLastUpdate = new Date();
+      return fetched;
+    }
+    // Keep showing the last known value if a refresh fails.
+    return this.cache.usageLimits;
+  }
+
   private async refreshData(): Promise<void> {
     try {
-      this.statusBar.setLoading(true);
-      this.webviewProvider.setLoading(true);
-
       const config = this.getConfiguration();
-      
+
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
         config.dataDirectory || undefined
@@ -144,20 +249,31 @@ export class ClaudeCodeUsageExtension {
         return;
       }
 
-      // Check if we need to reload data
-      const shouldReload = this.shouldReloadData(dataDirectory);
-      
-      let records = this.cache.records;
-      let contentAnalysis = this.cache.contentAnalysis;
-      if (shouldReload) {
-        const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
-        records = loaded.records;
-        contentAnalysis = loaded.contentAnalysis;
-        this.cache.records = records;
-        this.cache.contentAnalysis = contentAnalysis;
-        this.cache.lastUpdate = new Date();
-        this.cache.dataDirectory = dataDirectory;
+      // Skip the heavy recompute when nothing has changed since the last load —
+      // this avoids pointless work (and CPU spikes) while you are not running code.
+      const latestMtime = await ClaudeDataLoader.getLatestModifiedTime(dataDirectory);
+      const dirChanged = this.cache.dataDirectory !== dataDirectory;
+      const needFullRefresh =
+        dirChanged || this.cache.records.length === 0 || latestMtime > this.cache.lastUpdate.getTime();
+
+      const usageLimits = await this.maybeFetchUsageLimits(config);
+
+      if (!needFullRefresh) {
+        // Idle: logs unchanged — only refresh the (independent) quota indicator.
+        this.statusBar.updateQuota(usageLimits);
+        return;
       }
+
+      this.statusBar.setLoading(true);
+      this.webviewProvider.setLoading(true);
+
+      const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
+      const records = loaded.records;
+      const contentAnalysis = loaded.contentAnalysis;
+      this.cache.records = records;
+      this.cache.contentAnalysis = contentAnalysis;
+      this.cache.lastUpdate = new Date();
+      this.cache.dataDirectory = dataDirectory;
 
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
@@ -176,48 +292,26 @@ export class ClaudeCodeUsageExtension {
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
       const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records);
-      const window5h = ClaudeDataLoader.getAnchored5hWindow(records);
-      const useWeeklyAnchor = config.quotaWeeklyResetDay >= 0 && config.quotaWeeklyResetDay <= 6;
-      const weekly = useWeeklyAnchor
-        ? ClaudeDataLoader.getWeeklyWindow(records, config.quotaWeeklyResetDay, config.quotaWeeklyResetHour)
-        : { data: ClaudeDataLoader.getRollingWindowData(records, 24 * 7), resetAt: null as Date | null };
+      const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
       // Update UI
-      this.statusBar.updateUsageData(todayData, sessionData, undefined, {
-        cost5h: window5h.data.totalCost,
-        limit5h: config.quota5hLimit,
-        reset5h: window5h.resetAt,
-        costWeek: weekly.data.totalCost,
-        limitWeek: config.quotaWeeklyLimit,
-        resetWeek: weekly.resetAt
-      });
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis);
+      this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
+      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
-      
+
       this.statusBar.updateUsageData(null, null, errorMessage);
       this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
     }
-  }
-
-  private shouldReloadData(dataDirectory: string): boolean {
-    // Always reload if directory changed
-    if (this.cache.dataDirectory !== dataDirectory) {
-      return true;
-    }
-
-    // Reload if cache is older than 1 minute
-    const cacheAge = Date.now() - this.cache.lastUpdate.getTime();
-    return cacheAge > 60000;
   }
 
   dispose(): void {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
-    
+
     this.statusBar.dispose();
     this.webviewProvider.dispose();
   }
@@ -225,7 +319,7 @@ export class ClaudeCodeUsageExtension {
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Claude Code Usage extension is now active');
-  
+
   const extension = new ClaudeCodeUsageExtension(context);
   context.subscriptions.push({
     dispose: () => extension.dispose()

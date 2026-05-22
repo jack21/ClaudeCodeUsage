@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -21,6 +21,7 @@ export class UsageWebviewProvider {
   private sessionBreakdown: SessionUsage[] = [];
   private projectBreakdown: ProjectGroup[] = [];
   private contentAnalysis: ContentAnalysis | null = null;
+  private branchBreakdown: BranchUsage[] = [];
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -53,6 +54,9 @@ export class UsageWebviewProvider {
           break;
         case 'refreshPricing':
           vscode.commands.executeCommand('claudeCodeUsage.refreshPricing');
+          break;
+        case 'getAdvice':
+          vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
@@ -106,7 +110,8 @@ export class UsageWebviewProvider {
     allRecords?: any[],
     sessionBreakdown: SessionUsage[] = [],
     projectBreakdown: ProjectGroup[] = [],
-    contentAnalysis: ContentAnalysis | null = null
+    contentAnalysis: ContentAnalysis | null = null,
+    branchBreakdown: BranchUsage[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -124,6 +129,7 @@ export class UsageWebviewProvider {
     this.sessionBreakdown = sessionBreakdown;
     this.projectBreakdown = projectBreakdown;
     this.contentAnalysis = contentAnalysis;
+    this.branchBreakdown = branchBreakdown;
 
     if (this.panel) {
       this.updateWebview();
@@ -243,6 +249,7 @@ export class UsageWebviewProvider {
     const sessions = I18n.t.popup.sessions;
     const projects = I18n.t.popup.projects;
     const contentTab = I18n.t.popup.contentAnalysis;
+    const branchesTab = I18n.t.popup.branches;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
@@ -250,6 +257,7 @@ export class UsageWebviewProvider {
     const sessionsActive = this.currentTab === 'sessions' ? 'active' : '';
     const projectsActive = this.currentTab === 'projects' ? 'active' : '';
     const contentActive = this.currentTab === 'content' ? 'active' : '';
+    const branchesActive = this.currentTab === 'branches' ? 'active' : '';
 
     return (
       `
@@ -312,6 +320,11 @@ export class UsageWebviewProvider {
       `" onclick="showTab('content')">` +
       contentTab +
       `</button>
+            <button id="tab-branches" class="tab ` +
+      branchesActive +
+      `" onclick="showTab('branches')">` +
+      branchesTab +
+      `</button>
           </div>
 
           <div id="today" class="tab-content ` +
@@ -359,6 +372,14 @@ export class UsageWebviewProvider {
       `">
             ` +
       this.renderContentData() +
+      `
+          </div>
+
+          <div id="branches" class="tab-content ` +
+      branchesActive +
+      `">
+            ` +
+      this.renderBranchData() +
       `
           </div>
         </div>
@@ -1058,6 +1079,65 @@ export class UsageWebviewProvider {
     );
   }
 
+  private renderBranchData(): string {
+    if (!this.branchBreakdown || this.branchBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    let rows = '';
+    this.branchBreakdown.forEach((b) => {
+      const d = b.data;
+      rows +=
+        '<tr class="sort-row"' +
+        ' data-sort-branch="' + this.escapeHtml(b.branch.toLowerCase()) + '"' +
+        ' data-sort-project="' + this.escapeHtml((b.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-sessions="' + b.sessionCount + '"' +
+        ' data-sort-lastactive="' + b.lastSeen.getTime() + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
+        '<td class="date-cell" title="' + this.escapeHtml(b.projectPath) + '">' + this.escapeHtml(b.branch) + '</td>' +
+        '<td>' + this.escapeHtml(b.projectName) + '</td>' +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(b.sessionCount) + '</td>' +
+        '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(b.lastSeen)) + '</td>' +
+        '</tr>';
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.branchBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('branch', t.branch) +
+      th('project', t.project) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('messages', t.messages) +
+      th('sessions', t.sessions) +
+      th('lastactive', t.lastActive) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
   /**
    * "Content" tab: an estimated breakdown of which conversation content consumes
    * tokens (your prompts vs. tool results vs. assistant output), to help spot
@@ -1128,7 +1208,10 @@ export class UsageWebviewProvider {
     return (
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
-      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span></div>' +
+      '<span class="section-header-right">' +
+      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span>' +
+      '<button class="btn-secondary btn-small" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
+      '</span></div>' +
       '<p class="table-hint">' + t.last30days + ' · ' + t.estimatedNote + '</p>' +
       '<div class="cbar-list">' + catRows + '</div>' +
       toolSection +
@@ -1173,7 +1256,7 @@ export class UsageWebviewProvider {
         );
       };
       bars +=
-        '<div class="chart-bar-container">' +
+        '<div class="hc-col">' +
         '<div class="stack-bar" title="' +
         this.escapeHtml(it.label) +
         ': ' +
@@ -1184,11 +1267,10 @@ export class UsageWebviewProvider {
         seg(d.totalCacheCreationTokens, 'seg-cache-creation', t.cacheCreation) +
         seg(d.totalOutputTokens, 'seg-output', t.outputTokens) +
         '</div>' +
-        '<div class="chart-label">' +
-        this.escapeHtml(it.label) +
-        '</div>' +
         '</div>';
     });
+
+    const xlabels = items.map((it) => '<div class="hc-xlabel">' + this.escapeHtml(it.label) + '</div>').join('');
 
     const dot = (cls: string, label: string): string =>
       '<span class="legend-item"><span class="legend-dot ' + cls + '"></span>' + label + '</span>';
@@ -1204,9 +1286,25 @@ export class UsageWebviewProvider {
       dot('seg-cache-creation', t.cacheCreation) +
       dot('seg-output', t.outputTokens) +
       '</div>' +
-      '<div class="chart-container"><div class="chart-content"><div class="chart-bars">' +
+      '<div class="hc-wrap">' +
+      '<div class="hc-yaxis">' +
+      '<span class="hc-yval">' + I18n.formatNumber(maxTotal) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatNumber(Math.round(maxTotal / 2)) + '</span>' +
+      '<span class="hc-yval">0</span>' +
+      '</div>' +
+      '<div class="hc-main"><div class="hc-scroll">' +
+      '<div class="hc-plot">' +
+      '<div class="hc-grid hc-grid-top"></div>' +
+      '<div class="hc-grid hc-grid-mid"></div>' +
+      '<div class="hc-bars">' +
       bars +
-      '</div></div></div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="hc-xlabels">' +
+      xlabels +
+      '</div>' +
+      '</div></div>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -1880,6 +1978,12 @@ export class UsageWebviewProvider {
         margin: 0;
       }
 
+      .section-header-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
       .btn-small {
         padding: 4px 10px;
         font-size: 11px;
@@ -2022,7 +2126,8 @@ export class UsageWebviewProvider {
         justify-content: flex-end;
       }
 
-      .hc-col .chart-bar {
+      .hc-col .chart-bar,
+      .hc-col .stack-bar {
         margin-bottom: 0;
       }
 
@@ -2166,6 +2271,11 @@ function openSettings() {
 function refreshPricing() {
   console.log("[DEBUG] refreshPricing called");
   vscode.postMessage({ command: 'refreshPricing' });
+}
+
+function getAdvice() {
+  console.log("[DEBUG] getAdvice called");
+  vscode.postMessage({ command: 'getAdvice' });
 }
 
 function toggleProjectGroup(groupId) {
@@ -2472,6 +2582,7 @@ function syncChartBarSelection(date, isSelected) {
 window.refresh = refresh;
 window.openSettings = openSettings;
 window.refreshPricing = refreshPricing;
+window.getAdvice = getAdvice;
 window.toggleProjectGroup = toggleProjectGroup;
 window.sortTable = sortTable;
 window.showTab = showTab;

@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -72,31 +72,30 @@
           "maximum": 4,
           "description": "Number of decimal places for cost display"
         },
-        "claudeCodeUsage.quota5hLimit": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Cost ceiling (USD) for the rolling 5-hour quota window shown in the status bar. 0 hides the 5h indicator. Calibrate against Claude Code's /usage command."
+        "claudeCodeUsage.compactNumbers": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show large token counts compactly (e.g. 1.2M, 345K) instead of full numbers."
         },
-        "claudeCodeUsage.quotaWeeklyLimit": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Cost ceiling (USD) for the weekly quota window shown in the status bar. 0 hides the weekly indicator. Calibrate against Claude Code's /usage command."
+        "claudeCodeUsage.usageLimitTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
         },
-        "claudeCodeUsage.quotaWeeklyResetDay": {
-          "type": "number",
-          "default": -1,
-          "minimum": -1,
-          "maximum": 6,
-          "description": "Day of week the weekly quota resets (0=Sunday … 6=Saturday). -1 uses a rolling 7-day window instead. Check Claude Code's /usage for your reset day."
+        "claudeCodeUsage.adviceApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the 'Get AI Advice' feature (OpenAI-compatible endpoint, e.g. DeepSeek). Stored in your VS Code settings — leave empty to disable."
         },
-        "claudeCodeUsage.quotaWeeklyResetHour": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 23,
-          "description": "Hour of day (0-23, local time) the weekly quota resets. Only used when quotaWeeklyResetDay is set."
+        "claudeCodeUsage.adviceApiUrl": {
+          "type": "string",
+          "default": "https://api.deepseek.com/v1/chat/completions",
+          "description": "Chat-completions endpoint for the 'Get AI Advice' feature (OpenAI-compatible)."
+        },
+        "claudeCodeUsage.adviceModel": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "Model name used by the 'Get AI Advice' feature."
         }
       }
     },
@@ -119,6 +118,11 @@
       {
         "command": "claudeCodeUsage.refreshPricing",
         "title": "Refresh Model Pricing",
+        "category": "Claude Code Usage"
+      },
+      {
+        "command": "claudeCodeUsage.getAdvice",
+        "title": "Get AI Usage Advice",
         "category": "Claude Code Usage"
       }
     ]

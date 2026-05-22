@@ -62,6 +62,13 @@ export interface Translations {
     resets: string;
     cacheHitRate: string;
     last30days: string;
+    branches: string;
+    branchBreakdown: string;
+    branch: string;
+    getAdvice: string;
+    adviceNeedsKey: string;
+    adviceGenerating: string;
+    adviceFailed: string;
     date: string;
     yesterday: string;
     dataDirectory: string;
@@ -140,6 +147,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: 'Resets',
       cacheHitRate: 'Cache Hit Rate',
       last30days: 'Last 30 days',
+      branches: 'Branches',
+      branchBreakdown: 'Branch Usage',
+      branch: 'Branch',
+      getAdvice: 'Get AI Advice',
+      adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
+      adviceGenerating: 'Generating usage advice…',
+      adviceFailed: 'Failed to get advice',
       date: 'Date',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
@@ -216,6 +230,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: "Reset",
       cacheHitRate: "Cache-Trefferrate",
       last30days: "Letzte 30 Tage",
+      branches: "Branches",
+      branchBreakdown: "Nutzung nach Branch",
+      branch: "Branch",
+      getAdvice: "KI-Rat holen",
+      adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
+      adviceGenerating: "Nutzungsrat wird erstellt…",
+      adviceFailed: "Rat konnte nicht abgerufen werden",
       date: "Datum",
       yesterday: "Gestern",
       dataDirectory: "Daten Pfad",
@@ -294,6 +315,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: '重置',
       cacheHitRate: '快取命中率',
       last30days: '近 30 天',
+      branches: '分支',
+      branchBreakdown: '各分支使用量',
+      branch: '分支',
+      getAdvice: '取得 AI 建議',
+      adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
+      adviceGenerating: '正在產生使用建議…',
+      adviceFailed: '取得建議失敗',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
@@ -370,6 +398,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: '重置',
       cacheHitRate: '缓存命中率',
       last30days: '近 30 天',
+      branches: '分支',
+      branchBreakdown: '各分支使用量',
+      branch: '分支',
+      getAdvice: '获取 AI 建议',
+      adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
+      adviceGenerating: '正在生成使用建议…',
+      adviceFailed: '获取建议失败',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '数据目录',
@@ -446,6 +481,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: 'リセット',
       cacheHitRate: 'キャッシュヒット率',
       last30days: '過去 30 日',
+      branches: 'ブランチ',
+      branchBreakdown: 'ブランチ別使用量',
+      branch: 'ブランチ',
+      getAdvice: 'AI アドバイスを取得',
+      adviceNeedsKey: '設定で API キーを入力してください。',
+      adviceGenerating: '使用アドバイスを生成中…',
+      adviceFailed: 'アドバイスの取得に失敗しました',
       date: '日付',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
@@ -522,6 +564,13 @@ const translations: Record<SupportedLanguage, Translations> = {
       resets: '재설정',
       cacheHitRate: '캐시 적중률',
       last30days: '최근 30일',
+      branches: '브랜치',
+      branchBreakdown: '브랜치별 사용량',
+      branch: '브랜치',
+      getAdvice: 'AI 조언 받기',
+      adviceNeedsKey: '설정에서 API 키를 입력하세요.',
+      adviceGenerating: '사용 조언 생성 중…',
+      adviceFailed: '조언을 가져오지 못했습니다',
       date: '날짜',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',
@@ -541,12 +590,18 @@ const translations: Record<SupportedLanguage, Translations> = {
 export class I18n {
   private static currentLanguage: SupportedLanguage = 'en';
   private static currentDecimalPlaces: number = 2;
+  private static compactNumbers: boolean = false;
 
   /** Set the number of decimal places used by formatCurrency (claudeCodeUsage.decimalPlaces). */
   static setDecimalPlaces(places: number): void {
     if (typeof places === 'number' && isFinite(places) && places >= 0 && places <= 4) {
       this.currentDecimalPlaces = Math.floor(places);
     }
+  }
+
+  /** Toggle compact number formatting, e.g. 1.2M / 345K (claudeCodeUsage.compactNumbers). */
+  static setCompactNumbers(enabled: boolean): void {
+    this.compactNumbers = !!enabled;
   }
 
   static setLanguage(lang: SupportedLanguage | 'auto'): void {
@@ -587,6 +642,18 @@ export class I18n {
   }
 
   static formatNumber(num: number): string {
+    if (this.compactNumbers) {
+      const abs = Math.abs(num);
+      if (abs >= 1_000_000_000) {
+        return parseFloat((num / 1_000_000_000).toFixed(2)) + 'B';
+      }
+      if (abs >= 1_000_000) {
+        return parseFloat((num / 1_000_000).toFixed(2)) + 'M';
+      }
+      if (abs >= 1_000) {
+        return parseFloat((num / 1_000).toFixed(1)) + 'K';
+      }
+    }
     return num.toLocaleString();
   }
 }

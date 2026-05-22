@@ -1,16 +1,6 @@
 import * as vscode from 'vscode';
-import { SessionData, UsageData } from './types';
+import { ClaudeApiUsageResponse, ClaudeUsageLimit, SessionData, UsageData } from './types';
 import { I18n } from './i18n';
-
-// Quota-window usage vs. (optional) configured ceilings, with reset times.
-export interface QuotaInfo {
-  cost5h: number;
-  limit5h: number;
-  reset5h: Date | null;
-  costWeek: number;
-  limitWeek: number;
-  resetWeek: Date | null;
-}
 
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
@@ -22,7 +12,7 @@ export class StatusBarManager {
     this.statusBarItem.command = 'claudeCodeUsage.showDetails';
     this.statusBarItem.show();
 
-    // A second, quieter item for the rolling quota indicator.
+    // A second, quieter item for the real usage-limit indicator.
     this.quotaItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
     this.quotaItem.command = 'claudeCodeUsage.showDetails';
 
@@ -38,7 +28,7 @@ export class StatusBarManager {
     todayData: UsageData | null,
     sessionData?: SessionData | null,
     error?: string,
-    quota?: QuotaInfo
+    usageLimits?: ClaudeApiUsageResponse | null
   ): void {
     this.isLoading = false;
 
@@ -55,7 +45,7 @@ export class StatusBarManager {
     }
 
     this.showTodayData(todayData, sessionData ?? null);
-    this.updateQuota(quota);
+    this.updateQuota(usageLimits ?? null);
   }
 
   private updateStatusBar(): void {
@@ -80,30 +70,34 @@ export class StatusBarManager {
     this.statusBarItem.backgroundColor = undefined;
   }
 
-  /** Update the quota indicator. Hidden unless at least one limit is configured. */
-  private updateQuota(quota?: QuotaInfo): void {
-    if (!quota || (quota.limit5h <= 0 && quota.limitWeek <= 0)) {
+  /**
+   * Update the quota indicator with real 5-hour / weekly utilisation from the
+   * OAuth usage API. Hidden when the data is unavailable (e.g. not signed in).
+   * Public so it can be refreshed on its own while the rest of the UI is idle.
+   */
+  updateQuota(usageLimits: ClaudeApiUsageResponse | null): void {
+    const fiveHour = usageLimits?.five_hour;
+    const weekly = usageLimits?.seven_day;
+    if (!fiveHour && !weekly) {
       this.quotaItem.hide();
       return;
     }
 
     const parts: string[] = [];
     let worstPct = 0;
-    if (quota.limit5h > 0) {
-      const pct = Math.round((quota.cost5h / quota.limit5h) * 100);
-      worstPct = Math.max(worstPct, pct);
-      parts.push(`5h ${pct}%`);
+    if (fiveHour) {
+      worstPct = Math.max(worstPct, fiveHour.utilization);
+      parts.push(`5h:${Math.round(fiveHour.utilization)}%`);
     }
-    if (quota.limitWeek > 0) {
-      const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
-      worstPct = Math.max(worstPct, pct);
-      parts.push(`wk ${pct}%`);
+    if (weekly) {
+      worstPct = Math.max(worstPct, weekly.utilization);
+      parts.push(`wk:${Math.round(weekly.utilization)}%`);
     }
 
-    this.quotaItem.text = `$(dashboard) ${parts.join(' · ')}`;
+    this.quotaItem.text = `$(dashboard) ${parts.join(' ')}`;
 
     // Stay quiet until usage actually gets high.
-    if (worstPct >= 100) {
+    if (worstPct >= 95) {
       this.quotaItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else if (worstPct >= 80) {
       this.quotaItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
@@ -111,7 +105,7 @@ export class StatusBarManager {
       this.quotaItem.backgroundColor = undefined;
     }
 
-    this.quotaItem.tooltip = this.createQuotaTooltip(quota);
+    this.quotaItem.tooltip = this.createQuotaTooltip(usageLimits as ClaudeApiUsageResponse);
     this.quotaItem.show();
   }
 
@@ -177,31 +171,36 @@ export class StatusBarManager {
     return md;
   }
 
-  private createQuotaTooltip(quota: QuotaInfo): vscode.MarkdownString {
+  private createQuotaTooltip(usageLimits: ClaudeApiUsageResponse): vscode.MarkdownString {
     const t = I18n.t.popup;
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
     md.appendMarkdown(`**${t.quota}**\n\n`);
-    md.appendMarkdown(`| ${t.quotaWindow} | ${t.cost} | ${t.quotaLimit} | % | ${t.resets} |\n`);
-    md.appendMarkdown(`|:--|--:|--:|--:|--:|\n`);
+    md.appendMarkdown(`| ${t.quotaWindow} | ${t.share} | ${t.resets} |\n`);
+    md.appendMarkdown(`|:--|--:|--:|\n`);
 
-    if (quota.limit5h > 0) {
-      const pct = Math.round((quota.cost5h / quota.limit5h) * 100);
-      const resets = quota.reset5h ? this.formatCountdown(quota.reset5h) : '—';
-      md.appendMarkdown(
-        `| ${t.quota5h} | ${I18n.formatCurrency(quota.cost5h)} | ${I18n.formatCurrency(quota.limit5h)} | ${pct}% | ${resets} |\n`
-      );
+    if (usageLimits.five_hour) {
+      this.appendQuotaRow(md, t.quota5h, usageLimits.five_hour, false);
     }
-    if (quota.limitWeek > 0) {
-      const pct = Math.round((quota.costWeek / quota.limitWeek) * 100);
-      const resets = quota.resetWeek ? this.formatWeeklyReset(quota.resetWeek) : '—';
-      md.appendMarkdown(
-        `| ${t.quotaWeekly} | ${I18n.formatCurrency(quota.costWeek)} | ${I18n.formatCurrency(quota.limitWeek)} | ${pct}% | ${resets} |\n`
-      );
+    if (usageLimits.seven_day) {
+      this.appendQuotaRow(md, t.quotaWeekly, usageLimits.seven_day, true);
+    }
+    if (usageLimits.seven_day_opus) {
+      this.appendQuotaRow(md, `${t.quotaWeekly} (Opus)`, usageLimits.seven_day_opus, true);
     }
 
     md.appendMarkdown(`\n\n*${t.quotaHint}*`);
     return md;
+  }
+
+  private appendQuotaRow(md: vscode.MarkdownString, label: string, limit: ClaudeUsageLimit, weekly: boolean): void {
+    const resetDate = new Date(limit.resets_at);
+    const resets = isNaN(resetDate.getTime())
+      ? '—'
+      : weekly
+        ? `${this.formatWeeklyReset(resetDate)} (${this.formatCountdown(resetDate)})`
+        : this.formatCountdown(resetDate);
+    md.appendMarkdown(`| ${label} | ${limit.utilization.toFixed(1)}% | ${resets} |\n`);
   }
 
   /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
