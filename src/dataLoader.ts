@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 // Removed tinyglobby dependency - using native fs instead
 // Removed zod dependency - using native validation instead
-import { calculateCostFromTokens } from './pricing';
+import { calculateCostBreakdown } from './pricing';
 import {
   BranchUsage,
   ClaudeUsageRecord,
@@ -104,11 +104,24 @@ interface AnalysisAcc {
   toolIdToName: Record<string, string>;
   seenUuids: Set<string>;
   cutoffMs: number;
+  prompts: { cwd: string; text: string }[];
 }
 
 // cutoffMs: ignore log lines older than this (0 = no cutoff).
 function newAnalysisAcc(cutoffMs: number): AnalysisAcc {
-  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>(), cutoffMs };
+  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>(), cutoffMs, prompts: [] };
+}
+
+// Collect an actual user prompt (capped + truncated) for the AI-advice feature.
+function collectPrompt(acc: AnalysisAcc, cwd: string, text: string): void {
+  const trimmed = text.trim();
+  if (trimmed.length < 4) {
+    return;
+  }
+  acc.prompts.push({ cwd, text: trimmed.slice(0, 2500) });
+  if (acc.prompts.length > 600) {
+    acc.prompts.shift();
+  }
 }
 
 // Rough token estimate from text length (CJK characters are denser than ASCII).
@@ -187,6 +200,7 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
   }
   const role = message.role || parsed.type;
   const content = message.content;
+  const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : '';
 
   if (role === 'assistant') {
     if (Array.isArray(content)) {
@@ -211,6 +225,7 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
   } else if (role === 'user') {
     if (typeof content === 'string') {
       addToBucket(acc.cat, 'userPrompts', content);
+      collectPrompt(acc, cwd, content);
     } else if (Array.isArray(content)) {
       for (const block of content) {
         if (!block || typeof block !== 'object') {
@@ -222,6 +237,7 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
           addToBucket(acc.tools, acc.toolIdToName[block.tool_use_id] || 'unknown', text);
         } else if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'userPrompts', block.text);
+          collectPrompt(acc, cwd, block.text);
         }
       }
     }
@@ -239,6 +255,7 @@ function finalizeAnalysis(acc: AnalysisAcc): ContentAnalysis {
     categories,
     toolResultBreakdown: toSlices(acc.tools),
     totalEstimatedTokens: categories.reduce((sum, c) => sum + c.estimatedTokens, 0),
+    recentPrompts: acc.prompts.slice(-300),
   };
 }
 
@@ -482,6 +499,7 @@ export class ClaudeDataLoader {
       totalCacheCreationTokens: 0,
       totalCacheReadTokens: 0,
       totalCost: 0,
+      costBreakdown: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
       messageCount: 0,
       modelBreakdown: {},
     };
@@ -506,14 +524,19 @@ export class ClaudeDataLoader {
         continue;
       }
 
-      // Calculate cost using new pricing model
-      const calculatedCost = calculateCostFromTokens(usage, model);
+      // Cost split by token type; the total is the sum of the four components.
+      const costParts = calculateCostBreakdown(usage, model);
+      const calculatedCost = costParts.input + costParts.output + costParts.cacheWrite + costParts.cacheRead;
 
       data.totalInputTokens += usage.input_tokens;
       data.totalOutputTokens += usage.output_tokens;
       data.totalCacheCreationTokens += usage.cache_creation_input_tokens || 0;
       data.totalCacheReadTokens += usage.cache_read_input_tokens || 0;
       data.totalCost += calculatedCost;
+      data.costBreakdown.input += costParts.input;
+      data.costBreakdown.output += costParts.output;
+      data.costBreakdown.cacheWrite += costParts.cacheWrite;
+      data.costBreakdown.cacheRead += costParts.cacheRead;
       data.messageCount++;
 
       if (!data.modelBreakdown[model]) {

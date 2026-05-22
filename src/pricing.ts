@@ -324,6 +324,26 @@ export function calculateCostFromTokens(tokens: TokenUsage, modelName: string | 
 }
 
 /**
+ * Break a model's cost down by token type (input / output / cache write / cache read).
+ * The four components sum to the same total as calculateCostFromTokens.
+ */
+export function calculateCostBreakdown(
+  tokens: TokenUsage,
+  modelName: string | undefined
+): { input: number; output: number; cacheWrite: number; cacheRead: number } {
+  const pricing = getModelPricing(modelName);
+  if (!pricing) {
+    return { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  }
+  return {
+    input: tokens.input_tokens * (pricing.input_cost_per_token || 0),
+    output: tokens.output_tokens * (pricing.output_cost_per_token || 0),
+    cacheWrite: (tokens.cache_creation_input_tokens || 0) * (pricing.cache_creation_input_token_cost || 0),
+    cacheRead: (tokens.cache_read_input_tokens || 0) * (pricing.cache_read_input_token_cost || 0),
+  };
+}
+
+/**
  * Per-million-token rates for a model, intended for display in the UI so users
  * can sanity-check the figures behind a cost.
  * @returns rates in USD per 1M tokens, or null if the model is unknown

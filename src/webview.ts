@@ -522,6 +522,34 @@ export class UsageWebviewProvider {
     const inputSideTokens = data.totalInputTokens + data.totalCacheCreationTokens + data.totalCacheReadTokens;
     const cacheHitRate = inputSideTokens > 0 ? (data.totalCacheReadTokens / inputSideTokens) * 100 : 0;
 
+    // Cost composition: how each token type contributes to the total cost.
+    const cb = data.costBreakdown;
+    const costTotal = cb.input + cb.output + cb.cacheWrite + cb.cacheRead;
+    const cpct = (v: number): number => (costTotal > 0 ? (v / costTotal) * 100 : 0);
+    const compSeg = (cls: string, v: number): string =>
+      '<div class="cost-comp-seg ' + cls + '" style="width: ' + cpct(v).toFixed(2) + '%;"></div>';
+    const compItem = (cls: string, label: string, v: number): string =>
+      '<span class="legend-item"><span class="legend-dot ' + cls + '"></span>' +
+      label + ' ' + I18n.formatCurrency(v) + ' (' + cpct(v).toFixed(0) + '%)</span>';
+    const costComposition =
+      costTotal > 0
+        ? '<div class="cost-composition">' +
+          '<div class="cost-comp-head">' + I18n.t.popup.costComposition + '</div>' +
+          '<div class="cost-comp-bar">' +
+          compSeg('seg-input', cb.input) +
+          compSeg('seg-output', cb.output) +
+          compSeg('seg-cache-creation', cb.cacheWrite) +
+          compSeg('seg-cache-read', cb.cacheRead) +
+          '</div>' +
+          '<div class="cost-comp-legend">' +
+          compItem('seg-input', inputTokens, cb.input) +
+          compItem('seg-output', outputTokens, cb.output) +
+          compItem('seg-cache-creation', cacheCreation, cb.cacheWrite) +
+          compItem('seg-cache-read', cacheRead, cb.cacheRead) +
+          '</div>' +
+          '</div>'
+        : '';
+
     let html =
       '<div class="usage-summary">' +
       '<div class="summary-grid">' +
@@ -582,6 +610,7 @@ export class UsageWebviewProvider {
       '%</div>' +
       '</div>' +
       '</div>' +
+      costComposition +
       '</div>';
 
     if (Object.keys(data.modelBreakdown).length > 0) {
@@ -1907,6 +1936,39 @@ export class UsageWebviewProvider {
 
       .composition-chart {
         margin: 12px 0 20px;
+      }
+
+      .cost-composition {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .cost-comp-head {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        margin-bottom: 6px;
+      }
+
+      .cost-comp-bar {
+        display: flex;
+        height: 14px;
+        border-radius: 3px;
+        overflow: hidden;
+        background: var(--vscode-input-background);
+      }
+
+      .cost-comp-seg {
+        height: 100%;
+      }
+
+      .cost-comp-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
       }
 
       .composition-chart h4 {

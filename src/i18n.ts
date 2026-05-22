@@ -69,6 +69,9 @@ export interface Translations {
     adviceNeedsKey: string;
     adviceGenerating: string;
     adviceFailed: string;
+    adviceScopeOverall: string;
+    adviceScopePrompt: string;
+    costComposition: string;
     date: string;
     yesterday: string;
     dataDirectory: string;
@@ -154,6 +157,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
       adviceGenerating: 'Generating usage advice…',
       adviceFailed: 'Failed to get advice',
+      adviceScopeOverall: 'Overall (all projects)',
+      adviceScopePrompt: 'Choose what the advice should focus on',
+      costComposition: 'Cost Composition',
       date: 'Date',
       yesterday: 'Yesterday',
       dataDirectory: 'Data Directory',
@@ -237,6 +243,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
       adviceGenerating: "Nutzungsrat wird erstellt…",
       adviceFailed: "Rat konnte nicht abgerufen werden",
+      adviceScopeOverall: "Gesamt (alle Projekte)",
+      adviceScopePrompt: "Worauf soll sich der Rat konzentrieren?",
+      costComposition: "Kostenzusammensetzung",
       date: "Datum",
       yesterday: "Gestern",
       dataDirectory: "Daten Pfad",
@@ -322,6 +331,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
       adviceGenerating: '正在產生使用建議…',
       adviceFailed: '取得建議失敗',
+      adviceScopeOverall: '整體(所有專案)',
+      adviceScopePrompt: '選擇建議要聚焦的範圍',
+      costComposition: '成本構成',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '資料目錄',
@@ -405,6 +417,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
       adviceGenerating: '正在生成使用建议…',
       adviceFailed: '获取建议失败',
+      adviceScopeOverall: '整体(所有项目)',
+      adviceScopePrompt: '选择建议要聚焦的范围',
+      costComposition: '成本构成',
       date: '日期',
       yesterday: '昨日',
       dataDirectory: '数据目录',
@@ -488,6 +503,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: '設定で API キーを入力してください。',
       adviceGenerating: '使用アドバイスを生成中…',
       adviceFailed: 'アドバイスの取得に失敗しました',
+      adviceScopeOverall: '全体(全プロジェクト)',
+      adviceScopePrompt: 'アドバイスの対象範囲を選択',
+      costComposition: 'コスト構成',
       date: '日付',
       yesterday: '昨日',
       dataDirectory: 'データディレクトリ',
@@ -571,6 +589,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',
       adviceGenerating: '사용 조언 생성 중…',
       adviceFailed: '조언을 가져오지 못했습니다',
+      adviceScopeOverall: '전체(모든 프로젝트)',
+      adviceScopePrompt: '조언 범위를 선택하세요',
+      costComposition: '비용 구성',
       date: '날짜',
       yesterday: '어제',
       dataDirectory: '데이터 디렉토리',

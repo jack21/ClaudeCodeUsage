@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -89,13 +89,23 @@
         },
         "claudeCodeUsage.adviceApiUrl": {
           "type": "string",
-          "default": "https://api.deepseek.com/v1/chat/completions",
-          "description": "Chat-completions endpoint for the 'Get AI Advice' feature (OpenAI-compatible)."
+          "default": "https://api.deepseek.com/chat/completions",
+          "description": "Chat-completions endpoint for the 'Get AI Advice' feature (OpenAI-compatible). For DeepSeek use https://api.deepseek.com/chat/completions (no /v1)."
         },
         "claudeCodeUsage.adviceModel": {
           "type": "string",
-          "default": "deepseek-chat",
+          "default": "deepseek-v4-pro",
           "description": "Model name used by the 'Get AI Advice' feature."
+        },
+        "claudeCodeUsage.adviceReasoningEffort": {
+          "type": "string",
+          "enum": [
+            "",
+            "high",
+            "max"
+          ],
+          "default": "max",
+          "description": "Reasoning effort for the advice model (DeepSeek V4 supports 'high' and 'max'). Leave empty to disable."
         }
       }
     },

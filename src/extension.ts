@@ -77,41 +77,55 @@ export class ClaudeCodeUsageExtension {
     }
   }
 
-  /** Build a compact, aggregate-only summary to send to the advice model. */
-  private buildAdviceSummary(): string | null {
-    const records = this.cache.records;
-    const analysis = this.cache.contentAnalysis;
-    if (!records || records.length === 0 || !analysis) {
-      return null;
-    }
+  /**
+   * Build the advice prompt for a scope. Includes a usage summary, the content
+   * breakdown, and a sample of the developer's actual prompts so the model can
+   * critique instruction quality.
+   * @param scope 'overall' or a project group path
+   */
+  private buildAdviceSummary(records: any[], analysis: ContentAnalysis, scope: string, scopeLabel: string): string {
+    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const isOverall = scope === 'overall';
+    const scopedRecords = isOverall
+      ? records
+      : records.filter((r) => norm(r._projectPath || '').startsWith(norm(scope)));
+    const usage = ClaudeDataLoader.getAllTimeData(scopedRecords);
+    const prompts = isOverall
+      ? analysis.recentPrompts
+      : analysis.recentPrompts.filter((p) => norm(p.cwd).startsWith(norm(scope)));
+    const promptSample = prompts.slice(-80);
 
-    const allTime = ClaudeDataLoader.getAllTimeData(records);
     const lines: string[] = [];
-    lines.push('Claude Code usage summary');
+    lines.push(`Scope: ${isOverall ? 'overall (all projects)' : scopeLabel}`);
     lines.push(
-      `All-time: cost $${allTime.totalCost.toFixed(2)}, input ${allTime.totalInputTokens}, ` +
-        `output ${allTime.totalOutputTokens}, cache-write ${allTime.totalCacheCreationTokens}, ` +
-        `cache-read ${allTime.totalCacheReadTokens}, messages ${allTime.messageCount}`
+      `Usage: cost $${usage.totalCost.toFixed(2)}, input ${usage.totalInputTokens}, ` +
+        `output ${usage.totalOutputTokens}, cache-write ${usage.totalCacheCreationTokens}, ` +
+        `cache-read ${usage.totalCacheReadTokens}, messages ${usage.messageCount}`
     );
+    lines.push(`Models used: ${Object.keys(usage.modelBreakdown).join(', ') || 'n/a'}`);
     lines.push('');
-    lines.push(`Content token breakdown (last 30 days, estimated, total ~${analysis.totalEstimatedTokens} tokens):`);
+    lines.push('Content token breakdown, all projects, last 30 days (estimated):');
     for (const c of analysis.categories) {
       const pct =
         analysis.totalEstimatedTokens > 0
           ? ((c.estimatedTokens / analysis.totalEstimatedTokens) * 100).toFixed(1)
           : '0';
-      lines.push(`- ${c.key}: ${c.estimatedTokens} (${pct}%)`);
-    }
-    if (analysis.toolResultBreakdown.length > 0) {
-      lines.push('Tool results by tool:');
-      for (const s of analysis.toolResultBreakdown.slice(0, 12)) {
-        lines.push(`- ${s.key}: ${s.estimatedTokens}`);
-      }
+      lines.push(`- ${c.key}: ~${c.estimatedTokens} tokens (${pct}%)`);
     }
     lines.push('');
-    lines.push(`Models used: ${Object.keys(allTime.modelBreakdown).join(', ')}`);
+    lines.push(`=== Sample of ${promptSample.length} recent user prompts (review these for instruction quality) ===`);
+    promptSample.forEach((p, i) => {
+      lines.push(`[Prompt ${i + 1}]`);
+      lines.push(p.text);
+      lines.push('');
+    });
+    lines.push('=== End of prompts ===');
     lines.push('');
-    lines.push('Please give concrete, actionable advice to reduce token consumption and use Claude Code more efficiently.');
+    lines.push(
+      'Based primarily on the prompts above, give specific advice on how to write clearer, ' +
+        'more complete and more effective instructions for Claude Code, with concrete rewrite ' +
+        'examples drawn from the samples. Secondarily, note any easy token savings.'
+    );
     return lines.join('\n');
   }
 
@@ -125,11 +139,25 @@ export class ClaudeCodeUsageExtension {
       return;
     }
 
-    const summary = this.buildAdviceSummary();
-    if (!summary) {
+    const records = this.cache.records;
+    const analysis = this.cache.contentAnalysis;
+    if (!records || records.length === 0 || !analysis) {
       vscode.window.showWarningMessage(I18n.t.popup.noDataMessage);
       return;
     }
+
+    // Let the user scope the advice to everything, or to one project.
+    const projects = ClaudeDataLoader.getProjectBreakdown(records);
+    const items: (vscode.QuickPickItem & { scope: string })[] = [
+      { label: I18n.t.popup.adviceScopeOverall, scope: 'overall' },
+      ...projects.map((p) => ({ label: p.groupName, description: p.groupPath, scope: p.groupPath }))
+    ];
+    const picked = await vscode.window.showQuickPick(items, { placeHolder: I18n.t.popup.adviceScopePrompt });
+    if (!picked) {
+      return;
+    }
+
+    const summary = this.buildAdviceSummary(records, analysis, picked.scope, picked.label);
 
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: I18n.t.popup.adviceGenerating },
@@ -139,6 +167,7 @@ export class ClaudeCodeUsageExtension {
             apiKey: config.adviceApiKey,
             apiUrl: config.adviceApiUrl,
             model: config.adviceModel,
+            reasoningEffort: config.adviceReasoningEffort,
             summary
           });
           const doc = await vscode.workspace.openTextDocument({ content: advice, language: 'markdown' });
@@ -175,8 +204,9 @@ export class ClaudeCodeUsageExtension {
       compactNumbers: config.get('compactNumbers', false),
       usageLimitTracking: config.get('usageLimitTracking', true),
       adviceApiKey: config.get('adviceApiKey', ''),
-      adviceApiUrl: config.get('adviceApiUrl', 'https://api.deepseek.com/v1/chat/completions'),
-      adviceModel: config.get('adviceModel', 'deepseek-chat')
+      adviceApiUrl: config.get('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
+      adviceModel: config.get('adviceModel', 'deepseek-v4-pro'),
+      adviceReasoningEffort: config.get('adviceReasoningEffort', 'max')
     };
   }
 

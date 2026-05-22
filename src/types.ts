@@ -28,6 +28,13 @@ export interface UsageData {
   totalCacheCreationTokens: number;
   totalCacheReadTokens: number;
   totalCost: number;
+  // Cost split by token type (the four sum to totalCost).
+  costBreakdown: {
+    input: number;
+    output: number;
+    cacheWrite: number;
+    cacheRead: number;
+  };
   messageCount: number;
   modelBreakdown: Record<string, {
     inputTokens: number;
@@ -97,6 +104,9 @@ export interface ContentAnalysis {
   categories: ContentSlice[];
   toolResultBreakdown: ContentSlice[];
   totalEstimatedTokens: number;
+  // Recent user prompts (last 30 days), for the AI-advice feature. Each carries
+  // its working directory so advice can be scoped to a project.
+  recentPrompts: { cwd: string; text: string }[];
 }
 
 export interface ExtensionConfig {
@@ -111,6 +121,8 @@ export interface ExtensionConfig {
   adviceApiKey: string;
   adviceApiUrl: string;
   adviceModel: string;
+  // Reasoning effort for advice models that support it ('', 'high', 'max').
+  adviceReasoningEffort: string;
 }
 
 export interface ModelPricing {
