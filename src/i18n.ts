@@ -637,6 +637,25 @@ export class I18n {
     return this.currentLanguage;
   }
 
+  /** Localised + English name of the current UI language, used to instruct LLMs. */
+  static getLanguageName(): string {
+    switch (this.currentLanguage) {
+      case 'zh-CN':
+        return '简体中文 (Simplified Chinese)';
+      case 'zh-TW':
+        return '繁體中文 (Traditional Chinese)';
+      case 'ja':
+        return '日本語 (Japanese)';
+      case 'ko':
+        return '한국어 (Korean)';
+      case 'de-DE':
+        return 'Deutsch (German)';
+      case 'en':
+      default:
+        return 'English';
+    }
+  }
+
   static get t(): Translations {
     return translations[this.currentLanguage];
   }

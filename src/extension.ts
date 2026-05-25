@@ -113,19 +113,28 @@ export class ClaudeCodeUsageExtension {
       lines.push(`- ${c.key}: ~${c.estimatedTokens} tokens (${pct}%)`);
     }
     lines.push('');
-    lines.push(`=== Sample of ${promptSample.length} recent user prompts (review these for instruction quality) ===`);
-    promptSample.forEach((p, i) => {
-      lines.push(`[Prompt ${i + 1}]`);
-      lines.push(p.text);
+    if (promptSample.length === 0) {
+      lines.push('=== No recent user prompts captured for this scope ===');
+      lines.push(
+        'No prompt samples are available. Base your advice on the aggregate usage above and ' +
+          'on general Claude Code best practices for writing clearer, more complete and more ' +
+          'effective instructions. Also note any easy token savings the aggregates suggest.'
+      );
+    } else {
+      lines.push(`=== Sample of ${promptSample.length} recent user prompts (review these for instruction quality) ===`);
+      promptSample.forEach((p, i) => {
+        lines.push(`[Prompt ${i + 1}]`);
+        lines.push(p.text);
+        lines.push('');
+      });
+      lines.push('=== End of prompts ===');
       lines.push('');
-    });
-    lines.push('=== End of prompts ===');
-    lines.push('');
-    lines.push(
-      'Based primarily on the prompts above, give specific advice on how to write clearer, ' +
-        'more complete and more effective instructions for Claude Code, with concrete rewrite ' +
-        'examples drawn from the samples. Secondarily, note any easy token savings.'
-    );
+      lines.push(
+        'Based primarily on the prompts above, give specific advice on how to write clearer, ' +
+          'more complete and more effective instructions for Claude Code, with concrete rewrite ' +
+          'examples drawn from the samples. Secondarily, note any easy token savings.'
+      );
+    }
     return lines.join('\n');
   }
 
@@ -168,10 +177,26 @@ export class ClaudeCodeUsageExtension {
             apiUrl: config.adviceApiUrl,
             model: config.adviceModel,
             reasoningEffort: config.adviceReasoningEffort,
+            language: I18n.getLanguageName(),
             summary
           });
-          const doc = await vscode.workspace.openTextDocument({ content: advice, language: 'markdown' });
-          await vscode.window.showTextDocument(doc);
+
+          // Give the document a distinguishable name like
+          // claude-advice-<scope>-YYYY-MM-DD_HHmm.md so different runs are easy
+          // to tell apart in the tab strip.
+          const now = new Date();
+          const pad = (n: number): string => String(n).padStart(2, '0');
+          const stamp =
+            `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+            `_${pad(now.getHours())}${pad(now.getMinutes())}`;
+          const safeScope =
+            picked.scope === 'overall'
+              ? 'overall'
+              : (picked.label || 'project').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 30) || 'project';
+          const uri = vscode.Uri.parse(`untitled:claude-advice-${safeScope}-${stamp}.md`);
+          const doc = await vscode.workspace.openTextDocument(uri);
+          const editor = await vscode.window.showTextDocument(doc);
+          await editor.edit((eb) => eb.insert(new vscode.Position(0, 0), advice));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(`${I18n.t.popup.adviceFailed}: ${message}`);

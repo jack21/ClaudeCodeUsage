@@ -7,20 +7,28 @@ export interface AdviceOptions {
   apiUrl: string;
   model: string;
   summary: string;
+  // Localised name of the user's UI language, e.g. "简体中文 (Simplified Chinese)".
+  // Used to force the model to reply in the user's language regardless of the
+  // language mix found inside their prompts.
+  language: string;
   // '', 'high' or 'max' — passed as reasoning_effort for models that support it.
   reasoningEffort?: string;
 }
 
-const SYSTEM_PROMPT =
-  'You are a coaching advisor that helps a developer use the Claude Code AI ' +
-  'coding agent more effectively. You are given a breakdown of their usage and ' +
-  'a sample of their actual prompts. Your PRIMARY goal: advise how to write ' +
-  'clearer, more complete and more precise instructions so tasks are completed ' +
-  'correctly and efficiently — point at concrete weaknesses in the sample ' +
-  'prompts and show better rewrites. SECONDARY goal: where it does not hurt ' +
-  'clarity, suggest ways to reduce token consumption. Be concrete and ' +
-  'actionable, use short sections and bullet points, and reply in the same ' +
-  'language as the prompts.';
+function buildSystemPrompt(language: string): string {
+  return (
+    'You are a coaching advisor that helps a developer use the Claude Code AI ' +
+    'coding agent more effectively. You are given a breakdown of their usage and ' +
+    'a sample of their actual prompts. Your PRIMARY goal: advise how to write ' +
+    'clearer, more complete and more precise instructions so tasks are completed ' +
+    'correctly and efficiently — point at concrete weaknesses in the sample ' +
+    'prompts and show better rewrites. SECONDARY goal: where it does not hurt ' +
+    'clarity, suggest ways to reduce token consumption. Be concrete and ' +
+    'actionable, use short sections and bullet points. ' +
+    `IMPORTANT: write your entire reply in ${language}, regardless of the ` +
+    'language(s) used in the sample prompts.'
+  );
+}
 
 /** Normalise an OpenAI-compatible endpoint URL, fixing common mistakes. */
 function normalizeUrl(url: string): string {
@@ -51,7 +59,7 @@ export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
     model: options.model,
     stream: false,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt(options.language || 'English') },
       { role: 'user', content: options.summary },
     ],
   };
