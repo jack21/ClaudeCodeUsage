@@ -259,6 +259,17 @@ export class UsageWebviewProvider {
     const contentActive = this.currentTab === 'content' ? 'active' : '';
     const branchesActive = this.currentTab === 'branches' ? 'active' : '';
 
+    // The Content tab is hidden when content analysis is disabled via
+    // claudeCodeUsage.enableContentAnalysis (the analyser returned null).
+    const contentEnabled = this.contentAnalysis !== null;
+    const contentTabButton = contentEnabled
+      ? '<button id="tab-content" class="tab ' + contentActive +
+        '" onclick="showTab(\'content\')">' + contentTab + '</button>'
+      : '';
+    const contentTabContent = contentEnabled
+      ? '<div id="content" class="tab-content ' + contentActive + '">' + this.renderContentData() + '</div>'
+      : '';
+
     return (
       `
       <!DOCTYPE html>
@@ -315,11 +326,9 @@ export class UsageWebviewProvider {
       `" onclick="showTab('projects')">` +
       projects +
       `</button>
-            <button id="tab-content" class="tab ` +
-      contentActive +
-      `" onclick="showTab('content')">` +
-      contentTab +
-      `</button>
+            ` +
+      contentTabButton +
+      `
             <button id="tab-branches" class="tab ` +
       branchesActive +
       `" onclick="showTab('branches')">` +
@@ -367,13 +376,9 @@ export class UsageWebviewProvider {
       `
           </div>
 
-          <div id="content" class="tab-content ` +
-      contentActive +
-      `">
-            ` +
-      this.renderContentData() +
+          ` +
+      contentTabContent +
       `
-          </div>
 
           <div id="branches" class="tab-content ` +
       branchesActive +

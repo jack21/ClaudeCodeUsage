@@ -318,8 +318,10 @@ export class ClaudeDataLoader {
   }
 
   static async loadUsageRecords(
-    dataDirectory?: string
-  ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis }> {
+    dataDirectory?: string,
+    options?: { analyzeContent?: boolean }
+  ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis | null }> {
+    const analyzeContent = options?.analyzeContent !== false; // default true
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
       const allFiles: string[] = [];
@@ -335,8 +337,9 @@ export class ClaudeDataLoader {
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
       const processedHashes = new Set<string>();
       const records: ClaudeUsageRecord[] = [];
-      // Content analysis covers the last 30 days — recent enough to reflect habits.
-      const analysis = newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      // Content analysis (last 30 days) is optional — skipped when the user
+      // disables it via claudeCodeUsage.enableContentAnalysis.
+      const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
       let fileIndex = 0;
 
       for (const file of sortedFiles) {
@@ -355,7 +358,9 @@ export class ClaudeDataLoader {
               const parsed = JSON.parse(line) as unknown;
 
               // Feed every line into the content analysis (not only usage records).
-              analyzeLine(parsed, analysis);
+              if (analysis) {
+                analyzeLine(parsed, analysis);
+              }
 
               if (!validateUsageRecord(parsed)) {
                 continue;
@@ -403,10 +408,10 @@ export class ClaudeDataLoader {
         }
       }
 
-      return { records, contentAnalysis: finalizeAnalysis(analysis) };
+      return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
     } catch (error) {
       console.error('Error loading usage records:', error);
-      return { records: [], contentAnalysis: finalizeAnalysis(newAnalysisAcc(0)) };
+      return { records: [], contentAnalysis: null };
     }
   }
 
@@ -770,7 +775,11 @@ export class ClaudeDataLoader {
    * @param records All loaded usage records
    * @param limit Maximum number of project groups to return (default 60)
    */
-  static getProjectBreakdown(records: ClaudeUsageRecord[], limit: number = 60): ProjectGroup[] {
+  static getProjectBreakdown(
+    records: ClaudeUsageRecord[],
+    limit: number = 60,
+    mode: 'git' | 'folder' | 'flat' = 'git'
+  ): ProjectGroup[] {
     // 1. Group records per project, merging paths that differ only in case.
     const recordsByKey: Record<string, ClaudeUsageRecord[]> = {};
     const displayPathByKey: Record<string, string> = {};
@@ -808,18 +817,27 @@ export class ClaudeDataLoader {
 
       let groupKey: string;
       let groupDisplayPath: string;
-      let isGitRepo: boolean;
-      const gitRoot = this.resolveGitRoot(originalPath, gitCache);
-      if (gitRoot) {
-        groupKey = this.normalizePath(gitRoot);
-        groupDisplayPath = gitRoot;
-        isGitRepo = true;
+      let isGitRepo = false;
+
+      if (mode === 'flat') {
+        // Every working directory is its own group.
+        groupKey = segments.join('/');
+        groupDisplayPath = originalPath;
       } else {
-        // Not in a repo: fall back to the top-level project folder.
-        const groupLen = commonRootLen === 0 ? segments.length : Math.min(segments.length, commonRootLen + 1);
-        groupKey = segments.slice(0, groupLen).join('/');
-        groupDisplayPath = this.deriveGroupDisplayPath(originalPath, groupKey);
-        isGitRepo = false;
+        let gitRoot: string | null = null;
+        if (mode === 'git') {
+          gitRoot = this.resolveGitRoot(originalPath, gitCache);
+        }
+        if (gitRoot) {
+          groupKey = this.normalizePath(gitRoot);
+          groupDisplayPath = gitRoot;
+          isGitRepo = true;
+        } else {
+          // No git repo (or 'folder' mode): top-level project folder heuristic.
+          const groupLen = commonRootLen === 0 ? segments.length : Math.min(segments.length, commonRootLen + 1);
+          groupKey = segments.slice(0, groupLen).join('/');
+          groupDisplayPath = this.deriveGroupDisplayPath(originalPath, groupKey);
+        }
       }
 
       const timestamps = projectRecords.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));

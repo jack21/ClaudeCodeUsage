@@ -231,7 +231,9 @@ export class ClaudeCodeUsageExtension {
       adviceApiKey: config.get('adviceApiKey', ''),
       adviceApiUrl: config.get('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
       adviceModel: config.get('adviceModel', 'deepseek-v4-pro'),
-      adviceReasoningEffort: config.get('adviceReasoningEffort', 'max')
+      adviceReasoningEffort: config.get('adviceReasoningEffort', 'max'),
+      enableContentAnalysis: config.get('enableContentAnalysis', true),
+      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat'
     };
   }
 
@@ -322,7 +324,9 @@ export class ClaudeCodeUsageExtension {
       this.statusBar.setLoading(true);
       this.webviewProvider.setLoading(true);
 
-      const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory);
+      const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
+        analyzeContent: config.enableContentAnalysis
+      });
       const records = loaded.records;
       const contentAnalysis = loaded.contentAnalysis;
       this.cache.records = records;
@@ -346,7 +350,7 @@ export class ClaudeCodeUsageExtension {
       const dailyDataForAllTime = ClaudeDataLoader.getDailyDataForAllTime(records);
       const hourlyDataForToday = ClaudeDataLoader.getHourlyDataForToday(records);
       const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
-      const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records);
+      const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
       // Update UI

@@ -123,6 +123,14 @@ export interface ExtensionConfig {
   adviceModel: string;
   // Reasoning effort for advice models that support it ('', 'high', 'max').
   adviceReasoningEffort: string;
+  // Run the (CPU-heavy) content/prompt-token analysis. When false the Content
+  // tab is hidden and the analysis is skipped during refresh.
+  enableContentAnalysis: boolean;
+  // How the Projects tab groups working directories:
+  //   - 'git'    group by enclosing git repository (default; current behaviour)
+  //   - 'folder' group by the heuristic top-level project folder only
+  //   - 'flat'   no grouping; every working directory is its own row
+  projectGroupingMode: 'git' | 'folder' | 'flat';
 }
 
 export interface ModelPricing {
