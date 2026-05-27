@@ -175,8 +175,18 @@ export class StatusBarManager {
     const t = I18n.t.popup;
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
+    // supportHtml lets us use <br> inside table cells to put the weekly
+    // reset time and countdown on two lines (otherwise the cell gets long).
+    md.supportHtml = true;
     md.appendMarkdown(`**${t.quota}**\n\n`);
-    md.appendMarkdown(`| ${t.quotaWindow} | ${t.share} | ${t.resets} |\n`);
+    // Pad each cell with non-breaking spaces on both sides so column text does
+    // not crowd the separators — VS Code's tooltip markdown renderer collapses
+    // ordinary leading/trailing whitespace, but &nbsp; survives.
+    const PAD = '  ';
+    const GAP = '    ';
+    md.appendMarkdown(
+      `|${PAD}${t.quotaWindow}${PAD}|${PAD}${t.share}${PAD}|${GAP}${PAD}${t.resets}${PAD}|\n`
+    );
     md.appendMarkdown(`|:--|--:|--:|\n`);
 
     if (usageLimits.five_hour) {
@@ -195,12 +205,18 @@ export class StatusBarManager {
 
   private appendQuotaRow(md: vscode.MarkdownString, label: string, limit: ClaudeUsageLimit, weekly: boolean): void {
     const resetDate = new Date(limit.resets_at);
+    // Weekly cell renders the reset time on one line and the countdown on
+    // the next via <br>, so the cell stays narrow with both pieces present.
     const resets = isNaN(resetDate.getTime())
       ? '—'
       : weekly
-        ? `${this.formatWeeklyReset(resetDate)} (${this.formatCountdown(resetDate)})`
+        ? `${this.formatWeeklyReset(resetDate)}<br>${this.formatCountdown(resetDate)}`
         : this.formatCountdown(resetDate);
-    md.appendMarkdown(`| ${label} | ${limit.utilization.toFixed(1)}% | ${resets} |\n`);
+    const PAD = '  ';
+    const GAP = '    ';
+    md.appendMarkdown(
+      `|${PAD}${label}${PAD}|${PAD}${limit.utilization.toFixed(1)}%${PAD}|${GAP}${PAD}${resets}${PAD}|\n`
+    );
   }
 
   /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */

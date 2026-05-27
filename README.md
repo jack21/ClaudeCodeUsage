@@ -1,191 +1,289 @@
 # Claude Code Usage
 
-🌐 **多語言文檔 | Multi-language Documentation | 多语言文档 | 多言語ドキュメント | 다국어 문서**
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=flat-square&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+[![Open VSX Registry](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=flat-square&logo=eclipseide&label=Open%20VSX)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
-- [English](README-en.md)
-- [繁體中文](README-zh-TW.md)
-- [简体中文](README-zh-CN.md)
-- [日本語](README-ja.md)
-- [한국어](README-ko.md)
+> **What this is, in one sentence:** a VS Code status-bar monitor that
+> reads your local Claude Code conversation logs and shows
+> **token-derived** usage and cost estimates — plus an optional AI advisor
+> that suggests how to use Claude Code more economically.
+>
+> **What this is _not_:** a billing tool. All amounts are estimates;
+> refer to your official Anthropic account for actual charges.
+
+> **一句话简介**:一个 VS Code 状态栏小工具,读取本地 Claude Code
+> 对话日志,按 token × 公开单价估算用量与成本;并提供可选的 AI
+> 建议功能,帮你改进使用习惯。
+>
+> **它不是什么**:账单工具。显示金额均为估算值,实际费用请以官方账单为准。
+
+🌐 **Multi-language documentation** (v1 content; v2 translations in 2.0.1):
+[English](README-en.md) ·
+[繁體中文](README-zh-TW.md) ·
+[简体中文](README-zh-CN.md) ·
+[日本語](README-ja.md) ·
+[한국어](README-ko.md)
 
 ---
 
-A comprehensive VSCode extension that monitors Claude Code usage and costs with detailed analytics and interactive visualizations.
+## Screenshots
 
-## 🖼️ Screenshot
+### Status bar
 
-### Status Bar
+![Status bar](images/v2-status-bar-en.png)
 
-![Status Bar Preview](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
+*Today's cost · current-session cost · 5-hour and weekly quota utilisation.*
+
+Hover the quota indicator for a breakdown:
+
+![Quota tooltip](images/v2-quota-en.png)
+
+*Real `/usage` data — utilisation percent, reset countdown, and the
+weekly reset weekday and time.*
 
 ### Dashboard
 
-![Dashboard Preview](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
+![Dashboard — summary and charts](images/v2-dashboard-en.png)
 
-## ✨ Features
+*Click the status bar to open the full dashboard. Stacked token-composition
+chart, hourly breakdown, cache hit rate, cost composition by token type,
+plus per-model and per-day tables below.*
 
-### 📊 Real-time Monitoring
+### Content tab — where your tokens actually go
 
-- **Status Bar Display**: Shows today's usage costs in the VSCode status bar
-- **Live Updates**: Automatic data refresh with configurable intervals (minimum 30 seconds)
-- **Zero Dependencies**: Built with native Node.js modules for maximum compatibility
+![Content tab](images/v2-content-en.png)
 
-### 📈 Interactive Analytics Dashboard
+*Estimated breakdown of which content consumes tokens — your prompts vs.
+tool results (by tool) vs. assistant output / thinking. This is the lever
+for optimising your usage. Scoped to the last 30 days.*
 
-- **Multiple Time Views**: Today, This Month, and All Time perspectives
-- **Interactive Charts**: Switchable bar charts with 6 different metrics:
-  - Cost breakdown
-  - Input/Output tokens
-  - Cache creation/read tokens
-  - Message counts
-- **Hourly Breakdown**: Detailed hourly usage analysis for today and specific dates
-- **Expandable Monthly Data**: Click on any month in "All Time" to view daily breakdown
-- **Detailed Tables**: Comprehensive daily/monthly usage breakdowns with drill-down capabilities
-- **Model Analysis**: Per-model cost and token consumption tracking
+### AI advice (opt-in)
 
-![Dashboard Preview](images/dashboard-preview.png)
+![AI advice](images/v2-advice-en.png)
 
-### 🌐 Multi-language Support
+*Optional AI advisor sends your aggregates + a sample of your prompts
+to an OpenAI-compatible API (DeepSeek V4 Pro by default) and suggests
+concrete rewrites. **Bring your own key** — or click `Preview demo`
+on the warning prompt to see a static example first.*
 
-- **5 Languages**: English, 繁體中文, 简体中文, 日本語, 한국어
-- **Auto-detection**: Automatically detects system language
-- **Manual Override**: Choose your preferred language in settings
+---
 
-### 🎨 Visual Features
+## What's new in 2.0
 
-- **Bottom-up Charts**: Industry-standard chart orientation
-- **Monthly Trends**: All-time view shows monthly aggregated data for long-term analysis
-- **VSCode Theme Integration**: Seamless light/dark theme support
-- **Responsive Design**: Optimized for different screen sizes
+- **Real 5-hour and weekly quota** in the status bar — reads Claude Code's
+  existing OAuth session at `~/.claude/.credentials.json`, zero config.
+  Adapted from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)
+  by [@Dobidop](https://github.com/Dobidop).
+- **Four new tabs**: Sessions, Projects, Content, Branches — all sortable.
+- **Token-composition stacked chart** with Y-axis and reference lines.
+- **AI advice command** (DeepSeek V4 Pro default, `reasoning_effort=max`)
+  with a demo-mode fallback when no API key is configured.
+- **Multi-vendor pricing**: Opus 4.x, Sonnet 4.x, Haiku 4.5 (verified
+  against Anthropic's public pricing); reference rates for proxied setups
+  (OpenAI, Gemini, DeepSeek, Kimi, GLM, Qwen) with family-aware fallback.
+  `Refresh Token Pricing` pulls live LiteLLM data as runtime overrides.
+- **Custom timezone** for date display (`claudeCodeUsage.timezone`).
+- **Light-theme tab readability** fixed.
+- **Locale-aware numbers and dates** throughout (German `.`, English `,`).
+- **Real-time status bar** via `fs.watch` (1.5 s debounce) + idle-aware
+  refresh + non-blocking loader (yields every 25 files).
 
-## 📥 Download
+Full changelog: [changelog.md](changelog.md).
+Closes upstream issues
+[#7](https://github.com/jack21/ClaudeCodeUsage/issues/7),
+[#10](https://github.com/jack21/ClaudeCodeUsage/issues/10),
+[#11](https://github.com/jack21/ClaudeCodeUsage/issues/11),
+[#13](https://github.com/jack21/ClaudeCodeUsage/issues/13).
 
-### VSCode Marketplace
+---
 
-[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
+## Install
 
-### Open VSX Registry (for Cursor / Windsurf / Antigravity)
+### VS Code Marketplace
 
-[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+Search for **`Claude Code Usage`** in the Extensions view (`Ctrl+Shift+X`),
+or:
 
-## Installation
+```
+ext install GrowthJack.claude-code-usage
+```
 
-1. Install the extension from the VSCode marketplace
-2. The extension will automatically detect your Claude Code data directory
-3. Start using Claude Code and see your usage appear in the status bar
+### Cursor / Windsurf / Antigravity (Open VSX)
+
+Same extension is published at the Open VSX Registry:
+[GrowthJack.claude-code-usage](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage).
+
+### From a `.vsix` file
+
+`Ctrl+Shift+P` → **Extensions: Install from VSIX...** → pick the
+downloaded `.vsix`.
+
+---
 
 ## Configuration
 
-Access settings via `File > Preferences > Settings` and search for "Claude Code Usage":
+Open Settings (`Ctrl+,`) and search for **`Claude Code Usage`**. All
+settings are optional; defaults preserve upstream behaviour where
+reasonable.
 
-- **Refresh Interval**: How often to update usage data (minimum 30 seconds)
-- **Data Directory**: Custom Claude data directory path (leave empty for auto-detection)
-- **Language**: Display language preference
-- **Decimal Places**: Number of decimal places for cost display
+| Setting | Default | What it does |
+|---|---|---|
+| `refreshInterval` | `60` | Refresh interval in seconds (min 30). |
+| `dataDirectory` | `""` | Custom Claude data dir; empty = auto-detect. |
+| `language` | `"auto"` | UI language: `auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`. |
+| `decimalPlaces` | `2` | Decimal places in cost display (0–4). |
+| `compactNumbers` | `false` | Show `1.2M` / `345K` instead of full numbers. |
+| `timezone` | `""` | IANA timezone for date display (e.g. `Asia/Hong_Kong`). |
+| `usageLimitTracking` | `true` | Show real 5h / weekly quota in the status bar. |
+| `enableContentAnalysis` | `true` | Run the Content tab token analysis. |
+| `projectGroupingMode` | `"git"` | Projects tab grouping: `git` / `folder` / `flat`. |
+| `advice.apiKey` | `""` | API key for the AI advice feature (OpenAI-compatible). |
+| `advice.apiUrl` | `https://api.deepseek.com/chat/completions` | Chat-completions endpoint. |
+| `advice.model` | `"deepseek-v4-pro"` | Model name. |
+| `advice.reasoningEffort` | `"max"` | Reasoning effort (DeepSeek V4: `high` / `max`). |
 
-## 🚀 Usage
+---
 
-### Status Bar
+## How costs are calculated
 
-- Shows **today's usage cost** with a pulse icon
-- Click to open the detailed analytics dashboard
+The status-bar cost is **`Σ (tokens × per-million rate)`** across input,
+output, cache-write and cache-read, summed by model.
 
-### Analytics Dashboard
+- **Per-million rates** come from the bundled pricing table, which is
+  verified against the public Anthropic pricing page and supplemented
+  with reference rates for non-Anthropic models that may appear in
+  proxied setups.
+- **`Refresh Model Pricing`** (command + button in the dashboard) pulls
+  live prices from [LiteLLM's public dataset](https://github.com/BerriAI/litellm)
+  as runtime overrides.
+- **Unknown model snapshots** are priced against the current tier of
+  their detected family (Opus / Sonnet / Haiku / GPT / Gemini /
+  DeepSeek / Kimi / GLM / Qwen) instead of falling back blindly.
 
-1. **Time Tabs**: Switch between Today, This Month, and All Time views
-2. **Chart Metrics**: Click tabs above charts to switch between:
-   - Cost breakdown
-   - Input/Output tokens
-   - Cache creation/read tokens
-   - Message counts
-3. **Hourly Analysis**: View hourly usage patterns in "Today" tab
-4. **Expandable Data**:
-   - Click on daily entries in "This Month" to see hourly breakdown
-   - Click on monthly entries in "All Time" to see daily breakdown
-5. **Interactive Tables**: Detailed daily/monthly breakdowns below charts
-6. **Model Analysis**: Per-model usage statistics in each tab
+What the status bar does **not** know:
+- Your actual Anthropic invoice (discounts, free credits, plan caps).
+- Whether your proxy provider charges different rates.
+- Anything not recorded in your local `.jsonl` log files.
 
-![Usage Flow](images/usage-flow.png)
+The **5h / weekly quota indicator** is different — it queries Claude
+Code's real `/usage` endpoint via the OAuth session and shows the actual
+percentage Anthropic is tracking for your account. That number is
+authoritative.
 
-## 📋 Requirements
+---
 
-- **Claude Code**: Must be installed and running
-- **VSCode**: Version 1.74.0 or later
-- **Node.js**: Built-in modules only (no external dependencies)
+## Privacy
 
-## 🛠️ Troubleshooting
+- All token / cost / session analysis runs **locally** by reading your
+  `~/.claude/projects/**/*.jsonl` files.
+- The quota indicator calls **`api.anthropic.com/api/oauth/usage`** using
+  Claude Code's existing OAuth token. No additional credentials are sent.
+- The **AI advice command** is the only feature that calls an external
+  service — and only when *you* trigger it. It sends an aggregate summary
+  of your usage plus a sample of your recent user prompts to whatever
+  endpoint you configured in `advice.apiUrl`. **Bring your own key**;
+  nothing is shipped with the extension. If no key is configured, the
+  command opens a hand-written demo instead of calling any API.
 
-### "No Claude Code Data" Error
+---
 
-1. Ensure Claude Code is installed and has been used
-2. Check the data directory setting in extension preferences
-3. Verify Claude Code is generating usage logs in `~/.claude/projects` or `~/.config/claude/projects`
+## Troubleshooting
 
-### Charts Not Updating
+**"No Claude Code Data"**
+- Make sure Claude Code is installed and you have used it at least once.
+- Check the `dataDirectory` setting; auto-detection looks at
+  `~/.claude/projects` and `~/.config/claude/projects`.
 
-1. Switch to a different tab and back to refresh the chart
-2. Check if the time period has actual usage data
-3. Verify cache tokens are available in your Claude usage
+**Quota row shows `5h:--% wk:--%`**
+- The OAuth token at `~/.claude/.credentials.json` is missing or expired.
+  Log in to Claude Code once; the extension reads its credential file
+  read-only and refreshes the bearer if needed.
 
-### Performance Issues
+**`Get AI Usage Advice` returns 404**
+- DeepSeek's current endpoint does **not** use a `/v1` prefix. Use
+  `https://api.deepseek.com/chat/completions`. The extension auto-strips
+  `/v1` if present.
 
-- Increase refresh interval if experiencing slowdowns
-- Extension uses 1-minute caching to minimize file I/O
+**`Get AI Usage Advice` shows demo instead of real advice**
+- That means no API key is configured under `claudeCodeUsage.advice.apiKey`.
+  The demo file is filename-marked `…-DEMO-…` with a prominent banner.
+  Add a key in Settings and re-run the command.
 
-## License
+**Sluggish refresh on large histories**
+- 2.0 yields to the event loop every 25 files; idle ticks skip recompute.
+  If you still hit issues, raise `refreshInterval` or set
+  `enableContentAnalysis` to `false`.
 
-MIT
+---
 
-## 📝 Changelog
+## Credits
+
+Forked from [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage). MIT-licensed.
+
+- [@Dobidop](https://github.com/Dobidop) —
+  [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9), the OAuth
+  approach for reading real `/usage` data. The quota indicator in this
+  release is adapted from that work.
+- [@nickearnshaw](https://github.com/nickearnshaw) —
+  [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8), locale-aware
+  number/date formatting. The 2.0 implementation follows the same
+  direction.
+- [@brenoneill](https://github.com/brenoneill) —
+  [PR #14](https://github.com/jack21/ClaudeCodeUsage/pull/14), custom
+  data directory (merged into upstream 1.0.8).
+- [@mxzinke](https://github.com/mxzinke) — Opus 4.5 / Haiku 4.5 prices
+  + German translation (upstream 1.0.8).
+
+Many code changes in this fork were drafted with assistance from
+[Claude Code](https://claude.com/claude-code) (commits include
+`Co-Authored-By: Claude <noreply@anthropic.com>`).
+
+---
+
+## Changelog
+
+The current changelog lives in [**changelog.md**](changelog.md). The
+most recent 2.0 entry summarises every feature, fix and personalisation
+option in this release.
+
+<details>
+<summary><b>Pre-2.0 history (upstream 1.0.x)</b></summary>
 
 ### v1.0.8 (2025-11-28)
-
-- 📝 Converted all code comments from Traditional Chinese to English
-- 🌍 Improved code internationalization standards
-- 🔧 Enhanced code readability and maintainability
-- 💰 Fixed pricing table with new Opus 4.5 / Haiku 4.5 prices (thanks to [@mxzinke](https://github.com/mxzinke))
-- 🇩🇪 Added German (de-DE) translation support (thanks to [@mxzinke](https://github.com/mxzinke))
+- Converted code comments from Traditional Chinese to English.
+- Improved internationalisation standards.
+- Pricing: added Opus 4.5 / Haiku 4.5 (thanks @mxzinke).
+- Added German (de-DE) translation (thanks @mxzinke).
 
 ### v1.0.7 (2025-11-28)
-
-- 🌐 Added multilingual translation support for hourly usage labels
-- 🔧 Removed hardcoded Chinese text from code, replaced with i18n translation system
-- ✨ Ensured multilingual consistency across user interface (English, Traditional Chinese, Simplified Chinese, Japanese, Korean)
+- Multilingual translation for hourly usage labels.
+- Removed hardcoded Chinese text; switched to i18n.
 
 ### v1.0.6 (2025-08-10)
-
-- 🆕 Added support for Claude Opus 4.1 model pricing
-- 🔄 Updated pricing data to include `claude-opus-4-1-20250805` and `claude-opus-4-1` model IDs
-- 📊 Pricing remains the same as Opus 4 ($15/1M input, $75/1M output tokens)
+- Added support for Claude Opus 4.1 pricing.
 
 ### v1.0.5 (2025-01)
-
-- ⏰ Added hourly usage statistics and visualization
-- 📈 Enhanced dashboard with hourly breakdown functionality
-- 🔧 Improved data processing for hourly aggregation
+- Hourly usage statistics + visualisation.
 
 ### v1.0.4 (2025-01)
-
-- 📊 Added all-time data calculation functionality
-- 🎨 Updated UI to display all-time usage data with charts and labels
-- 🔄 Fixed data update logic to support new data structure
-- 🌐 Added "All Time" translations to multi-language support
+- All-time data calculation; "All Time" translations.
 
 ### v1.0.3 (2025-01)
-
-- 🔗 Updated GitHub repository URL
-- 🖼️ Fixed README image links to point to new repository location
-- 📦 Version bump and repository migration
+- Repository URL migration + README image link fixes.
 
 ### v1.0.0 (2025-01)
+- Initial complete release.
 
-- 🎉 Initial complete release
-- 📊 Real-time Claude Code usage monitoring in status bar
-- 🌐 Multi-language support (English, 繁體中文, 简体中文, 日本語, 한국어)
-- 📈 Interactive analytics dashboard with charts and tables
-- 🎨 VSCode theme integration and responsive design
-- ⚙️ Configurable refresh intervals and settings
+</details>
+
+---
 
 ## Contributing
 
-Issues and pull requests are welcome on the GitHub repository.
+Issues and pull requests are welcome on the
+[GitHub repository](https://github.com/jack21/ClaudeCodeUsage).
+
+## License
+
+[MIT](LICENSE)

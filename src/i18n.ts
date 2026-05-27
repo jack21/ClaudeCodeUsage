@@ -32,6 +32,7 @@ export interface Translations {
     project: string;
     startTime: string;
     duration: string;
+    hour: string;
     projects: string;
     projectBreakdown: string;
     fullPath: string;
@@ -71,6 +72,8 @@ export interface Translations {
     adviceFailed: string;
     adviceScopeOverall: string;
     adviceScopePrompt: string;
+    adviceDemoButton: string;
+    adviceDemoNotice: string;
     costComposition: string;
     date: string;
     yesterday: string;
@@ -120,6 +123,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: 'Project',
       startTime: 'Start Time',
       duration: 'Duration',
+      hour: 'Hour',
       projects: 'Projects',
       projectBreakdown: 'Project Usage',
       fullPath: 'Full Path',
@@ -127,7 +131,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: 'Token Composition',
       lastActive: 'Last Active',
       pricing: 'Pricing',
-      refreshPricing: 'Refresh Prices',
+      refreshPricing: 'Refresh Token Pricing',
       pricingUpdated: 'Pricing updated',
       pricingUpdateFailed: 'Failed to update pricing',
       sortHint: 'Click a column header to sort',
@@ -136,7 +140,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: 'Limit',
       quota5h: '5-hour',
       quotaWeekly: 'Weekly',
-      quotaHint: 'Set limits in Settings; calibrate against /usage',
+      quotaHint: 'Real data from Anthropic /usage.',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
       byTool: 'Tool Results by Tool',
@@ -159,6 +163,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: 'Failed to get advice',
       adviceScopeOverall: 'Overall (all projects)',
       adviceScopePrompt: 'Choose what the advice should focus on',
+      adviceDemoButton: 'Preview demo',
+      adviceDemoNotice:
+        '# DEMO — AI Usage Advice preview\n\n' +
+        '> **This file is a static demo, not real advice.**\n' +
+        '> The text below was hand-written to show what kind of output the\n' +
+        '> feature produces. It is **not** based on your actual Claude Code\n' +
+        '> usage data — nothing was sent to any API to generate this.\n\n' +
+        '### To get real, personalised advice based on YOUR usage:\n\n' +
+        '1. Open Settings (`Ctrl+,` / `Cmd+,`)\n' +
+        '2. Search for **`claudeCodeUsage.advice.apiKey`**\n' +
+        '3. Paste an OpenAI-compatible API key — DeepSeek works out of the box\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. Re-run **`Claude Code Usage: Get AI Usage Advice`**',
       costComposition: 'Cost Composition',
       date: 'Date',
       yesterday: 'Yesterday',
@@ -206,6 +223,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: "Projekt",
       startTime: "Startzeit",
       duration: "Dauer",
+      hour: "Stunde",
       projects: "Projekte",
       projectBreakdown: "Nutzung nach Projekt",
       fullPath: "Vollständiger Pfad",
@@ -213,7 +231,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: "Token-Zusammensetzung",
       lastActive: "Zuletzt aktiv",
       pricing: "Preise",
-      refreshPricing: "Preise aktualisieren",
+      refreshPricing: "Token-Preise aktualisieren",
       pricingUpdated: "Preise aktualisiert",
       pricingUpdateFailed: "Preisaktualisierung fehlgeschlagen",
       sortHint: "Zum Sortieren auf eine Spaltenüberschrift klicken",
@@ -222,7 +240,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: "Limit",
       quota5h: "5 Stunden",
       quotaWeekly: "Woche",
-      quotaHint: "Limits in den Einstellungen festlegen; an /usage kalibrieren",
+      quotaHint: "Echte Daten von Anthropic /usage.",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
       byTool: "Tool-Ergebnisse nach Tool",
@@ -245,6 +263,20 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: "Rat konnte nicht abgerufen werden",
       adviceScopeOverall: "Gesamt (alle Projekte)",
       adviceScopePrompt: "Worauf soll sich der Rat konzentrieren?",
+      adviceDemoButton: "Demo ansehen",
+      adviceDemoNotice:
+        '# DEMO — KI-Nutzungsrat-Vorschau\n\n' +
+        '> **Diese Datei ist eine statische Demo, kein echter Rat.**\n' +
+        '> Der untenstehende Text wurde handgeschrieben, um zu zeigen, welche\n' +
+        '> Art von Output die Funktion erzeugt. Er basiert **nicht** auf\n' +
+        '> Ihren tatsächlichen Nutzungsdaten — es wurde nichts an eine API\n' +
+        '> gesendet, um diesen Text zu generieren.\n\n' +
+        '### Für echten, personalisierten Rat basierend auf IHRER Nutzung:\n\n' +
+        '1. Einstellungen öffnen (`Ctrl+,` / `Cmd+,`)\n' +
+        '2. Nach **`claudeCodeUsage.advice.apiKey`** suchen\n' +
+        '3. Einen OpenAI-kompatiblen API-Key einfügen — DeepSeek funktioniert\n' +
+        '   sofort ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. **`Claude Code Usage: Get AI Usage Advice`** erneut ausführen',
       costComposition: "Kostenzusammensetzung",
       date: "Datum",
       yesterday: "Gestern",
@@ -294,6 +326,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: '專案',
       startTime: '開始時間',
       duration: '時長',
+      hour: '小時',
       projects: '專案',
       projectBreakdown: '各專案使用量',
       fullPath: '完整路徑',
@@ -301,7 +334,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: 'Token 組成',
       lastActive: '最近活動',
       pricing: '計費標準',
-      refreshPricing: '重新整理價格',
+      refreshPricing: '更新 Token 單價',
       pricingUpdated: '價格已更新',
       pricingUpdateFailed: '價格更新失敗',
       sortHint: '點擊欄位標題可排序',
@@ -310,7 +343,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: '上限',
       quota5h: '5 小時',
       quotaWeekly: '每週',
-      quotaHint: '在設定中配置上限,可對照 /usage 校準',
+      quotaHint: '來自 Anthropic /usage 的真實資料。',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
       byTool: '各工具結果用量',
@@ -333,6 +366,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: '取得建議失敗',
       adviceScopeOverall: '整體(所有專案)',
       adviceScopePrompt: '選擇建議要聚焦的範圍',
+      adviceDemoButton: '查看示範',
+      adviceDemoNotice:
+        '# 示範 — AI 用量建議預覽\n\n' +
+        '> **本檔案是靜態示範,不是真實建議。**\n' +
+        '> 下面的內容是手寫的範例,用來展示此功能的輸出風格。\n' +
+        '> 它**不是**基於你實際的 Claude Code 用量資料 ——\n' +
+        '> 沒有任何資料被送往 API 來產生本內容。\n\n' +
+        '### 要取得基於你實際用量的個人化建議:\n\n' +
+        '1. 開啟設定(`Ctrl+,` / `Cmd+,`)\n' +
+        '2. 搜尋 **`claudeCodeUsage.advice.apiKey`**\n' +
+        '3. 貼入 OpenAI-相容 API key —— DeepSeek 開箱即用\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. 重新執行 **`Claude Code Usage: Get AI Usage Advice`**',
       costComposition: '成本構成',
       date: '日期',
       yesterday: '昨日',
@@ -380,6 +426,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: '项目',
       startTime: '开始时间',
       duration: '时长',
+      hour: '小时',
       projects: '项目',
       projectBreakdown: '各项目使用量',
       fullPath: '完整路径',
@@ -387,7 +434,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: 'Token 组成',
       lastActive: '最近活动',
       pricing: '计费标准',
-      refreshPricing: '刷新价格',
+      refreshPricing: '更新 Token 单价',
       pricingUpdated: '价格已更新',
       pricingUpdateFailed: '价格更新失败',
       sortHint: '点击列标题可排序',
@@ -396,7 +443,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: '上限',
       quota5h: '5 小时',
       quotaWeekly: '每周',
-      quotaHint: '在设置中配置上限,可对照 /usage 校准',
+      quotaHint: '来自 Anthropic /usage 的真实数据。',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
       byTool: '各工具结果用量',
@@ -419,6 +466,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: '获取建议失败',
       adviceScopeOverall: '整体(所有项目)',
       adviceScopePrompt: '选择建议要聚焦的范围',
+      adviceDemoButton: '查看示例',
+      adviceDemoNotice:
+        '# 示例 — AI 用量建议预览\n\n' +
+        '> **本文件是静态示例,不是真实建议。**\n' +
+        '> 下面的内容是手写的样例,用来展示此功能的输出风格。\n' +
+        '> 它**不是**基于你实际的 Claude Code 用量数据 ——\n' +
+        '> 没有任何数据被发往 API 来生成本内容。\n\n' +
+        '### 要获得基于你实际用量的个性化建议:\n\n' +
+        '1. 打开设置(`Ctrl+,` / `Cmd+,`)\n' +
+        '2. 搜索 **`claudeCodeUsage.advice.apiKey`**\n' +
+        '3. 填入 OpenAI-兼容 API key —— DeepSeek 开箱即用\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. 重新运行 **`Claude Code Usage: Get AI Usage Advice`**',
       costComposition: '成本构成',
       date: '日期',
       yesterday: '昨日',
@@ -466,6 +526,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: 'プロジェクト',
       startTime: '開始時刻',
       duration: '期間',
+      hour: '時刻',
       projects: 'プロジェクト',
       projectBreakdown: 'プロジェクト別使用量',
       fullPath: 'フルパス',
@@ -473,7 +534,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: 'トークン構成',
       lastActive: '最終アクティブ',
       pricing: '料金',
-      refreshPricing: '価格を更新',
+      refreshPricing: 'Token 単価を更新',
       pricingUpdated: '価格を更新しました',
       pricingUpdateFailed: '価格の更新に失敗しました',
       sortHint: '列見出しをクリックで並べ替え',
@@ -482,7 +543,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: '上限',
       quota5h: '5時間',
       quotaWeekly: '週間',
-      quotaHint: '設定で上限を構成し、/usage で較正してください',
+      quotaHint: 'Anthropic /usage からの実データ。',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
       byTool: 'ツール別の結果使用量',
@@ -505,6 +566,20 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: 'アドバイスの取得に失敗しました',
       adviceScopeOverall: '全体(全プロジェクト)',
       adviceScopePrompt: 'アドバイスの対象範囲を選択',
+      adviceDemoButton: 'デモを見る',
+      adviceDemoNotice:
+        '# デモ — AI 使用アドバイス プレビュー\n\n' +
+        '> **このファイルは静的デモであり、実際のアドバイスではありません。**\n' +
+        '> 以下の内容は、この機能がどのような出力を生成するかを示すために\n' +
+        '> 手書きされたサンプルです。あなたの実際の Claude Code 使用データ\n' +
+        '> に基づくものでは**ありません** —— この内容を生成するために\n' +
+        '> API にデータは送信されていません。\n\n' +
+        '### あなたの実際の使用量に基づくパーソナライズされたアドバイスを取得するには:\n\n' +
+        '1. 設定を開く(`Ctrl+,` / `Cmd+,`)\n' +
+        '2. **`claudeCodeUsage.advice.apiKey`** を検索\n' +
+        '3. OpenAI 互換 API キーを貼り付け —— DeepSeek はすぐに使えます\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. **`Claude Code Usage: Get AI Usage Advice`** を再実行',
       costComposition: 'コスト構成',
       date: '日付',
       yesterday: '昨日',
@@ -552,6 +627,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       project: '프로젝트',
       startTime: '시작 시간',
       duration: '사용 시간',
+      hour: '시각',
       projects: '프로젝트',
       projectBreakdown: '프로젝트별 사용량',
       fullPath: '전체 경로',
@@ -559,7 +635,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       tokenComposition: '토큰 구성',
       lastActive: '마지막 활동',
       pricing: '요금',
-      refreshPricing: '가격 새로고침',
+      refreshPricing: '토큰 단가 업데이트',
       pricingUpdated: '가격이 업데이트됨',
       pricingUpdateFailed: '가격 업데이트 실패',
       sortHint: '열 머리글을 클릭하여 정렬',
@@ -568,7 +644,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaLimit: '한도',
       quota5h: '5시간',
       quotaWeekly: '주간',
-      quotaHint: '설정에서 한도를 구성하고 /usage로 보정하세요',
+      quotaHint: 'Anthropic /usage의 실제 데이터입니다.',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',
       byTool: '도구별 결과 사용량',
@@ -591,6 +667,20 @@ const translations: Record<SupportedLanguage, Translations> = {
       adviceFailed: '조언을 가져오지 못했습니다',
       adviceScopeOverall: '전체(모든 프로젝트)',
       adviceScopePrompt: '조언 범위를 선택하세요',
+      adviceDemoButton: '데모 보기',
+      adviceDemoNotice:
+        '# 데모 — AI 사용 조언 미리보기\n\n' +
+        '> **이 파일은 정적 데모이며, 실제 조언이 아닙니다.**\n' +
+        '> 아래 내용은 이 기능이 어떤 종류의 출력을 생성하는지 보여주기\n' +
+        '> 위해 직접 작성된 샘플입니다. 실제 Claude Code 사용 데이터에\n' +
+        '> 기반하지 **않으며**, 이 내용을 생성하기 위해 API에 데이터가\n' +
+        '> 전송된 적이 없습니다.\n\n' +
+        '### 실제 사용량 기반의 맞춤형 조언을 받으려면:\n\n' +
+        '1. 설정 열기 (`Ctrl+,` / `Cmd+,`)\n' +
+        '2. **`claudeCodeUsage.advice.apiKey`** 검색\n' +
+        '3. OpenAI 호환 API 키 붙여넣기 — DeepSeek 즉시 사용 가능\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. **`Claude Code Usage: Get AI Usage Advice`** 다시 실행',
       costComposition: '비용 구성',
       date: '날짜',
       yesterday: '어제',
@@ -612,6 +702,26 @@ export class I18n {
   private static currentLanguage: SupportedLanguage = 'en';
   private static currentDecimalPlaces: number = 2;
   private static compactNumbers: boolean = false;
+  private static timezone: string = '';
+
+  /** Locale string suitable for Intl APIs (toLocaleString, etc.). */
+  static getLocale(): string {
+    return this.currentLanguage;
+  }
+
+  /** IANA timezone (e.g. "Asia/Hong_Kong"), or '' to use the system zone. */
+  static setTimezone(tz: string): void {
+    this.timezone = typeof tz === 'string' ? tz.trim() : '';
+  }
+
+  static getTimezone(): string {
+    return this.timezone;
+  }
+
+  /** Intl date-format options merged with the configured timezone (if any). */
+  static dateFormatOptions(extra: Intl.DateTimeFormatOptions = {}): Intl.DateTimeFormatOptions {
+    return this.timezone ? { ...extra, timeZone: this.timezone } : extra;
+  }
 
   /** Set the number of decimal places used by formatCurrency (claudeCodeUsage.decimalPlaces). */
   static setDecimalPlaces(places: number): void {
@@ -694,6 +804,8 @@ export class I18n {
         return parseFloat((num / 1_000).toFixed(1)) + 'K';
       }
     }
-    return num.toLocaleString();
+    // Use the user's selected locale so the thousands separator etc. match
+    // the UI language instead of the system default (addresses upstream PR #8).
+    return num.toLocaleString(this.currentLanguage);
   }
 }

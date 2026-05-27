@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ClaudeDataLoader } from './dataLoader';
 import { StatusBarManager } from './statusBar';
@@ -6,6 +8,7 @@ import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
 import { ClaudeApiClient } from './claudeApiClient';
 import { getUsageAdvice } from './advisor';
+import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
 
 export class ClaudeCodeUsageExtension {
@@ -13,6 +16,9 @@ export class ClaudeCodeUsageExtension {
   private webviewProvider: UsageWebviewProvider;
   private apiClient: ClaudeApiClient;
   private refreshTimer: NodeJS.Timeout | undefined;
+  private fileWatcher: fs.FSWatcher | undefined;
+  private watchDebounceTimer: NodeJS.Timeout | undefined;
+  private watchedDir: string | null = null;
   private cache: {
     records: any[];
     contentAnalysis: ContentAnalysis | null;
@@ -29,16 +35,20 @@ export class ClaudeCodeUsageExtension {
     usageLimitsLastUpdate: new Date(0)
   };
 
+  private outputChannel: vscode.OutputChannel;
+
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
+    this.outputChannel = vscode.window.createOutputChannel('Claude Code Usage');
+    context.subscriptions.push(this.outputChannel);
     this.statusBar = new StatusBarManager();
     this.webviewProvider = new UsageWebviewProvider(context);
-    this.apiClient = new ClaudeApiClient();
+    this.apiClient = new ClaudeApiClient(this.outputChannel);
 
     this.setupCommands();
     this.loadConfiguration();
     this.startAutoRefresh();
-    this.refreshData();
+    this.refreshData().then(() => this.startFileWatching());
     console.log('Claude Code Usage Extension: Initialization complete');
   }
 
@@ -58,6 +68,9 @@ export class ClaudeCodeUsageExtension {
       }),
       vscode.commands.registerCommand('claudeCodeUsage.getAdvice', () => {
         this.getAdvice();
+      }),
+      vscode.commands.registerCommand('claudeCodeUsage.showLogs', () => {
+        this.outputChannel.show();
       })
     ];
 
@@ -141,9 +154,15 @@ export class ClaudeCodeUsageExtension {
   private async getAdvice(): Promise<void> {
     const config = this.getConfiguration();
     if (!config.adviceApiKey || config.adviceApiKey.trim() === '') {
-      const open = await vscode.window.showWarningMessage(I18n.t.popup.adviceNeedsKey, I18n.t.popup.settings);
-      if (open) {
+      const picked = await vscode.window.showWarningMessage(
+        I18n.t.popup.adviceNeedsKey,
+        I18n.t.popup.settings,
+        I18n.t.popup.adviceDemoButton
+      );
+      if (picked === I18n.t.popup.settings) {
         vscode.commands.executeCommand('claudeCodeUsage.openSettings');
+      } else if (picked === I18n.t.popup.adviceDemoButton) {
+        await this.openAdviceDemo();
       }
       return;
     }
@@ -168,6 +187,31 @@ export class ClaudeCodeUsageExtension {
 
     const summary = this.buildAdviceSummary(records, analysis, picked.scope, picked.label);
 
+    await this.runAdviceRequest(config, picked.scope, picked.label, summary);
+  }
+
+  private async openAdviceDemo(): Promise<void> {
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const stamp =
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+      `_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const uri = vscode.Uri.parse(`untitled:claude-advice-DEMO-${stamp}.md`);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc);
+    const lang = I18n.getCurrentLanguage();
+    const banner = I18n.t.popup.adviceDemoNotice;
+    const body = getDemoBody(lang);
+    const content = `${banner}\n\n---\n\n${body}`;
+    await editor.edit((eb) => eb.insert(new vscode.Position(0, 0), content));
+  }
+
+  private async runAdviceRequest(
+    config: ExtensionConfig,
+    scope: string,
+    label: string,
+    summary: string
+  ): Promise<void> {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: I18n.t.popup.adviceGenerating },
       async () => {
@@ -190,9 +234,9 @@ export class ClaudeCodeUsageExtension {
             `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
             `_${pad(now.getHours())}${pad(now.getMinutes())}`;
           const safeScope =
-            picked.scope === 'overall'
+            scope === 'overall'
               ? 'overall'
-              : (picked.label || 'project').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 30) || 'project';
+              : (label || 'project').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 30) || 'project';
           const uri = vscode.Uri.parse(`untitled:claude-advice-${safeScope}-${stamp}.md`);
           const doc = await vscode.workspace.openTextDocument(uri);
           const editor = await vscode.window.showTextDocument(doc);
@@ -210,6 +254,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setLanguage(config.language as any);
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
+    I18n.setTimezone(config.timezone);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -227,11 +272,22 @@ export class ClaudeCodeUsageExtension {
       language: config.get('language', 'auto'),
       decimalPlaces: config.get('decimalPlaces', 2),
       compactNumbers: config.get('compactNumbers', false),
+      timezone: config.get('timezone', ''),
       usageLimitTracking: config.get('usageLimitTracking', true),
-      adviceApiKey: config.get('adviceApiKey', ''),
-      adviceApiUrl: config.get('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
-      adviceModel: config.get('adviceModel', 'deepseek-v4-pro'),
-      adviceReasoningEffort: config.get('adviceReasoningEffort', 'max'),
+      // apiKey is the gate for the advice feature: ONLY read the new dotted
+      // key. We deliberately do NOT fall back to the pre-2.0 flat
+      // `adviceApiKey` here — otherwise users who clear the new key in
+      // Settings would silently keep the feature enabled via the stale flat
+      // key, with no way to enter demo mode. Other config (URL / model /
+      // effort) still falls back, since they only affect *how* requests are
+      // sent, not whether they are sent.
+      adviceApiKey: config.get<string>('advice.apiKey', ''),
+      adviceApiUrl:
+        config.get<string>('advice.apiUrl') ||
+        config.get<string>('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
+      adviceModel: config.get<string>('advice.model') || config.get<string>('adviceModel', 'deepseek-v4-pro'),
+      adviceReasoningEffort:
+        config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
       projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat'
     };
@@ -242,6 +298,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setLanguage(config.language as any);
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
+    I18n.setTimezone(config.timezone);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();
@@ -251,10 +308,64 @@ export class ClaudeCodeUsageExtension {
       this.cache.records = [];
       this.cache.lastUpdate = new Date(0);
       this.cache.dataDirectory = config.dataDirectory;
+      this.stopFileWatching();
     }
 
-    // Refresh data immediately
-    this.refreshData();
+    // Refresh data immediately, then (re-)attach the file watcher.
+    this.refreshData().then(() => this.startFileWatching());
+  }
+
+  /**
+   * Watch the Claude projects directory for new/changed jsonl lines so the
+   * status bar reflects new usage within ~1.5 seconds instead of waiting for
+   * the polling timer. Falls back silently if fs.watch fails (some platforms /
+   * filesystems do not support recursive watching).
+   */
+  private async startFileWatching(): Promise<void> {
+    const config = this.getConfiguration();
+    const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(config.dataDirectory || undefined);
+    if (!dataDirectory) {
+      return;
+    }
+    const projectsDir = path.join(dataDirectory, 'projects');
+    if (!fs.existsSync(projectsDir) || this.watchedDir === projectsDir) {
+      return;
+    }
+    this.stopFileWatching();
+    try {
+      this.fileWatcher = fs.watch(projectsDir, { recursive: true }, (_event, filename) => {
+        if (!filename || !String(filename).endsWith('.jsonl')) {
+          return;
+        }
+        // Debounce: Claude Code writes lines in bursts and the file mtime
+        // changes for every line.
+        if (this.watchDebounceTimer) {
+          clearTimeout(this.watchDebounceTimer);
+        }
+        this.watchDebounceTimer = setTimeout(() => {
+          this.refreshData();
+        }, 1500);
+      });
+      this.watchedDir = projectsDir;
+    } catch {
+      // Recursive watching unsupported — the polling timer is enough.
+    }
+  }
+
+  private stopFileWatching(): void {
+    if (this.watchDebounceTimer) {
+      clearTimeout(this.watchDebounceTimer);
+      this.watchDebounceTimer = undefined;
+    }
+    if (this.fileWatcher) {
+      try {
+        this.fileWatcher.close();
+      } catch {
+        // Already closed.
+      }
+      this.fileWatcher = undefined;
+    }
+    this.watchedDir = null;
   }
 
   private startAutoRefresh(): void {
@@ -370,7 +481,7 @@ export class ClaudeCodeUsageExtension {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
-
+    this.stopFileWatching();
     this.statusBar.dispose();
     this.webviewProvider.dispose();
   }

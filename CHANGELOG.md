@@ -4,7 +4,7 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [1.0.17] — Unreleased
+## [2.0.0] — 2026-05-26
 
 ### Added
 
@@ -64,6 +64,14 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Scope picker**: overall, or one specific project.
 - Output filename is `claude-advice-<scope>-YYYY-MM-DD_HHmm.md`.
 - Advice model is instructed to reply in the user's UI language.
+- **Demo-mode fallback**: if no API key is configured, the command offers
+  a `Preview demo` option that opens a static example of what real advice
+  looks like — so users can decide whether to set up a key before
+  configuring one. The demo file is filename-marked `…-DEMO-…`, opens
+  with a prominent banner ("This file is a static demo, not real advice"
+  + 4 enable steps), and the body is **localised per UI language**
+  (en / zh-CN / zh-TW / ja / ko / de-DE) so users can judge the feature
+  in their own language.
 
 #### Quality-of-life
 - **Status-bar tooltip** is now an aligned Markdown table.
@@ -83,6 +91,24 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - `adviceApiKey` / `adviceApiUrl` / `adviceModel` / `adviceReasoningEffort` —
   AI advice configuration.
 
+### Changed
+
+- **`advice.apiKey` is no longer back-compat read from the pre-2.0
+  `adviceApiKey` flat key.** Other `advice.*` config still falls back so
+  URL / model / effort survive the rename. Reason: with the apiKey
+  fallback, clearing the *new* key in Settings did not actually disable
+  the feature (the old key kept it alive silently and the demo-mode
+  fallback never triggered). Migration: if you set `adviceApiKey`
+  before 2.0, re-paste it under **`claudeCodeUsage.advice.apiKey`**.
+- **OAuth usage API calls now go through the system `curl` binary** instead
+  of Node's `fetch` / `https`. Reason: Anthropic's edge now rejects
+  requests whose TLS ClientHello (JA3/JA4) does not match a real CLI
+  client — Node's openssl handshake gets `403 "Request not allowed"` from
+  both the usage and token-refresh endpoints, while the same bearer token
+  works fine through `curl`. `curl.exe` ships with Windows 10+ (2018) and
+  is universally available on macOS / Linux, so this is portable. If
+  `curl` is missing the quota indicator just stays hidden, like before.
+
 ### Fixed
 
 - **Opus 4.5** 5-minute cache-write rate: was `$6.00 / MTok`, corrected to
@@ -92,6 +118,39 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - `claudeCodeUsage.decimalPlaces` setting was ignored by `formatCurrency` —
   now respected throughout the UI.
 - Cache metrics renamed to **"Input Cache (Miss/Hit)"** for clarity.
+- **Hard-coded Traditional Chinese strings** in the drill-down views
+  (`renderHourlyData`, `renderDailyData`, `renderDailyChart`) replaced with
+  proper i18n — non-zh-TW users no longer see Chinese in the daily/hourly
+  detail panels. Affected closing upstream **PR #8** in spirit.
+- **Light theme tab visibility**: tab labels inherited a white foreground
+  on light themes and became unreadable. Fixed by setting an explicit
+  `color: var(--vscode-foreground)` on `.tab`. **Closes upstream #11.**
+- All `toLocaleString` / `toLocaleDateString` calls now pass the user's
+  selected locale explicitly, so thousands-separators and date order match
+  the UI language (German `.`, English `,`, etc.). Aligned with upstream
+  **PR #8**'s locale-aware approach.
+
+### Personalisation
+
+- `enableContentAnalysis` (default true) — toggle the Content tab + analysis pipeline.
+- `projectGroupingMode` — `git` (default), `folder` (no fs walk) or `flat`.
+- `timezone` — IANA timezone name for date display (e.g. `Asia/Hong_Kong`,
+  `UTC`). Useful inside sandboxes / devcontainers whose system timezone
+  doesn't match the user's actual zone. **Closes upstream #10.**
+- `compactNumbers` — toggle `1.2M`/`345K` formatting.
+- `usageLimitTracking` — enable/disable the OAuth quota indicator.
+- `adviceApiKey` / `adviceApiUrl` / `adviceModel` / `adviceReasoningEffort` —
+  AI advice configuration.
+
+### Issues closed by this release
+
+- **#7** Phantom `ccusageIntegration.js` in published `.vsix` — this release
+  is built from clean source; the file does not exist. `.claude/**` and
+  `.github/**` added to `.vscodeignore` as a belt-and-braces measure.
+- **#10** Preferred timezone configuration — see `timezone` setting above.
+- **#11** Display anomaly under light theme — fixed.
+- **#13** "Feature request: % used" — fulfilled by the real OAuth quota
+  indicator described above.
 
 ### Performance & stability
 
@@ -106,7 +165,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ### Acknowledgements
 
 Based on [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
-by Jack Wang, MIT-licensed. Significant inspiration / patches from upstream
+MIT-licensed. Significant inspiration / patches from upstream
 PRs:
 
 - [#9](https://github.com/jack21/ClaudeCodeUsage/pull/9) — Real 5-hour and
@@ -117,3 +176,54 @@ PRs:
 Many code changes in this fork were drafted with assistance from
 [Claude Code](https://claude.com/claude-code) (commits credit
 `Co-Authored-By: Claude <noreply@anthropic.com>`).
+
+---
+
+## Pre-2.0 history (upstream 1.0.x)
+
+Released under [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
+before the 2.0 fork.
+
+## [1.0.8] — 2025-11-28
+
+- Converted all code comments from Traditional Chinese to English.
+- Improved code internationalisation standards.
+- Pricing: added Opus 4.5 / Haiku 4.5 rates (thanks to
+  [@mxzinke](https://github.com/mxzinke)).
+- Added German (de-DE) translation support (thanks to
+  [@mxzinke](https://github.com/mxzinke)).
+
+## [1.0.7] — 2025-11-28
+
+- Multilingual translation support for hourly usage labels.
+- Removed hardcoded Chinese text from code; replaced with i18n
+  translation system.
+
+## [1.0.6] — 2025-08-10
+
+- Added support for Claude Opus 4.1 model pricing
+  (`claude-opus-4-1-20250805` / `claude-opus-4-1`).
+- Pricing matches Opus 4 ($15 / $75 per MTok).
+
+## [1.0.5] — 2025-01
+
+- Hourly usage statistics and visualisation.
+- Dashboard hourly breakdown.
+
+## [1.0.4] — 2025-01
+
+- All-time data calculation.
+- "All Time" translations across supported languages.
+
+## [1.0.3] — 2025-01
+
+- GitHub repository URL migration.
+- README image-link fixes.
+
+## [1.0.0] — 2025-01
+
+- Initial complete release.
+- Status-bar usage monitoring.
+- Multi-language support (en / zh-TW / zh-CN / ja / ko).
+- Analytics dashboard with charts and tables.
+- Theme integration and responsive design.

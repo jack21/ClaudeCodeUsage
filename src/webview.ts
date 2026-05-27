@@ -476,7 +476,9 @@ export class UsageWebviewProvider {
         '<table class="daily-table">' +
         '<thead>' +
         '<tr>' +
-        '<th>時間</th>' +
+        '<th>' +
+        I18n.t.popup.hour +
+        '</th>' +
         '<th>' +
         cost +
         '</th>' +
@@ -619,6 +621,13 @@ export class UsageWebviewProvider {
       '</div>';
 
     if (Object.keys(data.modelBreakdown).length > 0) {
+      // Sort models by cost descending so the most expensive model is on top.
+      // Default state: only the top model is open; the rest collapse to one
+      // line — keeps low-cost noise from pushing the dashboard long.
+      const sortedModels = Object.entries(data.modelBreakdown).sort(
+        ([, a], [, b]) => b.cost - a.cost
+      );
+
       html +=
         '<div class="model-breakdown">' +
         '<div class="section-header">' +
@@ -627,13 +636,13 @@ export class UsageWebviewProvider {
         '</h3>' +
         '<button class="btn-secondary btn-small" onclick="refreshPricing()" title="' +
         this.escapeHtml(refreshPricing) +
-        '">↻ ' +
+        '">⟳ ' +
         refreshPricing +
         '</button>' +
         '</div>' +
         '<div class="model-list">';
 
-      Object.entries(data.modelBreakdown).forEach(([model, modelData]) => {
+      sortedModels.forEach(([model, modelData], index) => {
         const rates = getModelRatesPerMillion(model);
         const pricingLine = rates
           ? '<div class="model-pricing">' +
@@ -656,45 +665,44 @@ export class UsageWebviewProvider {
             this.formatRate(rates.cacheRead) +
             '</div>'
           : '';
+
+        // Per-model cache hit rate, same formula as the summary card.
+        const modelInputSide =
+          modelData.inputTokens + modelData.cacheCreationTokens + modelData.cacheReadTokens;
+        const modelHitRate =
+          modelInputSide > 0 ? (modelData.cacheReadTokens / modelInputSide) * 100 : 0;
+
+        // <details open> on index 0 only; subsequent models collapse so the
+        // user only sees N model rows by default.
+        const openAttr = index === 0 ? ' open' : '';
         html +=
-          '<div class="model-item">' +
-          '<div class="model-header">' +
+          '<details class="model-item"' +
+          openAttr +
+          '>' +
+          '<summary class="model-header">' +
           '<span class="model-name">' +
           this.escapeHtml(model) +
           '</span>' +
           '<span class="model-cost">' +
           I18n.formatCurrency(modelData.cost) +
           '</span>' +
-          '</div>' +
-          '<div class="model-details">' +
-          '<span>' +
-          inputTokens +
-          ': ' +
-          I18n.formatNumber(modelData.inputTokens) +
-          '</span>' +
-          '<span>' +
-          outputTokens +
-          ': ' +
-          I18n.formatNumber(modelData.outputTokens) +
-          '</span>' +
-          '<span>' +
-          cacheCreation +
-          ': ' +
-          I18n.formatNumber(modelData.cacheCreationTokens) +
-          '</span>' +
-          '<span>' +
-          cacheRead +
-          ': ' +
-          I18n.formatNumber(modelData.cacheReadTokens) +
-          '</span>' +
-          '<span>' +
-          messages +
-          ': ' +
-          I18n.formatNumber(modelData.count) +
-          '</span>' +
+          '</summary>' +
+          '<div class="model-details model-details-stacked">' +
+          '<span><span class="model-stat-label">' + inputTokens + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.inputTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + outputTokens + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.outputTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + cacheCreation + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.cacheCreationTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + cacheRead + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.cacheReadTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + I18n.t.popup.cacheHitRate + ':</span>' +
+          ' ' + modelHitRate.toFixed(0) + '%</span>' +
+          '<span><span class="model-stat-label">' + messages + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.count) + '</span>' +
           '</div>' +
           pricingLine +
-          '</div>';
+          '</details>';
       });
 
       html += '</div></div>';
@@ -766,7 +774,7 @@ export class UsageWebviewProvider {
                   <td class="number-cell">${I18n.formatNumber(data.totalCacheReadTokens)}</td>
                   <td class="number-cell">${I18n.formatNumber(data.messageCount)}</td>
                   <td class="detail-cell">
-                    <button class="detail-button" onclick="toggleHourlyDetail('${date}')" title="顯示每小時詳細資料">
+                    <button class="detail-button" onclick="toggleHourlyDetail('${date}')" title="${I18n.t.popup.hourlyBreakdown}">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path class="expand-icon" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
                       </svg>
@@ -1370,7 +1378,7 @@ export class UsageWebviewProvider {
                    data-cache-creation="${data.totalCacheCreationTokens}"
                    data-cache-read="${data.totalCacheReadTokens}"
                    data-messages="${data.messageCount}"
-                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)} - 點擊查看每小時詳情">
+                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)}">
               </div>
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
@@ -1408,7 +1416,7 @@ export class UsageWebviewProvider {
                    data-cache-creation="${data.totalCacheCreationTokens}"
                    data-cache-read="${data.totalCacheReadTokens}"
                    data-messages="${data.messageCount}"
-                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)} - 點擊查看每日詳情">
+                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)}">
               </div>
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
@@ -1490,13 +1498,10 @@ export class UsageWebviewProvider {
     const date = new Date(dateString);
     // Check if this is a month-only date (ends with -01)
     if (dateString.endsWith('-01')) {
-      // Format as YYYY年MM月 for monthly data
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
-      return `${year}年${month}月`;
+      return date.toLocaleDateString(I18n.getLocale(), I18n.dateFormatOptions({ year: 'numeric', month: 'long' }));
     }
-    // Standard date formatting for daily data
-    return date.toLocaleDateString();
+    // Standard date formatting for daily data, locale + timezone aware.
+    return date.toLocaleDateString(I18n.getLocale(), I18n.dateFormatOptions());
   }
 
   private getStyles(): string {
@@ -1570,6 +1575,10 @@ export class UsageWebviewProvider {
         padding: 8px 16px;
         cursor: pointer;
         border-bottom: 2px solid transparent;
+        /* Explicit foreground colour — otherwise the inherited button
+           foreground (white) becomes invisible on light themes. (Fixes
+           upstream issue #11.) */
+        color: var(--vscode-foreground);
       }
 
       .tab.active {
@@ -1640,11 +1649,36 @@ export class UsageWebviewProvider {
         border: 1px solid var(--vscode-input-border);
       }
 
+      /* <details>/<summary> reset: remove the default triangle, position our own */
+      details.model-item > summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      details.model-item > summary::-webkit-details-marker { display: none; }
+      details.model-item > summary::before {
+        content: '▸';
+        display: inline-block;
+        margin-right: 6px;
+        color: var(--vscode-descriptionForeground);
+        transition: transform 0.15s ease;
+      }
+      details.model-item[open] > summary::before {
+        transform: rotate(90deg);
+      }
+
       .model-header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 8px;
         margin-bottom: 8px;
+      }
+      /* Model name sits flush against the disclosure triangle on the left;
+         the cost is pushed to the far right by margin-left:auto. Avoids the
+         "name centred in the middle" effect that flex space-between gives
+         when the triangle ::before becomes a third flex child. */
+      .model-name {
+        flex: 0 1 auto;
+        text-align: left;
       }
 
       .model-name {
@@ -1655,14 +1689,36 @@ export class UsageWebviewProvider {
       .model-cost {
         font-weight: bold;
         color: var(--vscode-charts-green);
+        margin-left: auto;
       }
 
       .model-details {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 8px;
         font-size: 12px;
         color: var(--vscode-descriptionForeground);
+      }
+
+      /* Stack token stats one per line — fixed layout that does not reshuffle
+         when the window is resized. Each row is "label  value" left-aligned. */
+      .model-details-stacked {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+
+      .model-details-stacked > span {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        border-bottom: 1px dashed var(--vscode-input-border);
+      }
+      .model-details-stacked > span:last-child {
+        border-bottom: none;
+      }
+
+      .model-stat-label {
+        color: var(--vscode-descriptionForeground);
+        opacity: 0.85;
       }
 
       .chart-tabs {
@@ -2324,6 +2380,17 @@ console.log("[DEBUG] === JAVASCRIPT INITIALIZATION START ===");
 const vscode = acquireVsCodeApi();
 console.log("[DEBUG] VSCode API acquired");
 
+// Locale + timezone baked in at render time so drill-down renders match the
+// user's UI language and configured timezone (instead of the hardcoded zh-TW
+// that the original used in this script body).
+const __locale = ${JSON.stringify(I18n.getLocale())};
+const __tz = ${JSON.stringify(I18n.getTimezone())};
+const __dateOpts = (extra) => {
+  const opts = Object.assign({}, extra || {});
+  if (__tz) opts.timeZone = __tz;
+  return opts;
+};
+
 // Define basic functions
 function refresh() {
   console.log("[DEBUG] refresh called");
@@ -2926,139 +2993,107 @@ function formatValue(value, metric) {
 }
 
 function renderHourlyData(hourlyData, date) {
-  console.log("[DEBUG] renderHourlyData called with data:", hourlyData);
-
   if (!hourlyData || hourlyData.length === 0) {
-    return '<div class="no-data">當日無使用資料</div>';
+    return '<div class="no-data">${I18n.t.popup.noDataMessage}</div>';
   }
 
   let html = '<div class="hourly-breakdown">';
-  html += '<h4>' + new Date(date).toLocaleDateString() + ' ' + I18n.t.popup.hourlyBreakdown + '</h4>';
+  html += '<h4>' + new Date(date).toLocaleDateString(__locale, __dateOpts()) + ' ${I18n.t.popup.hourlyBreakdown}</h4>';
 
-  // Chart tabs
   html += '<div class="chart-tabs">';
-  html += '<button class="chart-tab active" data-metric="cost">費用</button>';
-  html += '<button class="chart-tab" data-metric="inputTokens">輸入 Token</button>';
-  html += '<button class="chart-tab" data-metric="outputTokens">輸出 Token</button>';
-  html += '<button class="chart-tab" data-metric="cacheCreation">快取建立</button>';
-  html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
-  html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
+  html += '<button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>';
+  html += '<button class="chart-tab" data-metric="inputTokens">${I18n.t.popup.inputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="outputTokens">${I18n.t.popup.outputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="cacheCreation">${I18n.t.popup.cacheCreation}</button>';
+  html += '<button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>';
+  html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="hourly-chart-' + date + '">';
   html += renderHourlyChart(hourlyData, 'cost');
   html += '</div>';
   html += '</div>';
 
-  // Table
-  html += '<div class="daily-table-container">';
-  html += '<table class="daily-table">';
-  html += '<thead>';
-  html += '<tr>';
-  html += '<th>時間</th>';
-  html += '<th>費用</th>';
-  html += '<th>輸入 Token</th>';
-  html += '<th>輸出 Token</th>';
-  html += '<th>快取建立</th>';
-  html += '<th>快取讀取</th>';
-  html += '<th>訊息數</th>';
-  html += '</tr>';
-  html += '</thead>';
-  html += '<tbody>';
+  html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
+  html += '<th>${I18n.t.popup.hour}</th>';
+  html += '<th>${I18n.t.popup.cost}</th>';
+  html += '<th>${I18n.t.popup.inputTokens}</th>';
+  html += '<th>${I18n.t.popup.outputTokens}</th>';
+  html += '<th>${I18n.t.popup.cacheCreation}</th>';
+  html += '<th>${I18n.t.popup.cacheRead}</th>';
+  html += '<th>${I18n.t.popup.messages}</th>';
+  html += '</tr></thead><tbody>';
 
   hourlyData.forEach(function(item) {
     html += '<tr>';
     html += '<td class="date-cell">' + item.hour + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(__locale) + '</td>';
     html += '</tr>';
   });
 
-  html += '</tbody>';
-  html += '</table>';
-  html += '</div>';
-
-  // Store data for chart updates
+  html += '</tbody></table></div>';
   window['hourlyData_' + date] = hourlyData;
-
-  html += '</div>'; // Close hourly-breakdown
-
+  html += '</div>';
   return html;
 }
 
 function renderDailyData(dailyData, monthDate) {
-  console.log("[DEBUG] renderDailyData called with data:", dailyData);
-
   if (!dailyData || dailyData.length === 0) {
-    return '<div class="no-data">該月無使用資料</div>';
+    return '<div class="no-data">${I18n.t.popup.noDataMessage}</div>';
   }
 
   let html = '<div class="daily-breakdown">';
-  html += '<h4>' + new Date(monthDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' }) + ' 每日使用量</h4>';
+  html += '<h4>' + new Date(monthDate).toLocaleDateString(__locale, __dateOpts({ year: 'numeric', month: 'long' })) + ' ${I18n.t.popup.dailyBreakdown}</h4>';
 
-  // Chart tabs
   html += '<div class="chart-tabs">';
-  html += '<button class="chart-tab active" data-metric="cost">費用</button>';
-  html += '<button class="chart-tab" data-metric="inputTokens">輸入 Token</button>';
-  html += '<button class="chart-tab" data-metric="outputTokens">輸出 Token</button>';
-  html += '<button class="chart-tab" data-metric="cacheCreation">快取建立</button>';
-  html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
-  html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
+  html += '<button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>';
+  html += '<button class="chart-tab" data-metric="inputTokens">${I18n.t.popup.inputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="outputTokens">${I18n.t.popup.outputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="cacheCreation">${I18n.t.popup.cacheCreation}</button>';
+  html += '<button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>';
+  html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="daily-chart-' + monthDate + '">';
   html += renderDailyChart(dailyData, 'cost');
   html += '</div>';
   html += '</div>';
 
-  // Table
-  html += '<div class="daily-table-container">';
-  html += '<table class="daily-table">';
-  html += '<thead>';
-  html += '<tr>';
-  html += '<th>日期</th>';
-  html += '<th>費用</th>';
-  html += '<th>輸入 Token</th>';
-  html += '<th>輸出 Token</th>';
-  html += '<th>快取建立</th>';
-  html += '<th>快取讀取</th>';
-  html += '<th>訊息數</th>';
-  html += '</tr>';
-  html += '</thead>';
-  html += '<tbody>';
+  html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
+  html += '<th>${I18n.t.popup.date}</th>';
+  html += '<th>${I18n.t.popup.cost}</th>';
+  html += '<th>${I18n.t.popup.inputTokens}</th>';
+  html += '<th>${I18n.t.popup.outputTokens}</th>';
+  html += '<th>${I18n.t.popup.cacheCreation}</th>';
+  html += '<th>${I18n.t.popup.cacheRead}</th>';
+  html += '<th>${I18n.t.popup.messages}</th>';
+  html += '</tr></thead><tbody>';
 
   dailyData.forEach(function(item) {
     const dateObj = new Date(item.date);
-    const formattedDate = dateObj.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+    const formattedDate = dateObj.toLocaleDateString(__locale, __dateOpts({ month: 'numeric', day: 'numeric' }));
 
     html += '<tr>';
     html += '<td class="date-cell">' + formattedDate + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(__locale) + '</td>';
     html += '</tr>';
   });
 
-  html += '</tbody>';
-  html += '</table>';
-  html += '</div>';
-
-  // Store data for chart updates
+  html += '</tbody></table></div>';
   window['dailyData_' + monthDate] = dailyData;
-
-  html += '</div>'; // Close daily-breakdown
-
+  html += '</div>';
   return html;
 }
 
@@ -3123,7 +3158,7 @@ function renderDailyChart(dailyData, metric) {
     html += 'data-cache-creation="' + item.data.totalCacheCreationTokens + '" ';
     html += 'data-cache-read="' + item.data.totalCacheReadTokens + '" ';
     html += 'data-messages="' + item.data.messageCount + '" ';
-    html += 'title="' + dateObj.toLocaleDateString('zh-TW') + ': ' + formatValue(value, metric) + '">';
+    html += 'title="' + dateObj.toLocaleDateString(__locale, __dateOpts()) + ': ' + formatValue(value, metric) + '">';
     html += '</div>';
     html += '<div class="chart-label">' + shortDate + '</div>';
     html += '</div>';

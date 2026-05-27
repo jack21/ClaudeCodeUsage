@@ -2,7 +2,7 @@
   "name": "claude-code-usage",
   "displayName": "Claude Code Usage",
   "description": "Monitor Claude Code usage and costs in VSCode status bar",
-  "version": "1.0.17",
+  "version": "2.0.0",
   "publisher": "GrowthJack",
   "author": "GrowthJack",
   "license": "MIT",
@@ -77,27 +77,32 @@
           "default": false,
           "description": "Show large token counts compactly (e.g. 1.2M, 345K) instead of full numbers."
         },
+        "claudeCodeUsage.timezone": {
+          "type": "string",
+          "default": "",
+          "description": "IANA timezone for date display (e.g. \"Asia/Hong_Kong\", \"UTC\"). Leave empty to use the system timezone. Useful inside sandboxes/devcontainers. Day-boundary calculations still follow the system timezone."
+        },
         "claudeCodeUsage.usageLimitTracking": {
           "type": "boolean",
           "default": true,
           "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
         },
-        "claudeCodeUsage.adviceApiKey": {
+        "claudeCodeUsage.advice.apiKey": {
           "type": "string",
           "default": "",
-          "description": "API key for the 'Get AI Advice' feature (OpenAI-compatible endpoint, e.g. DeepSeek). Stored in your VS Code settings — leave empty to disable."
+          "description": "API key for the 'Get AI Advice' feature (OpenAI-compatible endpoint, e.g. DeepSeek). Leave empty to disable."
         },
-        "claudeCodeUsage.adviceApiUrl": {
+        "claudeCodeUsage.advice.apiUrl": {
           "type": "string",
           "default": "https://api.deepseek.com/chat/completions",
-          "description": "Chat-completions endpoint for the 'Get AI Advice' feature (OpenAI-compatible). For DeepSeek use https://api.deepseek.com/chat/completions (no /v1)."
+          "description": "Chat-completions endpoint for the advice feature (OpenAI-compatible). For DeepSeek use https://api.deepseek.com/chat/completions (no /v1)."
         },
-        "claudeCodeUsage.adviceModel": {
+        "claudeCodeUsage.advice.model": {
           "type": "string",
           "default": "deepseek-v4-pro",
-          "description": "Model name used by the 'Get AI Advice' feature."
+          "description": "Model name used by the advice feature."
         },
-        "claudeCodeUsage.adviceReasoningEffort": {
+        "claudeCodeUsage.advice.reasoningEffort": {
           "type": "string",
           "enum": [
             "",
@@ -105,7 +110,7 @@
             "max"
           ],
           "default": "max",
-          "description": "Reasoning effort for the advice model (DeepSeek V4 supports 'high' and 'max'). Leave empty to disable."
+          "description": "Reasoning effort (DeepSeek V4 supports 'high' and 'max'). Leave empty to disable."
         },
         "claudeCodeUsage.enableContentAnalysis": {
           "type": "boolean",
@@ -142,12 +147,17 @@
       },
       {
         "command": "claudeCodeUsage.refreshPricing",
-        "title": "Refresh Model Pricing",
+        "title": "Refresh Token Pricing",
         "category": "Claude Code Usage"
       },
       {
         "command": "claudeCodeUsage.getAdvice",
         "title": "Get AI Usage Advice",
+        "category": "Claude Code Usage"
+      },
+      {
+        "command": "claudeCodeUsage.showLogs",
+        "title": "Show Diagnostic Logs",
         "category": "Claude Code Usage"
       }
     ]

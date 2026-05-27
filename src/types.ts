@@ -115,6 +115,10 @@ export interface ExtensionConfig {
   language: string;
   decimalPlaces: number;
   compactNumbers: boolean;
+  // IANA timezone name (e.g. "Asia/Hong_Kong") used for date display, or ''
+  // to use the system timezone. Useful for users in devcontainers or
+  // sandboxes whose system zone doesn't match their actual zone.
+  timezone: string;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).
