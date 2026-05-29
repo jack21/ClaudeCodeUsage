@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
-import { SessionData, UsageData } from './types';
+import { getModelRatesPerMillion } from './pricing';
+import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -17,6 +18,10 @@ export class UsageWebviewProvider {
   private currentTab: string = 'today';
   private hourlyDataCache: Map<string, { hour: string; data: UsageData }[]> = new Map();
   private allRecords: any[] = [];
+  private sessionBreakdown: SessionUsage[] = [];
+  private projectBreakdown: ProjectGroup[] = [];
+  private contentAnalysis: ContentAnalysis | null = null;
+  private branchBreakdown: BranchUsage[] = [];
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -46,6 +51,12 @@ export class UsageWebviewProvider {
           break;
         case 'openSettings':
           vscode.commands.executeCommand('claudeCodeUsage.openSettings');
+          break;
+        case 'refreshPricing':
+          vscode.commands.executeCommand('claudeCodeUsage.refreshPricing');
+          break;
+        case 'getAdvice':
+          vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
@@ -96,7 +107,11 @@ export class UsageWebviewProvider {
     hourlyDataForToday: { hour: string; data: UsageData }[] = [],
     error?: string,
     dataDirectory?: string | null,
-    allRecords?: any[]
+    allRecords?: any[],
+    sessionBreakdown: SessionUsage[] = [],
+    projectBreakdown: ProjectGroup[] = [],
+    contentAnalysis: ContentAnalysis | null = null,
+    branchBreakdown: BranchUsage[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -111,6 +126,10 @@ export class UsageWebviewProvider {
     if (allRecords) {
       this.allRecords = allRecords;
     }
+    this.sessionBreakdown = sessionBreakdown;
+    this.projectBreakdown = projectBreakdown;
+    this.contentAnalysis = contentAnalysis;
+    this.branchBreakdown = branchBreakdown;
 
     if (this.panel) {
       this.updateWebview();
@@ -227,10 +246,29 @@ export class UsageWebviewProvider {
     const today = I18n.t.popup.today;
     const thisMonth = I18n.t.popup.thisMonth;
     const allTime = I18n.t.popup.allTime;
+    const sessions = I18n.t.popup.sessions;
+    const projects = I18n.t.popup.projects;
+    const contentTab = I18n.t.popup.contentAnalysis;
+    const branchesTab = I18n.t.popup.branches;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
     const allActive = this.currentTab === 'all' ? 'active' : '';
+    const sessionsActive = this.currentTab === 'sessions' ? 'active' : '';
+    const projectsActive = this.currentTab === 'projects' ? 'active' : '';
+    const contentActive = this.currentTab === 'content' ? 'active' : '';
+    const branchesActive = this.currentTab === 'branches' ? 'active' : '';
+
+    // The Content tab is hidden when content analysis is disabled via
+    // claudeCodeUsage.enableContentAnalysis (the analyser returned null).
+    const contentEnabled = this.contentAnalysis !== null;
+    const contentTabButton = contentEnabled
+      ? '<button id="tab-content" class="tab ' + contentActive +
+        '" onclick="showTab(\'content\')">' + contentTab + '</button>'
+      : '';
+    const contentTabContent = contentEnabled
+      ? '<div id="content" class="tab-content ' + contentActive + '">' + this.renderContentData() + '</div>'
+      : '';
 
     return (
       `
@@ -278,6 +316,24 @@ export class UsageWebviewProvider {
       `" onclick="showTab('all')">` +
       allTime +
       `</button>
+            <button id="tab-sessions" class="tab ` +
+      sessionsActive +
+      `" onclick="showTab('sessions')">` +
+      sessions +
+      `</button>
+            <button id="tab-projects" class="tab ` +
+      projectsActive +
+      `" onclick="showTab('projects')">` +
+      projects +
+      `</button>
+            ` +
+      contentTabButton +
+      `
+            <button id="tab-branches" class="tab ` +
+      branchesActive +
+      `" onclick="showTab('branches')">` +
+      branchesTab +
+      `</button>
           </div>
 
           <div id="today" class="tab-content ` +
@@ -301,6 +357,34 @@ export class UsageWebviewProvider {
       `">
             ` +
       this.renderAllTimeData() +
+      `
+          </div>
+
+          <div id="sessions" class="tab-content ` +
+      sessionsActive +
+      `">
+            ` +
+      this.renderSessionData() +
+      `
+          </div>
+
+          <div id="projects" class="tab-content ` +
+      projectsActive +
+      `">
+            ` +
+      this.renderProjectData() +
+      `
+          </div>
+
+          ` +
+      contentTabContent +
+      `
+
+          <div id="branches" class="tab-content ` +
+      branchesActive +
+      `">
+            ` +
+      this.renderBranchData() +
       `
           </div>
         </div>
@@ -382,16 +466,19 @@ export class UsageWebviewProvider {
         messages +
         '</button>' +
         '</div>' +
-        '<div class="chart-container">' +
-        '<div class="chart-content" id="hourlyChart">' +
         this.renderHourlyChart() +
-        '</div>' +
-        '</div>' +
+        this.renderCompositionChart(
+          [...this.hourlyDataForToday]
+            .sort((a, b) => a.hour.localeCompare(b.hour))
+            .map((h) => ({ label: h.hour, data: h.data }))
+        ) +
         '<div class="daily-table-container">' +
         '<table class="daily-table">' +
         '<thead>' +
         '<tr>' +
-        '<th>時間</th>' +
+        '<th>' +
+        I18n.t.popup.hour +
+        '</th>' +
         '<th>' +
         cost +
         '</th>' +
@@ -435,6 +522,40 @@ export class UsageWebviewProvider {
     const cacheCreation = I18n.t.popup.cacheCreation;
     const cacheRead = I18n.t.popup.cacheRead;
     const modelBreakdown = I18n.t.popup.modelBreakdown;
+    const pricing = I18n.t.popup.pricing;
+    const refreshPricing = I18n.t.popup.refreshPricing;
+
+    // Cache hit rate: share of input-side tokens served cheaply from cache.
+    const inputSideTokens = data.totalInputTokens + data.totalCacheCreationTokens + data.totalCacheReadTokens;
+    const cacheHitRate = inputSideTokens > 0 ? (data.totalCacheReadTokens / inputSideTokens) * 100 : 0;
+
+    // Cost composition: how each token type contributes to the total cost.
+    const cb = data.costBreakdown;
+    const costTotal = cb.input + cb.output + cb.cacheWrite + cb.cacheRead;
+    const cpct = (v: number): number => (costTotal > 0 ? (v / costTotal) * 100 : 0);
+    const compSeg = (cls: string, v: number): string =>
+      '<div class="cost-comp-seg ' + cls + '" style="width: ' + cpct(v).toFixed(2) + '%;"></div>';
+    const compItem = (cls: string, label: string, v: number): string =>
+      '<span class="legend-item"><span class="legend-dot ' + cls + '"></span>' +
+      label + ' ' + I18n.formatCurrency(v) + ' (' + cpct(v).toFixed(0) + '%)</span>';
+    const costComposition =
+      costTotal > 0
+        ? '<div class="cost-composition">' +
+          '<div class="cost-comp-head">' + I18n.t.popup.costComposition + '</div>' +
+          '<div class="cost-comp-bar">' +
+          compSeg('seg-input', cb.input) +
+          compSeg('seg-output', cb.output) +
+          compSeg('seg-cache-creation', cb.cacheWrite) +
+          compSeg('seg-cache-read', cb.cacheRead) +
+          '</div>' +
+          '<div class="cost-comp-legend">' +
+          compItem('seg-input', inputTokens, cb.input) +
+          compItem('seg-output', outputTokens, cb.output) +
+          compItem('seg-cache-creation', cacheCreation, cb.cacheWrite) +
+          compItem('seg-cache-read', cacheRead, cb.cacheRead) +
+          '</div>' +
+          '</div>'
+        : '';
 
     let html =
       '<div class="usage-summary">' +
@@ -487,51 +608,101 @@ export class UsageWebviewProvider {
       I18n.formatNumber(data.totalCacheReadTokens) +
       '</div>' +
       '</div>' +
+      '<div class="summary-item">' +
+      '<div class="label">' +
+      I18n.t.popup.cacheHitRate +
       '</div>' +
+      '<div class="value">' +
+      cacheHitRate.toFixed(0) +
+      '%</div>' +
+      '</div>' +
+      '</div>' +
+      costComposition +
       '</div>';
 
     if (Object.keys(data.modelBreakdown).length > 0) {
-      html += '<div class="model-breakdown">' + '<h3>' + modelBreakdown + '</h3>' + '<div class="model-list">';
+      // Sort models by cost descending so the most expensive model is on top.
+      // Default state: only the top model is open; the rest collapse to one
+      // line — keeps low-cost noise from pushing the dashboard long.
+      const sortedModels = Object.entries(data.modelBreakdown).sort(
+        ([, a], [, b]) => b.cost - a.cost
+      );
 
-      Object.entries(data.modelBreakdown).forEach(([model, modelData]) => {
+      html +=
+        '<div class="model-breakdown">' +
+        '<div class="section-header">' +
+        '<h3>' +
+        modelBreakdown +
+        '</h3>' +
+        '<button class="btn-secondary btn-small" onclick="refreshPricing()" title="' +
+        this.escapeHtml(refreshPricing) +
+        '">⟳ ' +
+        refreshPricing +
+        '</button>' +
+        '</div>' +
+        '<div class="model-list">';
+
+      sortedModels.forEach(([model, modelData], index) => {
+        const rates = getModelRatesPerMillion(model);
+        const pricingLine = rates
+          ? '<div class="model-pricing">' +
+            pricing +
+            ' (/1M): ' +
+            inputTokens +
+            ' ' +
+            this.formatRate(rates.input) +
+            ' · ' +
+            outputTokens +
+            ' ' +
+            this.formatRate(rates.output) +
+            ' · ' +
+            cacheCreation +
+            ' ' +
+            this.formatRate(rates.cacheWrite) +
+            ' · ' +
+            cacheRead +
+            ' ' +
+            this.formatRate(rates.cacheRead) +
+            '</div>'
+          : '';
+
+        // Per-model cache hit rate, same formula as the summary card.
+        const modelInputSide =
+          modelData.inputTokens + modelData.cacheCreationTokens + modelData.cacheReadTokens;
+        const modelHitRate =
+          modelInputSide > 0 ? (modelData.cacheReadTokens / modelInputSide) * 100 : 0;
+
+        // <details open> on index 0 only; subsequent models collapse so the
+        // user only sees N model rows by default.
+        const openAttr = index === 0 ? ' open' : '';
         html +=
-          '<div class="model-item">' +
-          '<div class="model-header">' +
+          '<details class="model-item"' +
+          openAttr +
+          '>' +
+          '<summary class="model-header">' +
           '<span class="model-name">' +
           this.escapeHtml(model) +
           '</span>' +
           '<span class="model-cost">' +
           I18n.formatCurrency(modelData.cost) +
           '</span>' +
+          '</summary>' +
+          '<div class="model-details model-details-stacked">' +
+          '<span><span class="model-stat-label">' + inputTokens + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.inputTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + outputTokens + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.outputTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + cacheCreation + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.cacheCreationTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + cacheRead + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.cacheReadTokens) + '</span>' +
+          '<span><span class="model-stat-label">' + I18n.t.popup.cacheHitRate + ':</span>' +
+          ' ' + modelHitRate.toFixed(0) + '%</span>' +
+          '<span><span class="model-stat-label">' + messages + ':</span>' +
+          ' ' + I18n.formatNumber(modelData.count) + '</span>' +
           '</div>' +
-          '<div class="model-details">' +
-          '<span>' +
-          inputTokens +
-          ': ' +
-          I18n.formatNumber(modelData.inputTokens) +
-          '</span>' +
-          '<span>' +
-          outputTokens +
-          ': ' +
-          I18n.formatNumber(modelData.outputTokens) +
-          '</span>' +
-          '<span>' +
-          cacheCreation +
-          ': ' +
-          I18n.formatNumber(modelData.cacheCreationTokens) +
-          '</span>' +
-          '<span>' +
-          cacheRead +
-          ': ' +
-          I18n.formatNumber(modelData.cacheReadTokens) +
-          '</span>' +
-          '<span>' +
-          messages +
-          ': ' +
-          I18n.formatNumber(modelData.count) +
-          '</span>' +
-          '</div>' +
-          '</div>';
+          pricingLine +
+          '</details>';
       });
 
       html += '</div></div>';
@@ -570,6 +741,12 @@ export class UsageWebviewProvider {
           </div>
         </div>
 
+        ${this.renderCompositionChart(
+          [...this.dailyDataForMonth]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((d) => ({ label: this.getShortDate(d.date), data: d.data }))
+        )}
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -597,7 +774,7 @@ export class UsageWebviewProvider {
                   <td class="number-cell">${I18n.formatNumber(data.totalCacheReadTokens)}</td>
                   <td class="number-cell">${I18n.formatNumber(data.messageCount)}</td>
                   <td class="detail-cell">
-                    <button class="detail-button" onclick="toggleHourlyDetail('${date}')" title="顯示每小時詳細資料">
+                    <button class="detail-button" onclick="toggleHourlyDetail('${date}')" title="${I18n.t.popup.hourlyBreakdown}">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path class="expand-icon" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
                       </svg>
@@ -654,6 +831,12 @@ export class UsageWebviewProvider {
           </div>
         </div>
 
+        ${this.renderCompositionChart(
+          [...this.dailyDataForAllTime]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((d) => ({ label: this.getShortDate(d.date), data: d.data }))
+        )}
+
         <div class="daily-table-container">
           <table class="daily-table">
             <thead>
@@ -708,6 +891,466 @@ export class UsageWebviewProvider {
     return allTimeSummary + dailyBreakdown;
   }
 
+  private renderSessionData(): string {
+    if (!this.sessionBreakdown || this.sessionBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    let rows = '';
+    this.sessionBreakdown.forEach((s) => {
+      const d = s.data;
+      rows +=
+        '<tr class="sort-row"' +
+        ' data-sort-time="' + s.startTime.getTime() + '"' +
+        ' data-sort-project="' + this.escapeHtml((s.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-context="' + s.peakContextTokens + '"' +
+        ' data-sort-duration="' + (s.endTime.getTime() - s.startTime.getTime()) + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
+        '<td class="date-cell" title="' + this.escapeHtml(s.sessionId) + '">' +
+        this.escapeHtml(this.formatDateTime(s.startTime)) +
+        '</td>' +
+        this.renderProjectCell(s.projectName, s.projectPath) +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(s.peakContextTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
+        '<td class="number-cell">' + this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) + '</td>' +
+        '</tr>';
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.sessionBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('time', t.startTime) +
+      th('project', t.project) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('context', t.peakContext) +
+      th('messages', t.messages) +
+      th('duration', t.duration) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /** Reading-friendly date/time: "Today HH:MM", "Yesterday HH:MM", "MM-DD HH:MM" or "YYYY-MM-DD". */
+  private formatDateTime(date: Date): string {
+    if (!date || isNaN(date.getTime()) || date.getTime() === 0) {
+      return '-';
+    }
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const hm = pad(date.getHours()) + ':' + pad(date.getMinutes());
+    const sameDay = (a: Date, b: Date): boolean =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (sameDay(date, now)) {
+      return I18n.t.popup.today + ' ' + hm;
+    }
+    if (sameDay(date, yesterday)) {
+      return I18n.t.popup.yesterday + ' ' + hm;
+    }
+    if (date.getFullYear() === now.getFullYear()) {
+      return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + hm;
+    }
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+
+  /** USD per-1M-token rate, trimmed of trailing zeros for compact display. */
+  private formatRate(n: number): string {
+    return '$' + parseFloat(n.toFixed(4)).toString();
+  }
+
+  /** data-sort-* attributes for the token/cost columns shared by both tables. */
+  private usageSortAttrs(d: UsageData): string {
+    return (
+      ' data-sort-cost="' + d.totalCost +
+      '" data-sort-input="' + d.totalInputTokens +
+      '" data-sort-output="' + d.totalOutputTokens +
+      '" data-sort-cachecreate="' + d.totalCacheCreationTokens +
+      '" data-sort-cacheread="' + d.totalCacheReadTokens +
+      '" data-sort-messages="' + d.messageCount + '"'
+    );
+  }
+
+  private formatDuration(start: Date, end: Date): string {
+    if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return '-';
+    }
+    const ms = end.getTime() - start.getTime();
+    if (ms <= 0) {
+      return '<1m';
+    }
+    const totalMinutes = Math.round(ms / 60000);
+    if (totalMinutes < 1) {
+      return '<1m';
+    }
+    if (totalMinutes < 60) {
+      return totalMinutes + 'm';
+    }
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return minutes > 0 ? hours + 'h ' + minutes + 'm' : hours + 'h';
+  }
+
+  /** A table cell showing the project's friendly name with its full path beneath. */
+  private renderProjectCell(name: string, fullPath: string): string {
+    const safeName = this.escapeHtml(name || 'unknown');
+    const safePath = this.escapeHtml(fullPath || '');
+    const pathLine = safePath ? '<div class="project-path" title="' + safePath + '">' + safePath + '</div>' : '';
+    return '<td class="project-cell"><div class="project-name">' + safeName + '</div>' + pathLine + '</td>';
+  }
+
+  private renderProjectData(): string {
+    if (!this.projectBreakdown || this.projectBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    const usageCells = (d: UsageData): string =>
+      '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+      '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>';
+
+    let rows = '';
+    this.projectBreakdown.forEach((group, idx) => {
+      const groupId = 'pg' + idx;
+      const sortAttrs =
+        ' data-sort-name="' + this.escapeHtml(group.groupName.toLowerCase()) + '"' +
+        ' data-sort-sessions="' + group.sessionCount + '"' +
+        ' data-sort-lastactive="' + group.lastSeen.getTime() + '"' +
+        this.usageSortAttrs(group.data);
+
+      if (group.children.length <= 1) {
+        // A single project — render as one plain, sortable row.
+        const only = group.children[0];
+        const name = only ? only.projectName : group.groupName;
+        const path = only ? only.projectPath : group.groupPath;
+        rows +=
+          '<tr class="sort-row"' + sortAttrs + '>' +
+          this.renderProjectCell(name, path) +
+          '<td class="number-cell">' + I18n.formatNumber(group.sessionCount) + '</td>' +
+          usageCells(group.data) +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(group.lastSeen)) + '</td>' +
+          '</tr>';
+      } else {
+        // Several projects under one folder — an expandable group row.
+        rows +=
+          '<tr class="sort-row project-group-row" data-group="' + groupId + '"' + sortAttrs + '>' +
+          '<td class="project-cell">' +
+          '<div class="project-name">' +
+          '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
+          (group.isGitRepo ? '<span class="git-badge">git</span> ' : '') +
+          this.escapeHtml(group.groupName) +
+          ' <span class="group-count">(' + group.projectCount + ')</span>' +
+          '</div>' +
+          '<div class="project-path" title="' + this.escapeHtml(group.groupPath) + '">' +
+          this.escapeHtml(group.groupPath) +
+          '</div>' +
+          '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(group.sessionCount) + '</td>' +
+          usageCells(group.data) +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(group.lastSeen)) + '</td>' +
+          '</tr>';
+        group.children.forEach((child) => {
+          rows +=
+            '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+            '<td class="project-cell project-child-cell">' +
+            '<div class="project-name">' + this.escapeHtml(child.projectName) + '</div>' +
+            '<div class="project-path" title="' + this.escapeHtml(child.projectPath) + '">' +
+            this.escapeHtml(child.projectPath) +
+            '</div>' +
+            '</td>' +
+            '<td class="number-cell">' + I18n.formatNumber(child.sessionCount) + '</td>' +
+            usageCells(child.data) +
+            '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(child.lastSeen)) + '</td>' +
+            '</tr>';
+        });
+      }
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.projectBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('name', t.project) +
+      th('sessions', t.sessions) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('messages', t.messages) +
+      th('lastactive', t.lastActive) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  private renderBranchData(): string {
+    if (!this.branchBreakdown || this.branchBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    let rows = '';
+    this.branchBreakdown.forEach((b) => {
+      const d = b.data;
+      rows +=
+        '<tr class="sort-row"' +
+        ' data-sort-branch="' + this.escapeHtml(b.branch.toLowerCase()) + '"' +
+        ' data-sort-project="' + this.escapeHtml((b.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-sessions="' + b.sessionCount + '"' +
+        ' data-sort-lastactive="' + b.lastSeen.getTime() + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
+        '<td class="date-cell" title="' + this.escapeHtml(b.projectPath) + '">' + this.escapeHtml(b.branch) + '</td>' +
+        '<td>' + this.escapeHtml(b.projectName) + '</td>' +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(b.sessionCount) + '</td>' +
+        '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(b.lastSeen)) + '</td>' +
+        '</tr>';
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.branchBreakdown + '</h3>' +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('branch', t.branch) +
+      th('project', t.project) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('messages', t.messages) +
+      th('sessions', t.sessions) +
+      th('lastactive', t.lastActive) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * "Content" tab: an estimated breakdown of which conversation content consumes
+   * tokens (your prompts vs. tool results vs. assistant output), to help spot
+   * habits worth optimising. Token figures are estimated from text length.
+   */
+  private renderContentData(): string {
+    const t = I18n.t.popup;
+    const analysis = this.contentAnalysis;
+    if (!analysis || analysis.categories.length === 0 || analysis.totalEstimatedTokens === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const total = analysis.totalEstimatedTokens;
+
+    const catLabel = (key: string): string => {
+      switch (key) {
+        case 'userPrompts':
+          return t.catUserPrompts;
+        case 'assistantText':
+          return t.catAssistantText;
+        case 'assistantThinking':
+          return t.catAssistantThinking;
+        case 'toolCalls':
+          return t.catToolCalls;
+        case 'toolResults':
+          return t.catToolResults;
+        default:
+          return key;
+      }
+    };
+    const catColor: Record<string, string> = {
+      userPrompts: 'cf-1',
+      assistantText: 'cf-2',
+      assistantThinking: 'cf-3',
+      toolCalls: 'cf-4',
+      toolResults: 'cf-5',
+    };
+
+    const barRow = (label: string, tokens: number, barMax: number, colorClass: string): string => {
+      const pct = total > 0 ? (tokens / total) * 100 : 0;
+      const width = barMax > 0 ? (tokens / barMax) * 100 : 0;
+      return (
+        '<div class="cbar-row">' +
+        '<div class="cbar-label" title="' + this.escapeHtml(label) + '">' + this.escapeHtml(label) + '</div>' +
+        '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' + width.toFixed(1) + '%;"></div></div>' +
+        '<div class="cbar-val">' + I18n.formatNumber(tokens) + '</div>' +
+        '<div class="cbar-pct">' + pct.toFixed(1) + '%</div>' +
+        '</div>'
+      );
+    };
+
+    const maxCat = Math.max(...analysis.categories.map((c) => c.estimatedTokens), 1);
+    let catRows = '';
+    analysis.categories.forEach((c) => {
+      catRows += barRow(catLabel(c.key), c.estimatedTokens, maxCat, catColor[c.key] || 'cf-1');
+    });
+
+    let toolSection = '';
+    if (analysis.toolResultBreakdown.length > 0) {
+      const maxTool = Math.max(...analysis.toolResultBreakdown.map((s) => s.estimatedTokens), 1);
+      let toolRows = '';
+      analysis.toolResultBreakdown.forEach((s) => {
+        toolRows += barRow(s.key, s.estimatedTokens, maxTool, 'cf-4');
+      });
+      toolSection = '<h4 class="cbar-subhead">' + t.byTool + '</h4><div class="cbar-list">' + toolRows + '</div>';
+    }
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
+      '<span class="section-header-right">' +
+      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span>' +
+      '<button class="btn-secondary btn-small" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
+      '</span></div>' +
+      '<p class="table-hint">' + t.last30days + ' · ' + t.estimatedNote + '</p>' +
+      '<div class="cbar-list">' + catRows + '</div>' +
+      toolSection +
+      '</div>'
+    );
+  }
+
+  /**
+   * Static stacked-bar chart breaking each period into input / cache-read /
+   * cache-write / output tokens — a finer view than the single-metric chart.
+   */
+  private renderCompositionChart(items: { label: string; data: UsageData }[]): string {
+    if (!items || items.length === 0) {
+      return '';
+    }
+
+    const t = I18n.t.popup;
+    const maxHeight = 120;
+    const totals = items.map(
+      (it) =>
+        it.data.totalInputTokens + it.data.totalOutputTokens + it.data.totalCacheCreationTokens + it.data.totalCacheReadTokens
+    );
+    const maxTotal = Math.max(...totals, 1);
+
+    let bars = '';
+    items.forEach((it, idx) => {
+      const d = it.data;
+      const total = totals[idx];
+      const barHeight = (total / maxTotal) * maxHeight;
+      const seg = (value: number, cls: string, label: string): string => {
+        const h = total > 0 ? (value / total) * barHeight : 0;
+        return (
+          '<div class="stack-seg ' +
+          cls +
+          '" style="height: ' +
+          h +
+          'px;" title="' +
+          this.escapeHtml(label) +
+          ': ' +
+          I18n.formatNumber(value) +
+          '"></div>'
+        );
+      };
+      bars +=
+        '<div class="hc-col">' +
+        '<div class="stack-bar" title="' +
+        this.escapeHtml(it.label) +
+        ': ' +
+        I18n.formatNumber(total) +
+        '">' +
+        seg(d.totalInputTokens, 'seg-input', t.inputTokens) +
+        seg(d.totalCacheReadTokens, 'seg-cache-read', t.cacheRead) +
+        seg(d.totalCacheCreationTokens, 'seg-cache-creation', t.cacheCreation) +
+        seg(d.totalOutputTokens, 'seg-output', t.outputTokens) +
+        '</div>' +
+        '</div>';
+    });
+
+    const xlabels = items.map((it) => '<div class="hc-xlabel">' + this.escapeHtml(it.label) + '</div>').join('');
+
+    const dot = (cls: string, label: string): string =>
+      '<span class="legend-item"><span class="legend-dot ' + cls + '"></span>' + label + '</span>';
+
+    return (
+      '<div class="composition-chart">' +
+      '<h4>' +
+      t.tokenComposition +
+      '</h4>' +
+      '<div class="stack-legend">' +
+      dot('seg-input', t.inputTokens) +
+      dot('seg-cache-read', t.cacheRead) +
+      dot('seg-cache-creation', t.cacheCreation) +
+      dot('seg-output', t.outputTokens) +
+      '</div>' +
+      '<div class="hc-wrap">' +
+      '<div class="hc-yaxis">' +
+      '<span class="hc-yval">' + I18n.formatNumber(maxTotal) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatNumber(Math.round(maxTotal / 2)) + '</span>' +
+      '<span class="hc-yval">0</span>' +
+      '</div>' +
+      '<div class="hc-main"><div class="hc-scroll">' +
+      '<div class="hc-plot">' +
+      '<div class="hc-grid hc-grid-top"></div>' +
+      '<div class="hc-grid hc-grid-mid"></div>' +
+      '<div class="hc-bars">' +
+      bars +
+      '</div>' +
+      '</div>' +
+      '<div class="hc-xlabels">' +
+      xlabels +
+      '</div>' +
+      '</div></div>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
   private renderDailyChart(): string {
     if (this.dailyDataForMonth.length === 0) {
       return '<div class="no-chart-data">No data available</div>';
@@ -735,7 +1378,7 @@ export class UsageWebviewProvider {
                    data-cache-creation="${data.totalCacheCreationTokens}"
                    data-cache-read="${data.totalCacheReadTokens}"
                    data-messages="${data.messageCount}"
-                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)} - 點擊查看每小時詳情">
+                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)}">
               </div>
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
@@ -773,7 +1416,7 @@ export class UsageWebviewProvider {
                    data-cache-creation="${data.totalCacheCreationTokens}"
                    data-cache-read="${data.totalCacheReadTokens}"
                    data-messages="${data.messageCount}"
-                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)} - 點擊查看每日詳情">
+                   title="${this.formatDate(date)}: ${I18n.formatCurrency(data.totalCost)}">
               </div>
               <div class="chart-label">${this.getShortDate(date)}</div>
             </div>
@@ -784,42 +1427,60 @@ export class UsageWebviewProvider {
     `;
   }
 
+  /**
+   * Today's hourly chart. Unlike the other charts it has a Y-axis, two dashed
+   * reference lines and a value label on top of every bar, so figures are
+   * readable without hovering.
+   */
   private renderHourlyChart(): string {
     if (this.hourlyDataForToday.length === 0) {
       return '<div class="no-chart-data">No data available</div>';
     }
 
-    // Sort data by hour (chronological order)
     const sortedData = [...this.hourlyDataForToday].sort((a, b) => a.hour.localeCompare(b.hour));
+    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost), 0);
+    const maxHeight = 120; // Plot height in pixels — kept in sync with updateMainChart.
 
-    // Generate chart bars for cost (default metric)
-    const maxCost = Math.max(...sortedData.map((d) => d.data.totalCost));
-    const maxHeight = 120; // Max height in pixels
+    const bars = sortedData
+      .map(({ hour, data }) => {
+        const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
+        return (
+          '<div class="hc-col" data-hour="' + hour + '">' +
+          '<div class="hc-barval">' + I18n.formatCurrency(data.totalCost) + '</div>' +
+          '<div class="chart-bar cost-bar" style="height: ' + height + 'px;" ' +
+          'data-cost="' + data.totalCost + '" ' +
+          'data-input="' + data.totalInputTokens + '" ' +
+          'data-output="' + data.totalOutputTokens + '" ' +
+          'data-cache-creation="' + data.totalCacheCreationTokens + '" ' +
+          'data-cache-read="' + data.totalCacheReadTokens + '" ' +
+          'data-messages="' + data.messageCount + '" ' +
+          'title="' + I18n.formatCurrency(data.totalCost) + '"></div>' +
+          '</div>'
+        );
+      })
+      .join('');
 
-    return `
-      <div class="chart-bars">
-        ${sortedData
-          .map(({ hour, data }) => {
-            const height = maxCost > 0 ? (data.totalCost / maxCost) * maxHeight : 0;
-            return `
-            <div class="chart-bar-container" data-hour="${hour}">
-              <div class="chart-bar cost-bar"
-                   style="height: ${height}px;"
-                   data-cost="${data.totalCost}"
-                   data-input="${data.totalInputTokens}"
-                   data-output="${data.totalOutputTokens}"
-                   data-cache-creation="${data.totalCacheCreationTokens}"
-                   data-cache-read="${data.totalCacheReadTokens}"
-                   data-messages="${data.messageCount}"
-                   title="${hour}: ${I18n.formatCurrency(data.totalCost)}">
-              </div>
-              <div class="chart-label">${hour}</div>
-            </div>
-          `;
-          })
-          .join('')}
-      </div>
-    `;
+    const xlabels = sortedData.map(({ hour }) => '<div class="hc-xlabel">' + hour + '</div>').join('');
+
+    return (
+      '<div class="hc-wrap">' +
+      '<div class="hc-yaxis">' +
+      '<span class="hc-yval">' + I18n.formatCurrency(maxCost) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatCurrency(maxCost / 2) + '</span>' +
+      '<span class="hc-yval">' + I18n.formatCurrency(0) + '</span>' +
+      '</div>' +
+      '<div class="hc-main">' +
+      '<div class="hc-scroll">' +
+      '<div class="hc-plot" id="hourlyChart">' +
+      '<div class="hc-grid hc-grid-top"></div>' +
+      '<div class="hc-grid hc-grid-mid"></div>' +
+      '<div class="hc-bars">' + bars + '</div>' +
+      '</div>' +
+      '<div class="hc-xlabels">' + xlabels + '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>'
+    );
   }
 
   private getShortDate(dateString: string): string {
@@ -837,13 +1498,10 @@ export class UsageWebviewProvider {
     const date = new Date(dateString);
     // Check if this is a month-only date (ends with -01)
     if (dateString.endsWith('-01')) {
-      // Format as YYYY年MM月 for monthly data
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
-      return `${year}年${month}月`;
+      return date.toLocaleDateString(I18n.getLocale(), I18n.dateFormatOptions({ year: 'numeric', month: 'long' }));
     }
-    // Standard date formatting for daily data
-    return date.toLocaleDateString();
+    // Standard date formatting for daily data, locale + timezone aware.
+    return date.toLocaleDateString(I18n.getLocale(), I18n.dateFormatOptions());
   }
 
   private getStyles(): string {
@@ -917,6 +1575,10 @@ export class UsageWebviewProvider {
         padding: 8px 16px;
         cursor: pointer;
         border-bottom: 2px solid transparent;
+        /* Explicit foreground colour — otherwise the inherited button
+           foreground (white) becomes invisible on light themes. (Fixes
+           upstream issue #11.) */
+        color: var(--vscode-foreground);
       }
 
       .tab.active {
@@ -987,11 +1649,36 @@ export class UsageWebviewProvider {
         border: 1px solid var(--vscode-input-border);
       }
 
+      /* <details>/<summary> reset: remove the default triangle, position our own */
+      details.model-item > summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      details.model-item > summary::-webkit-details-marker { display: none; }
+      details.model-item > summary::before {
+        content: '▸';
+        display: inline-block;
+        margin-right: 6px;
+        color: var(--vscode-descriptionForeground);
+        transition: transform 0.15s ease;
+      }
+      details.model-item[open] > summary::before {
+        transform: rotate(90deg);
+      }
+
       .model-header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 8px;
         margin-bottom: 8px;
+      }
+      /* Model name sits flush against the disclosure triangle on the left;
+         the cost is pushed to the far right by margin-left:auto. Avoids the
+         "name centred in the middle" effect that flex space-between gives
+         when the triangle ::before becomes a third flex child. */
+      .model-name {
+        flex: 0 1 auto;
+        text-align: left;
       }
 
       .model-name {
@@ -1002,14 +1689,36 @@ export class UsageWebviewProvider {
       .model-cost {
         font-weight: bold;
         color: var(--vscode-charts-green);
+        margin-left: auto;
       }
 
       .model-details {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 8px;
         font-size: 12px;
         color: var(--vscode-descriptionForeground);
+      }
+
+      /* Stack token stats one per line — fixed layout that does not reshuffle
+         when the window is resized. Each row is "label  value" left-aligned. */
+      .model-details-stacked {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+
+      .model-details-stacked > span {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        border-bottom: 1px dashed var(--vscode-input-border);
+      }
+      .model-details-stacked > span:last-child {
+        border-bottom: none;
+      }
+
+      .model-stat-label {
+        color: var(--vscode-descriptionForeground);
+        opacity: 0.85;
       }
 
       .chart-tabs {
@@ -1269,6 +1978,397 @@ export class UsageWebviewProvider {
         color: var(--vscode-descriptionForeground);
         padding: 20px;
       }
+
+      .project-cell {
+        max-width: 340px;
+      }
+
+      .project-name {
+        font-weight: bold;
+        color: var(--vscode-symbolIcon-functionForeground);
+      }
+
+      .project-path {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        word-break: break-all;
+        margin-top: 2px;
+      }
+
+      .composition-chart {
+        margin: 12px 0 20px;
+      }
+
+      .cost-composition {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .cost-comp-head {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        margin-bottom: 6px;
+      }
+
+      .cost-comp-bar {
+        display: flex;
+        height: 14px;
+        border-radius: 3px;
+        overflow: hidden;
+        background: var(--vscode-input-background);
+      }
+
+      .cost-comp-seg {
+        height: 100%;
+      }
+
+      .cost-comp-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .composition-chart h4 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+      }
+
+      .stack-legend {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+
+      .stack-bar {
+        width: 24px;
+        display: flex;
+        flex-direction: column-reverse;
+        border-radius: 2px 2px 0 0;
+        overflow: hidden;
+        margin-bottom: 8px;
+        min-height: 2px;
+      }
+
+      .stack-seg {
+        width: 100%;
+      }
+
+      .seg-input {
+        background: var(--vscode-charts-blue);
+      }
+
+      .seg-output {
+        background: var(--vscode-charts-orange);
+      }
+
+      .seg-cache-creation {
+        background: var(--vscode-charts-purple);
+      }
+
+      .seg-cache-read {
+        background: var(--vscode-charts-green);
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 12px;
+      }
+
+      .section-header h3 {
+        margin: 0;
+      }
+
+      .section-header-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn-small {
+        padding: 4px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .model-pricing {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--vscode-panel-border);
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        word-break: break-word;
+      }
+
+      .table-hint {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin: 0 0 8px 0;
+      }
+
+      th.sortable {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+
+      th.sortable:hover {
+        color: var(--vscode-focusBorder);
+      }
+
+      th.sortable.sorted-asc::after {
+        content: ' \\25B2';
+        font-size: 9px;
+      }
+
+      th.sortable.sorted-desc::after {
+        content: ' \\25BC';
+        font-size: 9px;
+      }
+
+      .group-toggle {
+        display: inline-block;
+        width: 14px;
+        cursor: pointer;
+        color: var(--vscode-descriptionForeground);
+        transition: transform 0.15s ease;
+      }
+
+      .group-toggle.expanded {
+        transform: rotate(90deg);
+      }
+
+      .group-count {
+        font-weight: normal;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .project-child-cell {
+        padding-left: 28px;
+      }
+
+      .project-child-row {
+        background: var(--vscode-input-background);
+      }
+
+      .hc-wrap {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 20px;
+        padding-top: 18px;
+      }
+
+      .hc-yaxis {
+        width: 62px;
+        height: 120px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        text-align: right;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .hc-yval {
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .hc-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .hc-scroll {
+        overflow-x: auto;
+        overflow-y: visible;
+      }
+
+      .hc-plot {
+        position: relative;
+        height: 120px;
+        min-width: fit-content;
+        border-bottom: 1px solid var(--vscode-panel-border);
+      }
+
+      .hc-grid {
+        position: absolute;
+        left: 0;
+        right: 0;
+        border-top: 1px dashed var(--vscode-panel-border);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .hc-grid-top {
+        top: 0;
+      }
+
+      .hc-grid-mid {
+        top: 50%;
+      }
+
+      .hc-bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 120px;
+        min-width: fit-content;
+      }
+
+      .hc-col {
+        width: 38px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .hc-col .chart-bar,
+      .hc-col .stack-bar {
+        margin-bottom: 0;
+      }
+
+      .hc-barval {
+        font-size: 9px;
+        color: var(--vscode-descriptionForeground);
+        margin-bottom: 2px;
+        white-space: nowrap;
+      }
+
+      .hc-xlabels {
+        display: flex;
+        gap: 4px;
+        min-width: fit-content;
+        margin-top: 4px;
+      }
+
+      .hc-xlabel {
+        width: 38px;
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .git-badge {
+        display: inline-block;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: var(--vscode-badge-background);
+        color: var(--vscode-badge-foreground);
+        vertical-align: middle;
+      }
+
+      .cbar-total {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .cbar-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 8px 0 16px;
+      }
+
+      .cbar-subhead {
+        margin: 16px 0 4px;
+        font-size: 14px;
+      }
+
+      .cbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+
+      .cbar-label {
+        width: 160px;
+        flex-shrink: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cbar-track {
+        flex: 1;
+        height: 16px;
+        min-width: 40px;
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .cbar-fill {
+        height: 100%;
+        border-radius: 2px;
+        min-width: 1px;
+      }
+
+      .cbar-val {
+        width: 96px;
+        flex-shrink: 0;
+        text-align: right;
+        font-family: var(--vscode-editor-font-family);
+      }
+
+      .cbar-pct {
+        width: 52px;
+        flex-shrink: 0;
+        text-align: right;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .cf-1 {
+        background: var(--vscode-charts-blue);
+      }
+
+      .cf-2 {
+        background: var(--vscode-charts-orange);
+      }
+
+      .cf-3 {
+        background: var(--vscode-charts-purple);
+      }
+
+      .cf-4 {
+        background: var(--vscode-charts-green);
+      }
+
+      .cf-5 {
+        background: var(--vscode-charts-red);
+      }
     `;
   }
 
@@ -1280,6 +2380,17 @@ console.log("[DEBUG] === JAVASCRIPT INITIALIZATION START ===");
 const vscode = acquireVsCodeApi();
 console.log("[DEBUG] VSCode API acquired");
 
+// Locale + timezone baked in at render time so drill-down renders match the
+// user's UI language and configured timezone (instead of the hardcoded zh-TW
+// that the original used in this script body).
+const __locale = ${JSON.stringify(I18n.getLocale())};
+const __tz = ${JSON.stringify(I18n.getTimezone())};
+const __dateOpts = (extra) => {
+  const opts = Object.assign({}, extra || {});
+  if (__tz) opts.timeZone = __tz;
+  return opts;
+};
+
 // Define basic functions
 function refresh() {
   console.log("[DEBUG] refresh called");
@@ -1289,6 +2400,79 @@ function refresh() {
 function openSettings() {
   console.log("[DEBUG] openSettings called");
   vscode.postMessage({ command: 'openSettings' });
+}
+
+function refreshPricing() {
+  console.log("[DEBUG] refreshPricing called");
+  vscode.postMessage({ command: 'refreshPricing' });
+}
+
+function getAdvice() {
+  console.log("[DEBUG] getAdvice called");
+  vscode.postMessage({ command: 'getAdvice' });
+}
+
+function toggleProjectGroup(groupId) {
+  var groupRow = document.querySelector('.project-group-row[data-group="' + groupId + '"]');
+  var childRows = document.querySelectorAll('.project-child-row[data-group="' + groupId + '"]');
+  var toggle = groupRow ? groupRow.querySelector('.group-toggle') : null;
+  var expanded = toggle && toggle.classList.contains('expanded');
+  childRows.forEach(function(r) {
+    r.style.display = expanded ? 'none' : 'table-row';
+  });
+  if (toggle) {
+    toggle.classList.toggle('expanded');
+    toggle.textContent = expanded ? '▶' : '▼';
+  }
+}
+
+// Sort a table by a column key. Rows with class "sort-child" travel with the
+// preceding "sort-row" (used for expandable project groups).
+function sortTable(table, key, th) {
+  var tbody = table.querySelector('tbody');
+  if (!tbody) { return; }
+  var allRows = Array.prototype.slice.call(tbody.children);
+
+  var units = [];
+  var current = null;
+  allRows.forEach(function(row) {
+    if (row.classList.contains('sort-child') && current) {
+      current.rows.push(row);
+    } else {
+      current = { lead: row, rows: [row] };
+      units.push(current);
+    }
+  });
+
+  // First click on a column sorts descending; clicking again flips direction.
+  var ascending = th.getAttribute('data-sortdir') === 'desc';
+
+  table.querySelectorAll('th.sortable').forEach(function(h) {
+    h.removeAttribute('data-sortdir');
+    h.classList.remove('sorted-asc', 'sorted-desc');
+  });
+  th.setAttribute('data-sortdir', ascending ? 'asc' : 'desc');
+  th.classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
+
+  units.sort(function(a, b) {
+    var va = a.lead.getAttribute('data-sort-' + key);
+    var vb = b.lead.getAttribute('data-sort-' + key);
+    if (va === null) { va = ''; }
+    if (vb === null) { vb = ''; }
+    var na = parseFloat(va);
+    var nb = parseFloat(vb);
+    var cmp;
+    if (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb)) {
+      cmp = na - nb;
+    } else {
+      cmp = String(va).localeCompare(String(vb));
+    }
+    return ascending ? cmp : -cmp;
+  });
+
+  units.forEach(function(u) {
+    u.rows.forEach(function(r) { tbody.appendChild(r); });
+  });
 }
 
 function showTab(tabName) {
@@ -1531,6 +2715,10 @@ function syncChartBarSelection(date, isSelected) {
 // Make functions available globally
 window.refresh = refresh;
 window.openSettings = openSettings;
+window.refreshPricing = refreshPricing;
+window.getAdvice = getAdvice;
+window.toggleProjectGroup = toggleProjectGroup;
+window.sortTable = sortTable;
 window.showTab = showTab;
 window.toggleHourlyDetail = toggleHourlyDetail;
 window.toggleMonthlyDetail = toggleMonthlyDetail;
@@ -1570,6 +2758,17 @@ window.addEventListener('message', function(event) {
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {
   console.log("[DEBUG] Document click event:", event.target);
+
+  // Handle sortable table header clicks
+  var sortableTh = event.target.closest ? event.target.closest('th.sortable') : null;
+  if (sortableTh) {
+    var sortTableEl = sortableTh.closest('table');
+    var sortKey = sortableTh.getAttribute('data-sortkey');
+    if (sortTableEl && sortKey) {
+      sortTable(sortTableEl, sortKey, sortableTh);
+    }
+    return;
+  }
 
   // Handle chart tab clicks
   if (event.target.classList.contains('chart-tab')) {
@@ -1732,19 +2931,33 @@ function updateMainChart(metric, container) {
       bar.classList.add('selected');
     }
 
-    // Update tooltip
+    // Update tooltip + on-bar value label
     const formattedValue = formatValue(value, metric);
     const container = bar.parentElement;
     const date = container.dataset.date;
     const hour = container.dataset.hour;
 
     if (hour) {
-      bar.title = hour + ': ' + formattedValue;
+      // Hourly chart: tooltip shows the value only (the hour is on the x-axis).
+      bar.title = formattedValue;
     } else if (date) {
       const dateObj = new Date(date);
       bar.title = dateObj.toLocaleDateString() + ': ' + formattedValue;
     }
+
+    const barVal = container.querySelector('.hc-barval');
+    if (barVal) {
+      barVal.textContent = formattedValue;
+    }
   });
+
+  // Update the hourly chart's Y-axis reference labels, if present.
+  const yvals = targetContainer.querySelectorAll('.hc-yaxis .hc-yval');
+  if (yvals.length === 3) {
+    yvals[0].textContent = formatValue(maxValue, metric);
+    yvals[1].textContent = formatValue(maxValue / 2, metric);
+    yvals[2].textContent = formatValue(0, metric);
+  }
 }
 
 function getDataAttribute(metric) {
@@ -1780,139 +2993,107 @@ function formatValue(value, metric) {
 }
 
 function renderHourlyData(hourlyData, date) {
-  console.log("[DEBUG] renderHourlyData called with data:", hourlyData);
-
   if (!hourlyData || hourlyData.length === 0) {
-    return '<div class="no-data">當日無使用資料</div>';
+    return '<div class="no-data">${I18n.t.popup.noDataMessage}</div>';
   }
 
   let html = '<div class="hourly-breakdown">';
-  html += '<h4>' + new Date(date).toLocaleDateString() + ' ' + I18n.t.popup.hourlyBreakdown + '</h4>';
+  html += '<h4>' + new Date(date).toLocaleDateString(__locale, __dateOpts()) + ' ${I18n.t.popup.hourlyBreakdown}</h4>';
 
-  // Chart tabs
   html += '<div class="chart-tabs">';
-  html += '<button class="chart-tab active" data-metric="cost">費用</button>';
-  html += '<button class="chart-tab" data-metric="inputTokens">輸入 Token</button>';
-  html += '<button class="chart-tab" data-metric="outputTokens">輸出 Token</button>';
-  html += '<button class="chart-tab" data-metric="cacheCreation">快取建立</button>';
-  html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
-  html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
+  html += '<button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>';
+  html += '<button class="chart-tab" data-metric="inputTokens">${I18n.t.popup.inputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="outputTokens">${I18n.t.popup.outputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="cacheCreation">${I18n.t.popup.cacheCreation}</button>';
+  html += '<button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>';
+  html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="hourly-chart-' + date + '">';
   html += renderHourlyChart(hourlyData, 'cost');
   html += '</div>';
   html += '</div>';
 
-  // Table
-  html += '<div class="daily-table-container">';
-  html += '<table class="daily-table">';
-  html += '<thead>';
-  html += '<tr>';
-  html += '<th>時間</th>';
-  html += '<th>費用</th>';
-  html += '<th>輸入 Token</th>';
-  html += '<th>輸出 Token</th>';
-  html += '<th>快取建立</th>';
-  html += '<th>快取讀取</th>';
-  html += '<th>訊息數</th>';
-  html += '</tr>';
-  html += '</thead>';
-  html += '<tbody>';
+  html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
+  html += '<th>${I18n.t.popup.hour}</th>';
+  html += '<th>${I18n.t.popup.cost}</th>';
+  html += '<th>${I18n.t.popup.inputTokens}</th>';
+  html += '<th>${I18n.t.popup.outputTokens}</th>';
+  html += '<th>${I18n.t.popup.cacheCreation}</th>';
+  html += '<th>${I18n.t.popup.cacheRead}</th>';
+  html += '<th>${I18n.t.popup.messages}</th>';
+  html += '</tr></thead><tbody>';
 
   hourlyData.forEach(function(item) {
     html += '<tr>';
     html += '<td class="date-cell">' + item.hour + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(__locale) + '</td>';
     html += '</tr>';
   });
 
-  html += '</tbody>';
-  html += '</table>';
-  html += '</div>';
-
-  // Store data for chart updates
+  html += '</tbody></table></div>';
   window['hourlyData_' + date] = hourlyData;
-
-  html += '</div>'; // Close hourly-breakdown
-
+  html += '</div>';
   return html;
 }
 
 function renderDailyData(dailyData, monthDate) {
-  console.log("[DEBUG] renderDailyData called with data:", dailyData);
-
   if (!dailyData || dailyData.length === 0) {
-    return '<div class="no-data">該月無使用資料</div>';
+    return '<div class="no-data">${I18n.t.popup.noDataMessage}</div>';
   }
 
   let html = '<div class="daily-breakdown">';
-  html += '<h4>' + new Date(monthDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' }) + ' 每日使用量</h4>';
+  html += '<h4>' + new Date(monthDate).toLocaleDateString(__locale, __dateOpts({ year: 'numeric', month: 'long' })) + ' ${I18n.t.popup.dailyBreakdown}</h4>';
 
-  // Chart tabs
   html += '<div class="chart-tabs">';
-  html += '<button class="chart-tab active" data-metric="cost">費用</button>';
-  html += '<button class="chart-tab" data-metric="inputTokens">輸入 Token</button>';
-  html += '<button class="chart-tab" data-metric="outputTokens">輸出 Token</button>';
-  html += '<button class="chart-tab" data-metric="cacheCreation">快取建立</button>';
-  html += '<button class="chart-tab" data-metric="cacheRead">快取讀取</button>';
-  html += '<button class="chart-tab" data-metric="messages">訊息數</button>';
+  html += '<button class="chart-tab active" data-metric="cost">${I18n.t.popup.cost}</button>';
+  html += '<button class="chart-tab" data-metric="inputTokens">${I18n.t.popup.inputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="outputTokens">${I18n.t.popup.outputTokens}</button>';
+  html += '<button class="chart-tab" data-metric="cacheCreation">${I18n.t.popup.cacheCreation}</button>';
+  html += '<button class="chart-tab" data-metric="cacheRead">${I18n.t.popup.cacheRead}</button>';
+  html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  // Chart container
   html += '<div class="chart-container">';
   html += '<div class="chart-content" id="daily-chart-' + monthDate + '">';
   html += renderDailyChart(dailyData, 'cost');
   html += '</div>';
   html += '</div>';
 
-  // Table
-  html += '<div class="daily-table-container">';
-  html += '<table class="daily-table">';
-  html += '<thead>';
-  html += '<tr>';
-  html += '<th>日期</th>';
-  html += '<th>費用</th>';
-  html += '<th>輸入 Token</th>';
-  html += '<th>輸出 Token</th>';
-  html += '<th>快取建立</th>';
-  html += '<th>快取讀取</th>';
-  html += '<th>訊息數</th>';
-  html += '</tr>';
-  html += '</thead>';
-  html += '<tbody>';
+  html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
+  html += '<th>${I18n.t.popup.date}</th>';
+  html += '<th>${I18n.t.popup.cost}</th>';
+  html += '<th>${I18n.t.popup.inputTokens}</th>';
+  html += '<th>${I18n.t.popup.outputTokens}</th>';
+  html += '<th>${I18n.t.popup.cacheCreation}</th>';
+  html += '<th>${I18n.t.popup.cacheRead}</th>';
+  html += '<th>${I18n.t.popup.messages}</th>';
+  html += '</tr></thead><tbody>';
 
   dailyData.forEach(function(item) {
     const dateObj = new Date(item.date);
-    const formattedDate = dateObj.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+    const formattedDate = dateObj.toLocaleDateString(__locale, __dateOpts({ month: 'numeric', day: 'numeric' }));
 
     html += '<tr>';
     html += '<td class="date-cell">' + formattedDate + '</td>';
     html += '<td class="cost-cell">$' + item.data.totalCost.toFixed(2) + '</td>';
-    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString() + '</td>';
-    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString() + '</td>';
+    html += '<td class="number-cell">' + item.data.totalInputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalOutputTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheCreationTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.totalCacheReadTokens.toLocaleString(__locale) + '</td>';
+    html += '<td class="number-cell">' + item.data.messageCount.toLocaleString(__locale) + '</td>';
     html += '</tr>';
   });
 
-  html += '</tbody>';
-  html += '</table>';
-  html += '</div>';
-
-  // Store data for chart updates
+  html += '</tbody></table></div>';
   window['dailyData_' + monthDate] = dailyData;
-
-  html += '</div>'; // Close daily-breakdown
-
+  html += '</div>';
   return html;
 }
 
@@ -1977,7 +3158,7 @@ function renderDailyChart(dailyData, metric) {
     html += 'data-cache-creation="' + item.data.totalCacheCreationTokens + '" ';
     html += 'data-cache-read="' + item.data.totalCacheReadTokens + '" ';
     html += 'data-messages="' + item.data.messageCount + '" ';
-    html += 'title="' + dateObj.toLocaleDateString('zh-TW') + ': ' + formatValue(value, metric) + '">';
+    html += 'title="' + dateObj.toLocaleDateString(__locale, __dateOpts()) + ': ' + formatValue(value, metric) + '">';
     html += '</div>';
     html += '<div class="chart-label">' + shortDate + '</div>';
     html += '</div>';

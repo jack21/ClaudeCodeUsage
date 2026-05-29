@@ -3,3 +3,10 @@ node_modules
 .vscode-test/
 *.vsix
 .DS_Store
+
+# Secrets — belt-and-braces. Source never reads these,
+# but keep accidental drops out of git.
+.env
+.env.*
+*.env.local
+secrets.json
