@@ -140,7 +140,10 @@ const NON_CLAUDE_PRICING: Record<string, ModelPricing> = {
 // so direct lookups stay fast; anything not listed is resolved by getModelPricing()'s
 // family-aware fallback below.
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Claude Opus 4.7 / 4.6
+  // Claude Opus 4.8 / 4.7 / 4.6 — assumed at the current Opus tier rate
+  // ($5 / $25 / $6.25 / $0.5 per MTok). If Anthropic later differentiates
+  // Opus 4.8 pricing, override here or pull via "Refresh Token Pricing".
+  'claude-opus-4-8': OPUS_CURRENT,
   'claude-opus-4-7': OPUS_CURRENT,
   'claude-opus-4-6': OPUS_CURRENT,
 
