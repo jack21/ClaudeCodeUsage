@@ -362,7 +362,9 @@ export class ClaudeDataLoader {
         replacedByDedup: 0,
         skippedByDedup: 0,
         kept: 0,
-        models: {} as Record<string, number>, // model name → kept-record count
+        // model name → { count, totalTokens }. totalTokens lets us tell whether
+        // records exist but are all zeros (proxy-placeholder only).
+        models: {} as Record<string, { count: number; tokens: number }>,
       };
 
       for (const file of sortedFiles) {
@@ -429,7 +431,11 @@ export class ClaudeDataLoader {
               stats.kept += 1;
               const modelName =
                 typeof record.message?.model === 'string' ? record.message.model : '<no-model>';
-              stats.models[modelName] = (stats.models[modelName] || 0) + 1;
+              if (!stats.models[modelName]) {
+                stats.models[modelName] = { count: 0, tokens: 0 };
+              }
+              stats.models[modelName].count += 1;
+              stats.models[modelName].tokens += this.tokenSum(record);
               if (uniqueHash) {
                 processedHashes.set(uniqueHash, records.length - 1);
               }
@@ -453,11 +459,18 @@ export class ClaudeDataLoader {
         const rejectedSummary = Object.entries(stats.rejected)
           .map(([reason, count]) => `${reason}=${count}`)
           .join(', ') || 'none';
-        // List models sorted by kept-record count desc — instantly shows which
-        // model names actually appear in the user's data (incl. proxy aliases).
+        // List models sorted by kept-record count desc, with each entry's
+        // total token sum. If a model shows up with N records but 0 tokens
+        // it means every record for that model was a proxy zero-placeholder
+        // and the real values were never written — that's the missing-Flash
+        // story.
+        const fmt = (n: number): string =>
+          n >= 1e6 ? `${(n / 1e6).toFixed(1)}M`
+          : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K`
+          : `${n}`;
         const modelsSummary = Object.entries(stats.models)
-          .sort(([, a], [, b]) => b - a)
-          .map(([name, count]) => `${name}=${count}`)
+          .sort(([, a], [, b]) => b.count - a.count)
+          .map(([name, m]) => `${name}=${m.count}/${fmt(m.tokens)}`)
           .join(', ') || 'none';
         log(
           `loader: ${stats.files} files, ${stats.linesScanned} lines | ` +

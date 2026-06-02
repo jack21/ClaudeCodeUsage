@@ -226,9 +226,10 @@ export class StatusBarManager {
   }
 
   /** Progress bar built from nested coloured <span>s. VS Code's tooltip
-   * Markdown sanitiser strips SVG, but `background-color`, `font-size` and
-   * `border-radius` survive — so the bar is two spans wrapped in a third
-   * acting as the 100% gray "track".
+   * Markdown sanitiser strips SVG, but `background-color`, `font-size`,
+   * `border-radius` and `border` survive — so the bar is a coloured inner
+   * span wrapped in a gray-tracked outer with a visible 1px border that
+   * draws the 0-100% frame regardless of fill.
    *
    * Bar colour mirrors the status-bar warning/error thresholds (amber at
    * >=80%, red at >=95%) so the visual signal matches the indicator. */
@@ -240,13 +241,14 @@ export class StatusBarManager {
     if (pct >= 95) { color = '#f44336'; }     // red
     else if (pct >= 80) { color = '#ff9800'; } // amber
     const nbsp = (n: number) => '&nbsp;'.repeat(n);
-    // font-size 60% compresses both bar height and width; the outer span's
-    // semi-opaque gray draws the 100% boundary frame and is bumped to 0.55
-    // opacity so it's visible on both light and dark themes; border-radius
-    // softens the bar corners.
+    // font-size 48% squashes bar height; the outer 1px gray border makes
+    // the 0-100% frame visible at a glance so users can see where the bar
+    // ends even when fill is low.
     return (
-      `<span style="background-color:rgba(128,128,128,0.55);font-size:60%;border-radius:4px;">` +
-        `<span style="background-color:${color};border-radius:4px;">${nbsp(filled)}</span>` +
+      `<span style="background-color:rgba(128,128,128,0.4);` +
+        `border:1px solid rgba(128,128,128,0.7);` +
+        `font-size:48%;border-radius:4px;">` +
+        `<span style="background-color:${color};border-radius:3px;">${nbsp(filled)}</span>` +
         `${nbsp(empty)}` +
       `</span>`
     );
