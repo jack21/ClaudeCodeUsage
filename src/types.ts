@@ -139,6 +139,10 @@ export interface ExtensionConfig {
   // the extension falls back to the interval-based refresh, which is calmer
   // but lags behind real-time.
   fileWatching: boolean;
+  // Skip the dashboard webview on auto-refreshes (status bar still updates).
+  // Use when the constantly-reloading dashboard interferes with reading
+  // numbers while an agent is actively writing.
+  pauseDashboardRefresh: boolean;
 }
 
 export interface ModelPricing {

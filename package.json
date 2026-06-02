@@ -131,6 +131,11 @@
           "type": "boolean",
           "default": true,
           "description": "Watch Claude Code log files and refresh the status bar within ~1.5s of each new message. Disable to fall back to the slower interval-based refresh (claudeCodeUsage.refreshInterval) — useful if the constant refresh feels distracting during active sessions."
+        },
+        "claudeCodeUsage.pauseDashboardRefresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip the dashboard webview on automatic refreshes (status bar still updates). When enabled, the dashboard only updates when you run 'Refresh Usage Data' manually — handy if a constantly-reloading dashboard interferes with reading numbers while an agent is actively writing."
         }
       }
     },

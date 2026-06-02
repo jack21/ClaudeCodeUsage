@@ -40,7 +40,7 @@ export class ClaudeApiClient {
 
   private log(line: string): void {
     if (this.out) {
-      const ts = new Date().toISOString().slice(11, 19);
+      const ts = new Date().toLocaleTimeString(undefined, { hour12: false });
       this.out.appendLine(`[${ts}] ${line}`);
     }
   }

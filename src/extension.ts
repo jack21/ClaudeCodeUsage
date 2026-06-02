@@ -55,7 +55,9 @@ export class ClaudeCodeUsageExtension {
   private setupCommands(): void {
     const commands = [
       vscode.commands.registerCommand('claudeCodeUsage.refresh', () => {
-        this.refreshData();
+        // Manual refresh always updates the dashboard even when
+        // pauseDashboardRefresh is on.
+        this.refreshData(true);
       }),
       vscode.commands.registerCommand('claudeCodeUsage.showDetails', () => {
         this.webviewProvider.show();
@@ -290,7 +292,8 @@ export class ClaudeCodeUsageExtension {
         config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
       projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
-      fileWatching: config.get('fileWatching', true)
+      fileWatching: config.get('fileWatching', true),
+      pauseDashboardRefresh: config.get('pauseDashboardRefresh', false)
     };
   }
 
@@ -408,9 +411,14 @@ export class ClaudeCodeUsageExtension {
     return this.cache.usageLimits;
   }
 
-  private async refreshData(): Promise<void> {
+  private async refreshData(manualTrigger: boolean = false): Promise<void> {
     try {
       const config = this.getConfiguration();
+      // When the user has paused dashboard refresh, auto-triggers (timer +
+      // fs.watch) skip the webview update entirely; the status bar still
+      // refreshes so today's cost / quota stay live. Manual command always
+      // refreshes everything so the user can force-update on demand.
+      const updateWebview = manualTrigger || !config.pauseDashboardRefresh;
 
       // Quota is account-level, decoupled from local data. Refresh and push
       // it unconditionally, even when the workspace has no Claude history or
@@ -427,7 +435,9 @@ export class ClaudeCodeUsageExtension {
       if (!dataDirectory) {
         const error = 'Claude data directory not found. Please check your configuration.';
         this.statusBar.updateUsageData(null, null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
+        if (updateWebview) {
+          this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
+        }
         return;
       }
 
@@ -444,11 +454,16 @@ export class ClaudeCodeUsageExtension {
       }
 
       this.statusBar.setLoading(true);
-      this.webviewProvider.setLoading(true);
+      if (updateWebview) {
+        this.webviewProvider.setLoading(true);
+      }
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
         analyzeContent: config.enableContentAnalysis,
-        log: (line) => this.outputChannel.appendLine(`[${new Date().toISOString().slice(11, 19)}] ${line}`)
+        log: (line) =>
+          this.outputChannel.appendLine(
+            `[${new Date().toLocaleTimeString(undefined, { hour12: false })}] ${line}`
+          )
       });
       const records = loaded.records;
       const contentAnalysis = loaded.contentAnalysis;
@@ -460,7 +475,9 @@ export class ClaudeCodeUsageExtension {
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
         this.statusBar.updateUsageData(null, null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
+        if (updateWebview) {
+          this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
+        }
         return;
       }
 
@@ -479,14 +496,18 @@ export class ClaudeCodeUsageExtension {
       // Update UI — quota was already pushed above, so we pass it again only
       // to keep the success-path signature stable.
       this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
+      if (updateWebview) {
+        this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
 
       this.statusBar.updateUsageData(null, null, errorMessage);
-      this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
+      if (manualTrigger || !this.getConfiguration().pauseDashboardRefresh) {
+        this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
+      }
     }
   }
 
