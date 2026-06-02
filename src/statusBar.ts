@@ -30,22 +30,27 @@ export class StatusBarManager {
     error?: string,
     usageLimits?: ClaudeApiUsageResponse | null
   ): void {
+    // Quota is account-level and decoupled from local-data state: the caller
+    // is expected to call updateQuota() separately so workspaces without
+    // history still see it. We only touch the cost item here.
     this.isLoading = false;
 
     if (error) {
       this.showError(error);
-      this.quotaItem.hide();
       return;
     }
 
     if (!todayData) {
       this.showNoData();
-      this.quotaItem.hide();
       return;
     }
 
     this.showTodayData(todayData, sessionData ?? null);
-    this.updateQuota(usageLimits ?? null);
+    // The usageLimits arg is kept for callers that want a single-call update
+    // path; quota was already refreshed earlier in this cycle.
+    if (usageLimits !== undefined) {
+      this.updateQuota(usageLimits);
+    }
   }
 
   private updateStatusBar(): void {

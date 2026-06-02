@@ -126,6 +126,11 @@
           ],
           "default": "git",
           "description": "How the Projects tab groups working directories. 'git' groups by enclosing git repository (default); 'folder' groups by the heuristic top-level project folder only (no filesystem walk); 'flat' shows every working directory as its own row."
+        },
+        "claudeCodeUsage.fileWatching": {
+          "type": "boolean",
+          "default": true,
+          "description": "Watch Claude Code log files and refresh the status bar within ~1.5s of each new message. Disable to fall back to the slower interval-based refresh (claudeCodeUsage.refreshInterval) — useful if the constant refresh feels distracting during active sessions."
         }
       }
     },

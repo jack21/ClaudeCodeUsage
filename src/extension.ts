@@ -289,7 +289,8 @@ export class ClaudeCodeUsageExtension {
       adviceReasoningEffort:
         config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
-      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat'
+      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
+      fileWatching: config.get('fileWatching', true)
     };
   }
 
@@ -323,6 +324,10 @@ export class ClaudeCodeUsageExtension {
    */
   private async startFileWatching(): Promise<void> {
     const config = this.getConfiguration();
+    if (!config.fileWatching) {
+      this.stopFileWatching();
+      return;
+    }
     const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(config.dataDirectory || undefined);
     if (!dataDirectory) {
       return;
@@ -388,7 +393,10 @@ export class ClaudeCodeUsageExtension {
       return null;
     }
     const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
-    if (this.cache.usageLimits && age < 120000) {
+    // 30-second cache: short enough that switching between workspaces shows
+    // near-current data, long enough to avoid hammering the /usage endpoint
+    // on every keystroke-triggered refresh.
+    if (this.cache.usageLimits && age < 30000) {
       return this.cache.usageLimits;
     }
     const fetched = await this.apiClient.fetchUsageLimits();
@@ -404,6 +412,13 @@ export class ClaudeCodeUsageExtension {
   private async refreshData(): Promise<void> {
     try {
       const config = this.getConfiguration();
+
+      // Quota is account-level, decoupled from local data. Refresh and push
+      // it unconditionally, even when the workspace has no Claude history or
+      // when something later fails — otherwise opening VS Code in a fresh
+      // project would hide a quota indicator that ought to be account-wide.
+      const usageLimits = await this.maybeFetchUsageLimits(config);
+      this.statusBar.updateQuota(usageLimits);
 
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
@@ -424,11 +439,8 @@ export class ClaudeCodeUsageExtension {
       const needFullRefresh =
         dirChanged || this.cache.records.length === 0 || latestMtime > this.cache.lastUpdate.getTime();
 
-      const usageLimits = await this.maybeFetchUsageLimits(config);
-
       if (!needFullRefresh) {
-        // Idle: logs unchanged — only refresh the (independent) quota indicator.
-        this.statusBar.updateQuota(usageLimits);
+        // Idle: logs unchanged. Quota was already refreshed above.
         return;
       }
 
@@ -464,7 +476,8 @@ export class ClaudeCodeUsageExtension {
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
-      // Update UI
+      // Update UI — quota was already pushed above, so we pass it again only
+      // to keep the success-path signature stable.
       this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
       this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
 
