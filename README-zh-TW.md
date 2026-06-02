@@ -126,6 +126,23 @@
 - 如遇到速度變慢，可增加重新整理間隔
 - 擴充功能使用 1 分鐘快取來減少檔案 I/O
 
+### 缺少先前月份的歷史記錄
+
+此擴充功能會讀取 Claude Code 的對話記錄，而 Claude Code 會自動刪除超過其
+`cleanupPeriodDays` 設定（**預設:30 天**）的對話記錄。一旦這些記錄被刪除，
+對應的用量便無法再顯示。
+
+若要保留更多歷史記錄，請在 Claude Code 設定檔（`~/.claude/settings.json`）中
+調高 `cleanupPeriodDays`:
+
+```json
+{
+  "cleanupPeriodDays": 365
+}
+```
+
+此設定僅影響自此之後保留的資料 — 已被刪除的記錄無法復原。
+
 ## 授權
 
 MIT

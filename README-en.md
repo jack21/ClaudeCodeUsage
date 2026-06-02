@@ -124,6 +124,25 @@ Access settings via `File > Preferences > Settings` and search for "Claude Code 
 - Increase refresh interval if experiencing slowdowns
 - Extension uses 1-minute caching to minimize file I/O
 
+### Missing History from Previous Months
+
+This extension reads Claude Code's conversation transcripts, and Claude Code
+automatically deletes transcripts older than its `cleanupPeriodDays` setting
+(**default: 30 days**). Once those logs are deleted, the corresponding usage
+can no longer be displayed.
+
+To keep more history, raise `cleanupPeriodDays` in your Claude Code settings
+file (`~/.claude/settings.json`):
+
+```json
+{
+  "cleanupPeriodDays": 365
+}
+```
+
+This only affects data retained from now on — transcripts that have already
+been deleted cannot be recovered.
+
 ## License
 
 MIT

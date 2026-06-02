@@ -215,6 +215,18 @@ authoritative.
   If you still hit issues, raise `refreshInterval` or set
   `enableContentAnalysis` to `false`.
 
+**Previous months' history is missing**
+- The extension reads Claude Code's conversation transcripts, and Claude Code
+  automatically deletes transcripts older than its `cleanupPeriodDays` setting
+  (default **30 days**). Once the logs are gone, that usage can no longer be
+  shown. To keep more history, raise `cleanupPeriodDays` in your Claude Code
+  settings (`~/.claude/settings.json`):
+  ```json
+  { "cleanupPeriodDays": 365 }
+  ```
+  This affects data retained from now on; already-deleted logs cannot be
+  recovered.
+
 ---
 
 ## Credits
