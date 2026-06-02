@@ -335,7 +335,12 @@ export class ClaudeDataLoader {
       }
 
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
-      const processedHashes = new Set<string>();
+      // hash → records[] index. Some proxies (mimo / CC Switch) write two
+      // records per message: a tokens=0 placeholder when streaming starts,
+      // and the real values when the response finishes. Both records share
+      // the same messageId, so they hash identically. We keep whichever
+      // record has the higher total token sum (issue #18).
+      const processedHashes = new Map<string, number>();
       const records: ClaudeUsageRecord[] = [];
       // Content analysis (last 30 days) is optional — skipped when the user
       // disables it via claudeCodeUsage.enableContentAnalysis.
@@ -369,14 +374,6 @@ export class ClaudeDataLoader {
               const data = parsed;
               const uniqueHash = this.createUniqueHash(data);
 
-              if (uniqueHash && processedHashes.has(uniqueHash)) {
-                continue;
-              }
-
-              if (uniqueHash) {
-                processedHashes.add(uniqueHash);
-              }
-
               // Tag the record with the session/project it came from.
               // Prefer the real working directory (`cwd`) recorded in the log line
               // over the lossy, dash-encoded folder name when it is available.
@@ -392,7 +389,22 @@ export class ClaudeDataLoader {
               }
               const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
               record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
+
+              if (uniqueHash && processedHashes.has(uniqueHash)) {
+                // Duplicate — keep whichever record has more tokens. This
+                // resolves the proxy "placeholder + real value" pair from
+                // issue #18 without needing to detect the proxy.
+                const existingIndex = processedHashes.get(uniqueHash)!;
+                if (this.tokenSum(record) > this.tokenSum(records[existingIndex])) {
+                  records[existingIndex] = record;
+                }
+                continue;
+              }
+
               records.push(record);
+              if (uniqueHash) {
+                processedHashes.set(uniqueHash, records.length - 1);
+              }
             } catch (parseError) {
               console.warn(`Failed to parse line in ${file}:`, parseError);
             }
@@ -424,6 +436,15 @@ export class ClaudeDataLoader {
     }
 
     return `${messageId || 'no-msg'}-${requestId || 'no-req'}`;
+  }
+
+  /** Total tokens recorded on a usage record, across all four buckets. Used
+   * to decide which of two records sharing the same uniqueHash to keep
+   * (issue #18 — proxy writes placeholder then real values). */
+  private static tokenSum(r: any): number {
+    const u = r?.message?.usage || {};
+    return (u.input_tokens || 0) + (u.output_tokens || 0)
+      + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
   }
 
   /**
