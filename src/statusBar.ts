@@ -225,37 +225,28 @@ export class StatusBarManager {
     );
   }
 
-  /** Progress bar built from four side-by-side coloured <span>s. VS Code's
-   * tooltip Markdown sanitiser strips most CSS, but `background-color` and
-   * `font-size` reliably survive on `<span>` — so we build the bar from
-   * adjacent solid-coloured cells:
-   *
-   *   [dark-gray-bookend][fill-coloured filled cells][light-gray empty][dark-gray-bookend]
-   *
-   * The dark-gray bookends mark the 0% and 100% boundaries with a strong
-   * contrast that's visible on both light and dark themes; the medium-gray
-   * empty cells make the unfilled range obvious without competing with the
-   * coloured fill.
+  /** Progress bar: nested <span>s with solid background colours so the
+   * sanitiser keeps everything we need. The outer span paints the full
+   * 100% track in solid medium gray (#bbb) — visible on both light and
+   * dark themes without relying on rgba opacity that some themes wash out.
+   * The inner span paints the filled portion in colour, sitting on top of
+   * the gray track.
    *
    * Bar colour mirrors the status-bar warning/error thresholds (amber at
    * >=80%, red at >=95%) so the visual signal matches the indicator. */
   private progressBarSvg(pct: number): string {
-    const TOTAL = 20; // fill segments between the two bookends
+    const TOTAL = 24;
     const filled = Math.max(0, Math.min(TOTAL, Math.round((pct / 100) * TOTAL)));
     const empty = TOTAL - filled;
     let color = '#4caf50';                    // green
     if (pct >= 95) { color = '#f44336'; }     // red
     else if (pct >= 80) { color = '#ff9800'; } // amber
     const nbsp = (n: number) => '&nbsp;'.repeat(n);
-    // font-size 48% squashes height into a thin strip. Theme-neutral colours:
-    //   #666 dark-gray bookends (visible on light AND dark backgrounds)
-    //   #cccccc empty fill (clearly different from the bookends)
-    const SIZE = 'font-size:48%';
     return (
-      `<span style="background-color:#666;${SIZE};">&nbsp;</span>` +
-      `<span style="background-color:${color};${SIZE};">${nbsp(filled)}</span>` +
-      `<span style="background-color:#cccccc;${SIZE};">${nbsp(empty)}</span>` +
-      `<span style="background-color:#666;${SIZE};">&nbsp;</span>`
+      `<span style="background-color:#bbbbbb;font-size:48%;border-radius:3px;">` +
+        `<span style="background-color:${color};border-radius:3px;">${nbsp(filled)}</span>` +
+        `${nbsp(empty)}` +
+      `</span>`
     );
   }
 

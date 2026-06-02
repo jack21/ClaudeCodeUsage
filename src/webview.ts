@@ -58,6 +58,13 @@ export class UsageWebviewProvider {
         case 'getAdvice':
           vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
+        case 'setPauseDashboardRefresh':
+          // Persist the in-dashboard toggle so it survives reload and stays in
+          // sync with VS Code Settings.
+          await vscode.workspace
+            .getConfiguration('claudeCodeUsage')
+            .update('pauseDashboardRefresh', !!message.value, vscode.ConfigurationTarget.Global);
+          break;
         case 'tabChanged':
           this.currentTab = message.tab;
           break;
@@ -284,22 +291,37 @@ export class UsageWebviewProvider {
       this.getStyles() +
       `</style>
       </head>
-      <body>
+      <body class="${
+        vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
+          ? 'auto-off'
+          : ''
+      }">
         <div class="container">
           <header>
             <h1>` +
       title +
       `</h1>
             <div class="actions">
-              <button onclick="refresh()" class="btn-secondary">` +
+              <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="btn-secondary" title="Toggle dashboard auto-refresh — when off, only the status bar updates automatically and you must press Refresh Now to update this page."></button>
+              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
       refresh +
       `</button>
               <button onclick="openSettings()" class="btn-secondary">` +
       settings +
       `</button>
             </div>
-          </header>
-
+          </header>` +
+      // Initialise the auto-refresh button label on first render. JS sets it
+      // again on every toggle, but we need it to be correct before any click.
+      `
+          <script>
+            (function(){
+              var off = document.body.classList.contains('auto-off');
+              var btn = document.getElementById('autoRefreshBtn');
+              if (btn) btn.textContent = off ? '⏸ Auto-refresh: OFF' : '🔄 Auto-refresh: ON';
+            })();
+          </script>` +
+      `
           <div class="tabs">
             <button id="tab-today" class="tab ` +
       todayActive +
@@ -1563,6 +1585,15 @@ export class UsageWebviewProvider {
         background: var(--vscode-button-secondaryHoverBackground);
       }
 
+      /* Refresh-Now button is only relevant when auto-refresh is OFF — hide
+         it by default, show only when the body carries the .auto-off class. */
+      .btn-refresh-now {
+        display: none;
+      }
+      body.auto-off .btn-refresh-now {
+        display: inline-block;
+      }
+
       .tabs {
         display: flex;
         margin-bottom: 20px;
@@ -2395,6 +2426,16 @@ const __dateOpts = (extra) => {
 function refresh() {
   console.log("[DEBUG] refresh called");
   vscode.postMessage({ command: 'refresh' });
+}
+
+function toggleAutoRefresh() {
+  var nowOff = !document.body.classList.contains('auto-off');
+  document.body.classList.toggle('auto-off', nowOff);
+  var btn = document.getElementById('autoRefreshBtn');
+  if (btn) {
+    btn.textContent = nowOff ? '⏸ Auto-refresh: OFF' : '🔄 Auto-refresh: ON';
+  }
+  vscode.postMessage({ command: 'setPauseDashboardRefresh', value: nowOff });
 }
 
 function openSettings() {
