@@ -225,25 +225,30 @@ export class StatusBarManager {
     );
   }
 
-  /** Progress bar built from two coloured <span>s separated only by an
-   * `&nbsp;`-padded background. VS Code's tooltip Markdown renderer strips
-   * SVG, but `background-color` on a span is in the safe-CSS allowlist and
-   * survives — so this is the most portable way to render a real progress
-   * bar in a hover tooltip.
+  /** Progress bar built from nested coloured <span>s. VS Code's tooltip
+   * Markdown sanitiser strips SVG, but `background-color` and `font-size`
+   * survive — so we use a 100%-width gray-framed outer span (showing the
+   * boundary regardless of fill) and a coloured inner span with as many
+   * `&nbsp;` as the percentage warrants.
    *
    * Bar colour mirrors the status-bar warning/error thresholds (amber at
    * >=80%, red at >=95%) so the visual signal matches the indicator. */
   private progressBarSvg(pct: number): string {
-    const TOTAL = 16; // total bar segments — 16 looks like a ~80px bar
+    const TOTAL = 24; // wider bar — easier to read at low percentages
     const filled = Math.max(0, Math.min(TOTAL, Math.round((pct / 100) * TOTAL)));
     const empty = TOTAL - filled;
     let color = '#4caf50';                    // green
     if (pct >= 95) { color = '#f44336'; }     // red
     else if (pct >= 80) { color = '#ff9800'; } // amber
     const nbsp = (n: number) => '&nbsp;'.repeat(n);
+    // font-size 70% compresses bar height (and width) so the bar reads as a
+    // thin strip; the outer span's gray background draws the "track" / 100%
+    // frame so users can see where the bar ends regardless of fill.
     return (
-      `<span style="background-color:${color};">${nbsp(filled)}</span>` +
-      `<span style="background-color:rgba(128,128,128,0.35);">${nbsp(empty)}</span>`
+      `<span style="background-color:rgba(128,128,128,0.3);font-size:70%;">` +
+        `<span style="background-color:${color};">${nbsp(filled)}</span>` +
+        `${nbsp(empty)}` +
+      `</span>`
     );
   }
 
@@ -262,10 +267,16 @@ export class StatusBarManager {
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
 
-  /** Localised weekday + time of a weekly reset, e.g. "Wed 03:00". */
+  /** Localised weekday + time of a weekly reset, in 24-hour form
+   * (e.g. "Wed 03:00"). hour12:false suppresses AM/PM that some locales add. */
   private formatWeeklyReset(target: Date): string {
     try {
-      return target.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      return target.toLocaleString(undefined, {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
     } catch {
       return target.toISOString();
     }
