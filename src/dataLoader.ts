@@ -362,6 +362,7 @@ export class ClaudeDataLoader {
         replacedByDedup: 0,
         skippedByDedup: 0,
         kept: 0,
+        models: {} as Record<string, number>, // model name → kept-record count
       };
 
       for (const file of sortedFiles) {
@@ -426,6 +427,9 @@ export class ClaudeDataLoader {
 
               records.push(record);
               stats.kept += 1;
+              const modelName =
+                typeof record.message?.model === 'string' ? record.message.model : '<no-model>';
+              stats.models[modelName] = (stats.models[modelName] || 0) + 1;
               if (uniqueHash) {
                 processedHashes.set(uniqueHash, records.length - 1);
               }
@@ -449,12 +453,19 @@ export class ClaudeDataLoader {
         const rejectedSummary = Object.entries(stats.rejected)
           .map(([reason, count]) => `${reason}=${count}`)
           .join(', ') || 'none';
+        // List models sorted by kept-record count desc — instantly shows which
+        // model names actually appear in the user's data (incl. proxy aliases).
+        const modelsSummary = Object.entries(stats.models)
+          .sort(([, a], [, b]) => b - a)
+          .map(([name, count]) => `${name}=${count}`)
+          .join(', ') || 'none';
         log(
           `loader: ${stats.files} files, ${stats.linesScanned} lines | ` +
             `kept=${stats.kept}, dedup-replaced=${stats.replacedByDedup}, ` +
             `dedup-skipped=${stats.skippedByDedup}, parse-errors=${stats.parseErrors} | ` +
             `rejected: ${rejectedSummary}`
         );
+        log(`loader: models seen: ${modelsSummary}`);
       }
       return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
     } catch (error) {
