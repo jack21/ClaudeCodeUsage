@@ -225,21 +225,25 @@ export class StatusBarManager {
     );
   }
 
-  /** Inline SVG progress bar. Colour matches the status-bar warning/error
-   * thresholds (yellow at >=80%, red at >=95%) so the visual signal is
-   * consistent with the indicator itself. */
+  /** Progress bar built from two coloured <span>s separated only by an
+   * `&nbsp;`-padded background. VS Code's tooltip Markdown renderer strips
+   * SVG, but `background-color` on a span is in the safe-CSS allowlist and
+   * survives — so this is the most portable way to render a real progress
+   * bar in a hover tooltip.
+   *
+   * Bar colour mirrors the status-bar warning/error thresholds (amber at
+   * >=80%, red at >=95%) so the visual signal matches the indicator. */
   private progressBarSvg(pct: number): string {
-    const W = 120;
-    const H = 8;
-    const filled = Math.max(0, Math.min(W, (pct / 100) * W));
-    let color = '#4caf50';                   // green
-    if (pct >= 95) { color = '#f44336'; }    // red
+    const TOTAL = 16; // total bar segments — 16 looks like a ~80px bar
+    const filled = Math.max(0, Math.min(TOTAL, Math.round((pct / 100) * TOTAL)));
+    const empty = TOTAL - filled;
+    let color = '#4caf50';                    // green
+    if (pct >= 95) { color = '#f44336'; }     // red
     else if (pct >= 80) { color = '#ff9800'; } // amber
+    const nbsp = (n: number) => '&nbsp;'.repeat(n);
     return (
-      `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
-      `<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="rgba(128,128,128,0.3)"/>` +
-      `<rect x="0" y="0" width="${filled.toFixed(2)}" height="${H}" rx="3" fill="${color}"/>` +
-      `</svg>`
+      `<span style="background-color:${color};">${nbsp(filled)}</span>` +
+      `<span style="background-color:rgba(128,128,128,0.35);">${nbsp(empty)}</span>`
     );
   }
 

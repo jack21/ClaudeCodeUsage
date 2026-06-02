@@ -55,36 +55,41 @@ async function findJsonlFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-// Native validation function to replace zod
+// Identify usage records by structural shape only.
+//
+// Previously we dropped any record whose secondary fields had an unexpected
+// type (e.g. `model` is null, `requestId` is a number). That cost us records
+// from proxies and from new Claude Code features (xhigh / ultracode /
+// workflow) that occasionally write atypical field types. Now we accept any
+// record that has the minimum it takes to count tokens — timestamp + the
+// numeric token fields — and downstream code is responsible for coercing the
+// optional fields safely.
+//
+// The companion function `validationDropReason` lets the loader log *why* a
+// record was rejected so users can spot format drift without us guessing.
 function validateUsageRecord(data: any): data is ClaudeUsageRecord {
-  // Basic structure validation
   if (!data || typeof data !== 'object') return false;
-
-  // Required timestamp
   if (typeof data.timestamp !== 'string') return false;
-
-  // Required message with usage
   if (!data.message || typeof data.message !== 'object') return false;
   if (!data.message.usage || typeof data.message.usage !== 'object') return false;
-
   const usage = data.message.usage;
-
-  // Required token fields must be numbers
+  // We require both token fields to be numbers — they are the whole point of
+  // the record. Anything else is best-effort: a missing model, a null
+  // requestId, an isApiErrorMessage that's "true" (string) — they get
+  // accepted now, and the aggregators treat the value as 0/undefined.
   if (typeof usage.input_tokens !== 'number') return false;
   if (typeof usage.output_tokens !== 'number') return false;
-
-  // Optional fields validation
-  if (usage.cache_creation_input_tokens !== undefined && typeof usage.cache_creation_input_tokens !== 'number') return false;
-  if (usage.cache_read_input_tokens !== undefined && typeof usage.cache_read_input_tokens !== 'number') return false;
-
-  // Optional fields validation
-  if (data.message.model !== undefined && typeof data.message.model !== 'string') return false;
-  if (data.message.id !== undefined && typeof data.message.id !== 'string') return false;
-  if (data.costUSD !== undefined && typeof data.costUSD !== 'number') return false;
-  if (data.requestId !== undefined && typeof data.requestId !== 'string') return false;
-  if (data.isApiErrorMessage !== undefined && typeof data.isApiErrorMessage !== 'boolean') return false;
-
   return true;
+}
+
+function validationDropReason(data: any): string {
+  if (!data || typeof data !== 'object') return 'not-an-object';
+  if (typeof data.timestamp !== 'string') return 'timestamp-missing-or-non-string';
+  if (!data.message || typeof data.message !== 'object') return 'message-missing';
+  if (!data.message.usage || typeof data.message.usage !== 'object') return 'usage-missing';
+  if (typeof data.message.usage.input_tokens !== 'number') return 'input_tokens-not-a-number';
+  if (typeof data.message.usage.output_tokens !== 'number') return 'output_tokens-not-a-number';
+  return 'other';
 }
 
 // --- Content-consumption analysis helpers ---
@@ -319,9 +324,10 @@ export class ClaudeDataLoader {
 
   static async loadUsageRecords(
     dataDirectory?: string,
-    options?: { analyzeContent?: boolean }
+    options?: { analyzeContent?: boolean; log?: (line: string) => void }
   ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis | null }> {
     const analyzeContent = options?.analyzeContent !== false; // default true
+    const log = options?.log;
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
       const allFiles: string[] = [];
@@ -346,6 +352,17 @@ export class ClaudeDataLoader {
       // disables it via claudeCodeUsage.enableContentAnalysis.
       const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
       let fileIndex = 0;
+      // Diagnostic counters so the "Show Diagnostic Logs" command can explain
+      // how many records were seen / rejected / deduped without speculation.
+      const stats = {
+        files: sortedFiles.length,
+        linesScanned: 0,
+        parseErrors: 0,
+        rejected: {} as Record<string, number>,
+        replacedByDedup: 0,
+        skippedByDedup: 0,
+        kept: 0,
+      };
 
       for (const file of sortedFiles) {
         try {
@@ -359,6 +376,7 @@ export class ClaudeDataLoader {
           const sessionInfo = this.parseSessionInfo(file);
 
           for (const line of lines) {
+            stats.linesScanned += 1;
             try {
               const parsed = JSON.parse(line) as unknown;
 
@@ -368,6 +386,8 @@ export class ClaudeDataLoader {
               }
 
               if (!validateUsageRecord(parsed)) {
+                const reason = validationDropReason(parsed);
+                stats.rejected[reason] = (stats.rejected[reason] || 0) + 1;
                 continue;
               }
 
@@ -397,15 +417,20 @@ export class ClaudeDataLoader {
                 const existingIndex = processedHashes.get(uniqueHash)!;
                 if (this.tokenSum(record) > this.tokenSum(records[existingIndex])) {
                   records[existingIndex] = record;
+                  stats.replacedByDedup += 1;
+                } else {
+                  stats.skippedByDedup += 1;
                 }
                 continue;
               }
 
               records.push(record);
+              stats.kept += 1;
               if (uniqueHash) {
                 processedHashes.set(uniqueHash, records.length - 1);
               }
             } catch (parseError) {
+              stats.parseErrors += 1;
               console.warn(`Failed to parse line in ${file}:`, parseError);
             }
           }
@@ -420,6 +445,17 @@ export class ClaudeDataLoader {
         }
       }
 
+      if (log) {
+        const rejectedSummary = Object.entries(stats.rejected)
+          .map(([reason, count]) => `${reason}=${count}`)
+          .join(', ') || 'none';
+        log(
+          `loader: ${stats.files} files, ${stats.linesScanned} lines | ` +
+            `kept=${stats.kept}, dedup-replaced=${stats.replacedByDedup}, ` +
+            `dedup-skipped=${stats.skippedByDedup}, parse-errors=${stats.parseErrors} | ` +
+            `rejected: ${rejectedSummary}`
+        );
+      }
       return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
     } catch (error) {
       console.error('Error loading usage records:', error);

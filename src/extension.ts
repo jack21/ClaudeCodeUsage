@@ -393,10 +393,9 @@ export class ClaudeCodeUsageExtension {
       return null;
     }
     const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
-    // 30-second cache: short enough that switching between workspaces shows
-    // near-current data, long enough to avoid hammering the /usage endpoint
-    // on every keystroke-triggered refresh.
-    if (this.cache.usageLimits && age < 30000) {
+    // 120-second cache: matches the polling interval and avoids hammering
+    // /usage on every file-watch tick when active sessions write rapidly.
+    if (this.cache.usageLimits && age < 120000) {
       return this.cache.usageLimits;
     }
     const fetched = await this.apiClient.fetchUsageLimits();
@@ -448,7 +447,8 @@ export class ClaudeCodeUsageExtension {
       this.webviewProvider.setLoading(true);
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
-        analyzeContent: config.enableContentAnalysis
+        analyzeContent: config.enableContentAnalysis,
+        log: (line) => this.outputChannel.appendLine(`[${new Date().toISOString().slice(11, 19)}] ${line}`)
       });
       const records = loaded.records;
       const contentAnalysis = loaded.contentAnalysis;
