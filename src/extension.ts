@@ -19,6 +19,10 @@ export class ClaudeCodeUsageExtension {
   private fileWatcher: fs.FSWatcher | undefined;
   private watchDebounceTimer: NodeJS.Timeout | undefined;
   private watchedDir: string | null = null;
+  // Guards against overlapping refreshes. The auto-refresh timer and the file
+  // watcher can both fire while a (slow) full reload is still running; without
+  // this, reloads pile up and keep re-asserting the "Loading…" spinner.
+  private isRefreshing: boolean = false;
   private cache: {
     records: any[];
     contentAnalysis: ContentAnalysis | null;
@@ -402,6 +406,12 @@ export class ClaudeCodeUsageExtension {
   }
 
   private async refreshData(): Promise<void> {
+    // Coalesce overlapping refreshes — a trigger that arrives mid-load is
+    // dropped rather than starting a second full reload on top of the first.
+    if (this.isRefreshing) {
+      return;
+    }
+    this.isRefreshing = true;
     try {
       const config = this.getConfiguration();
 
@@ -432,8 +442,14 @@ export class ClaudeCodeUsageExtension {
         return;
       }
 
-      this.statusBar.setLoading(true);
-      this.webviewProvider.setLoading(true);
+      // Only show the full-screen spinner on the very first load (nothing on
+      // screen yet). Background refreshes keep the existing dashboard/status
+      // bar visible and swap in fresh data when ready — otherwise the panel
+      // flickers to "Loading…" on every file-watch tick during active use.
+      if (this.cache.records.length === 0) {
+        this.statusBar.setLoading(true);
+        this.webviewProvider.setLoading(true);
+      }
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
         analyzeContent: config.enableContentAnalysis
@@ -474,6 +490,8 @@ export class ClaudeCodeUsageExtension {
 
       this.statusBar.updateUsageData(null, null, errorMessage);
       this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
+    } finally {
+      this.isRefreshing = false;
     }
   }
 
