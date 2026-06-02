@@ -175,51 +175,70 @@ export class StatusBarManager {
     const t = I18n.t.popup;
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
-    // supportHtml lets us use <br> inside table cells to put the weekly
-    // reset time and countdown on two lines (otherwise the cell gets long).
     md.supportHtml = true;
     md.appendMarkdown(`**${t.quota}**\n\n`);
-    // Pad each cell with non-breaking spaces on both sides so column text does
-    // not crowd the separators — VS Code's tooltip markdown renderer collapses
-    // ordinary leading/trailing whitespace, but &nbsp; survives.
-    const PAD = '  ';
-    const GAP = '    ';
+    // HTML table with embedded SVG progress bars. SVG is the most reliable
+    // VS Code can render inside a Markdown tooltip — it survives the markdown
+    // sanitiser, looks identical on light and dark themes, and lets us pick
+    // bar colour by threshold so a near-full quota visually screams.
+    md.appendMarkdown(`<table>\n`);
     md.appendMarkdown(
-      `|${PAD}${t.quotaWindow}${PAD}|${PAD}${t.share}${PAD}|${GAP}${PAD}${t.resets}${PAD}|\n`
+      `<tr><th align="left">${t.quotaWindow}</th>` +
+      `<th></th><th align="right">${t.share}</th>` +
+      `<th align="right">${t.resets}</th></tr>\n`
     );
-    md.appendMarkdown(`|:--|--:|--:|\n`);
-
     if (usageLimits.five_hour) {
-      this.appendQuotaRow(md, t.quota5h, usageLimits.five_hour, false);
+      md.appendMarkdown(this.quotaRowHtml(t.quota5h, usageLimits.five_hour, false));
     }
     if (usageLimits.seven_day) {
-      this.appendQuotaRow(md, t.quotaWeekly, usageLimits.seven_day, true);
+      md.appendMarkdown(this.quotaRowHtml(t.quotaWeekly, usageLimits.seven_day, true));
     }
     if (usageLimits.seven_day_opus) {
-      this.appendQuotaRow(md, `${t.quotaWeekly} (Opus)`, usageLimits.seven_day_opus, true);
+      md.appendMarkdown(this.quotaRowHtml(`${t.quotaWeekly} (Opus)`, usageLimits.seven_day_opus, true));
     }
-
-    md.appendMarkdown(`\n\n*${t.quotaHint}*`);
+    md.appendMarkdown(`</table>\n\n*${t.quotaHint}*`);
     return md;
   }
 
-  private appendQuotaRow(md: vscode.MarkdownString, label: string, limit: ClaudeUsageLimit, weekly: boolean): void {
+  /** Build one row of the quota tooltip table, with an SVG progress bar. */
+  private quotaRowHtml(label: string, limit: ClaudeUsageLimit, weekly: boolean): string {
     const resetDate = new Date(limit.resets_at);
-    // Weekly cell renders the reset time on one line and the countdown on
-    // the next via <br>, so the cell stays narrow with both pieces present.
     const resets = isNaN(resetDate.getTime())
       ? '—'
       : weekly
         ? `${this.formatWeeklyReset(resetDate)}<br>${this.formatCountdown(resetDate)}`
         : this.formatCountdown(resetDate);
-    const PAD = '  ';
-    const GAP = '    ';
-    md.appendMarkdown(
-      `|${PAD}${label}${PAD}|${PAD}${limit.utilization.toFixed(1)}%${PAD}|${GAP}${PAD}${resets}${PAD}|\n`
+    const pct = Math.max(0, Math.min(100, limit.utilization));
+    const bar = this.progressBarSvg(pct);
+    return (
+      `<tr>` +
+      `<td align="left"><b>${label}</b></td>` +
+      `<td>${bar}</td>` +
+      `<td align="right">${pct.toFixed(1)}%</td>` +
+      `<td align="right">${resets}</td>` +
+      `</tr>\n`
     );
   }
 
-  /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
+  /** Inline SVG progress bar. Colour matches the status-bar warning/error
+   * thresholds (yellow at >=80%, red at >=95%) so the visual signal is
+   * consistent with the indicator itself. */
+  private progressBarSvg(pct: number): string {
+    const W = 120;
+    const H = 8;
+    const filled = Math.max(0, Math.min(W, (pct / 100) * W));
+    let color = '#4caf50';                   // green
+    if (pct >= 95) { color = '#f44336'; }    // red
+    else if (pct >= 80) { color = '#ff9800'; } // amber
+    return (
+      `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
+      `<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="rgba(128,128,128,0.3)"/>` +
+      `<rect x="0" y="0" width="${filled.toFixed(2)}" height="${H}" rx="3" fill="${color}"/>` +
+      `</svg>`
+    );
+  }
+
+    /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
   private formatCountdown(target: Date): string {
     const ms = target.getTime() - Date.now();
     if (ms <= 0) {
