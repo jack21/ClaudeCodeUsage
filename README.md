@@ -4,19 +4,26 @@
 [![Open VSX Registry](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=flat-square&logo=eclipseide&label=Open%20VSX)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
-> **What this is, in one sentence:** a VS Code status-bar monitor that
-> reads your local Claude Code conversation logs and shows
-> **token-derived** usage and cost estimates — plus an optional AI advisor
-> that suggests how to use Claude Code more economically.
->
-> **What this is _not_:** a billing tool. All amounts are estimates;
-> refer to your official Anthropic account for actual charges.
+**The Claude Code coach in your status bar.** Not a billing tool. Not a
+multi-provider monitor. A focused token tracker that uses AI to help you
+use Claude Code better.
 
-> **一句话简介**:一个 VS Code 状态栏小工具,读取本地 Claude Code
-> 对话日志,按 token × 公开单价估算用量与成本;并提供可选的 AI
-> 建议功能,帮你改进使用习惯。
+> **What this is:** A VS Code status-bar monitor that reads your local
+> Claude Code conversation logs and shows **token-derived** usage and cost
+> estimates — plus an optional AI advisor that suggests how to improve
+> your prompts and reduce waste.
 >
-> **它不是什么**:账单工具。显示金额均为估算值,实际费用请以官方账单为准。
+> **What this is _not_:** a billing tool. All amounts are estimates based
+> on public per-million-token rates. Refer to your Anthropic account for
+> actual charges.
+
+> **看清你的 Claude Code 用量，让 AI 帮你用得更好。**
+>
+> **简介**：一个 VS Code 状态栏小工具，读取本地 Claude Code 对话日志，
+> 按 token × 公开单价估算用量与成本；并提供可选的 AI 建议功能，帮你优化
+> 提示词、减少不必要的 token 消耗。
+>
+> **它不是什么**：账单工具。显示金额均为估算值，实际费用请以官方账单为准。
 
 🌐 **Multi-language documentation** (v1 content; v2 translations in 2.0.1):
 [English](README-en.md) ·
@@ -215,6 +222,28 @@ authoritative.
   If you still hit issues, raise `refreshInterval` or set
   `enableContentAnalysis` to `false`.
 
+**Usage history disappears or is missing older months**
+- Claude Code automatically deletes conversation logs older than
+  `cleanupPeriodDays` (default: **30 days**). Once deleted, those records
+  cannot be recovered. To retain more history, add this to your
+  `~/.claude/settings.json`:
+  ```json
+  { "cleanupPeriodDays": 365 }
+  ```
+  This only affects logs kept from now on; already-deleted logs cannot be
+  restored. Thanks to [@nickearnshaw](https://github.com/nickearnshaw) for
+  documenting this ([PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21)).
+
+**Token counts appear lower than the model provider's own dashboard**
+- If you use Claude Code with a third-party proxy that routes requests
+  through sub-agents or background workflows (e.g. ultracode / dynamic
+  workflows), each agent writes its own `.jsonl` log file inside a
+  sub-directory. The extension reads all these files, but some proxy
+  configurations may not write agent-level records at all. Until native
+  workflow attribution is added in a future release, the total shown here
+  may be lower than the provider's upstream count. Your actual spend is
+  always on your provider's billing page.
+
 ---
 
 ## Credits
@@ -226,9 +255,13 @@ Forked from [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage
   approach for reading real `/usage` data. The quota indicator in this
   release is adapted from that work.
 - [@nickearnshaw](https://github.com/nickearnshaw) —
-  [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8), locale-aware
-  number/date formatting. The 2.0 implementation follows the same
-  direction.
+  [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8) locale-aware
+  number/date formatting;
+  [PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20) fix for
+  webview/status-bar getting stuck on "Loading…" (re-entrancy guard +
+  spinner only on cold start);
+  [PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21) docs
+  explaining `cleanupPeriodDays` for retaining usage history.
 - [@brenoneill](https://github.com/brenoneill) —
   [PR #14](https://github.com/jack21/ClaudeCodeUsage/pull/14), custom
   data directory (merged into upstream 1.0.8).

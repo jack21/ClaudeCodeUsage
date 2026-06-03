@@ -36,6 +36,10 @@ export class ClaudeCodeUsageExtension {
   };
 
   private outputChannel: vscode.OutputChannel;
+  // Re-entrancy guard (PR #20 by @nickearnshaw). The auto-refresh timer and
+  // file watcher can both fire while a slow reload is still in flight. Without
+  // this, reloads pile up and keep re-asserting the "Loading…" spinner.
+  private isRefreshing: boolean = false;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -412,6 +416,10 @@ export class ClaudeCodeUsageExtension {
   }
 
   private async refreshData(manualTrigger: boolean = false): Promise<void> {
+    if (this.isRefreshing) {
+      return;
+    }
+    this.isRefreshing = true;
     try {
       const config = this.getConfiguration();
       // When the user has paused dashboard refresh, auto-triggers (timer +
@@ -453,9 +461,15 @@ export class ClaudeCodeUsageExtension {
         return;
       }
 
-      this.statusBar.setLoading(true);
-      if (updateWebview) {
-        this.webviewProvider.setLoading(true);
+      // Only show the full-screen spinner on the very first load (cold cache,
+      // nothing on screen yet). Background refreshes keep existing dashboard
+      // visible and swap in fresh data when ready — avoiding panel flicker
+      // on every file-watch tick during active use. (PR #20, @nickearnshaw)
+      if (this.cache.records.length === 0) {
+        this.statusBar.setLoading(true);
+        if (updateWebview) {
+          this.webviewProvider.setLoading(true);
+        }
       }
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
@@ -508,6 +522,8 @@ export class ClaudeCodeUsageExtension {
       if (manualTrigger || !this.getConfiguration().pauseDashboardRefresh) {
         this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
       }
+    } finally {
+      this.isRefreshing = false;
     }
   }
 
