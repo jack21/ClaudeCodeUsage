@@ -36,6 +36,10 @@ export class ClaudeCodeUsageExtension {
   };
 
   private outputChannel: vscode.OutputChannel;
+  // Re-entrancy guard (PR #20 by @nickearnshaw). The auto-refresh timer and
+  // file watcher can both fire while a slow reload is still in flight. Without
+  // this, reloads pile up and keep re-asserting the "Loading…" spinner.
+  private isRefreshing: boolean = false;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -55,7 +59,9 @@ export class ClaudeCodeUsageExtension {
   private setupCommands(): void {
     const commands = [
       vscode.commands.registerCommand('claudeCodeUsage.refresh', () => {
-        this.refreshData();
+        // Manual refresh always updates the dashboard even when
+        // pauseDashboardRefresh is on.
+        this.refreshData(true);
       }),
       vscode.commands.registerCommand('claudeCodeUsage.showDetails', () => {
         this.webviewProvider.show();
@@ -289,7 +295,9 @@ export class ClaudeCodeUsageExtension {
       adviceReasoningEffort:
         config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
-      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat'
+      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
+      fileWatching: config.get('fileWatching', true),
+      pauseDashboardRefresh: config.get('pauseDashboardRefresh', false)
     };
   }
 
@@ -323,6 +331,10 @@ export class ClaudeCodeUsageExtension {
    */
   private async startFileWatching(): Promise<void> {
     const config = this.getConfiguration();
+    if (!config.fileWatching) {
+      this.stopFileWatching();
+      return;
+    }
     const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(config.dataDirectory || undefined);
     if (!dataDirectory) {
       return;
@@ -388,6 +400,8 @@ export class ClaudeCodeUsageExtension {
       return null;
     }
     const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
+    // 120-second cache: matches the polling interval and avoids hammering
+    // /usage on every file-watch tick when active sessions write rapidly.
     if (this.cache.usageLimits && age < 120000) {
       return this.cache.usageLimits;
     }
@@ -401,9 +415,25 @@ export class ClaudeCodeUsageExtension {
     return this.cache.usageLimits;
   }
 
-  private async refreshData(): Promise<void> {
+  private async refreshData(manualTrigger: boolean = false): Promise<void> {
+    if (this.isRefreshing) {
+      return;
+    }
+    this.isRefreshing = true;
     try {
       const config = this.getConfiguration();
+      // When the user has paused dashboard refresh, auto-triggers (timer +
+      // fs.watch) skip the webview update entirely; the status bar still
+      // refreshes so today's cost / quota stay live. Manual command always
+      // refreshes everything so the user can force-update on demand.
+      const updateWebview = manualTrigger || !config.pauseDashboardRefresh;
+
+      // Quota is account-level, decoupled from local data. Refresh and push
+      // it unconditionally, even when the workspace has no Claude history or
+      // when something later fails — otherwise opening VS Code in a fresh
+      // project would hide a quota indicator that ought to be account-wide.
+      const usageLimits = await this.maybeFetchUsageLimits(config);
+      this.statusBar.updateQuota(usageLimits);
 
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
@@ -413,7 +443,9 @@ export class ClaudeCodeUsageExtension {
       if (!dataDirectory) {
         const error = 'Claude data directory not found. Please check your configuration.';
         this.statusBar.updateUsageData(null, null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
+        if (updateWebview) {
+          this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
+        }
         return;
       }
 
@@ -424,19 +456,28 @@ export class ClaudeCodeUsageExtension {
       const needFullRefresh =
         dirChanged || this.cache.records.length === 0 || latestMtime > this.cache.lastUpdate.getTime();
 
-      const usageLimits = await this.maybeFetchUsageLimits(config);
-
       if (!needFullRefresh) {
-        // Idle: logs unchanged — only refresh the (independent) quota indicator.
-        this.statusBar.updateQuota(usageLimits);
+        // Idle: logs unchanged. Quota was already refreshed above.
         return;
       }
 
-      this.statusBar.setLoading(true);
-      this.webviewProvider.setLoading(true);
+      // Only show the full-screen spinner on the very first load (cold cache,
+      // nothing on screen yet). Background refreshes keep existing dashboard
+      // visible and swap in fresh data when ready — avoiding panel flicker
+      // on every file-watch tick during active use. (PR #20, @nickearnshaw)
+      if (this.cache.records.length === 0) {
+        this.statusBar.setLoading(true);
+        if (updateWebview) {
+          this.webviewProvider.setLoading(true);
+        }
+      }
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
-        analyzeContent: config.enableContentAnalysis
+        analyzeContent: config.enableContentAnalysis,
+        log: (line) =>
+          this.outputChannel.appendLine(
+            `[${new Date().toLocaleTimeString(undefined, { hour12: false })}] ${line}`
+          )
       });
       const records = loaded.records;
       const contentAnalysis = loaded.contentAnalysis;
@@ -448,7 +489,9 @@ export class ClaudeCodeUsageExtension {
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
         this.statusBar.updateUsageData(null, null, error);
-        this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
+        if (updateWebview) {
+          this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
+        }
         return;
       }
 
@@ -464,16 +507,23 @@ export class ClaudeCodeUsageExtension {
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
-      // Update UI
+      // Update UI — quota was already pushed above, so we pass it again only
+      // to keep the success-path signature stable.
       this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
-      this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
+      if (updateWebview) {
+        this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error refreshing Claude Code usage data:', error);
 
       this.statusBar.updateUsageData(null, null, errorMessage);
-      this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
+      if (manualTrigger || !this.getConfiguration().pauseDashboardRefresh) {
+        this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
+      }
+    } finally {
+      this.isRefreshing = false;
     }
   }
 

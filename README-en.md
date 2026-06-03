@@ -4,7 +4,7 @@
 
 ---
 
-A comprehensive VSCode extension that monitors Claude Code usage and costs with detailed analytics and interactive visualizations.
+The Claude Code coach in your status bar. Not a billing tool. Not a multi-provider monitor. A focused token tracker that uses AI to help you use Claude Code better.
 
 ## 🖼️ Screenshot
 

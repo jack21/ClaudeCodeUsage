@@ -4,7 +4,7 @@
 
 ---
 
-全方位的 VSCode 擴充功能，提供 Claude Code 使用量監控、詳細分析和互動式視覺化圖表。
+看清你的 Claude Code 用量，讓 AI 幫你用得更好。不是帳單工具，不是多 provider 監控面板。一個專注於 token 精確歸因、並以 AI 幫你優化使用習慣的輕量 VS Code 插件。
 
 ## 🖼️ 截圖
 

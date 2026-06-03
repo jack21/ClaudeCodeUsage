@@ -55,36 +55,41 @@ async function findJsonlFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-// Native validation function to replace zod
+// Identify usage records by structural shape only.
+//
+// Previously we dropped any record whose secondary fields had an unexpected
+// type (e.g. `model` is null, `requestId` is a number). That cost us records
+// from proxies and from new Claude Code features (xhigh / ultracode /
+// workflow) that occasionally write atypical field types. Now we accept any
+// record that has the minimum it takes to count tokens — timestamp + the
+// numeric token fields — and downstream code is responsible for coercing the
+// optional fields safely.
+//
+// The companion function `validationDropReason` lets the loader log *why* a
+// record was rejected so users can spot format drift without us guessing.
 function validateUsageRecord(data: any): data is ClaudeUsageRecord {
-  // Basic structure validation
   if (!data || typeof data !== 'object') return false;
-
-  // Required timestamp
   if (typeof data.timestamp !== 'string') return false;
-
-  // Required message with usage
   if (!data.message || typeof data.message !== 'object') return false;
   if (!data.message.usage || typeof data.message.usage !== 'object') return false;
-
   const usage = data.message.usage;
-
-  // Required token fields must be numbers
+  // We require both token fields to be numbers — they are the whole point of
+  // the record. Anything else is best-effort: a missing model, a null
+  // requestId, an isApiErrorMessage that's "true" (string) — they get
+  // accepted now, and the aggregators treat the value as 0/undefined.
   if (typeof usage.input_tokens !== 'number') return false;
   if (typeof usage.output_tokens !== 'number') return false;
-
-  // Optional fields validation
-  if (usage.cache_creation_input_tokens !== undefined && typeof usage.cache_creation_input_tokens !== 'number') return false;
-  if (usage.cache_read_input_tokens !== undefined && typeof usage.cache_read_input_tokens !== 'number') return false;
-
-  // Optional fields validation
-  if (data.message.model !== undefined && typeof data.message.model !== 'string') return false;
-  if (data.message.id !== undefined && typeof data.message.id !== 'string') return false;
-  if (data.costUSD !== undefined && typeof data.costUSD !== 'number') return false;
-  if (data.requestId !== undefined && typeof data.requestId !== 'string') return false;
-  if (data.isApiErrorMessage !== undefined && typeof data.isApiErrorMessage !== 'boolean') return false;
-
   return true;
+}
+
+function validationDropReason(data: any): string {
+  if (!data || typeof data !== 'object') return 'not-an-object';
+  if (typeof data.timestamp !== 'string') return 'timestamp-missing-or-non-string';
+  if (!data.message || typeof data.message !== 'object') return 'message-missing';
+  if (!data.message.usage || typeof data.message.usage !== 'object') return 'usage-missing';
+  if (typeof data.message.usage.input_tokens !== 'number') return 'input_tokens-not-a-number';
+  if (typeof data.message.usage.output_tokens !== 'number') return 'output_tokens-not-a-number';
+  return 'other';
 }
 
 // --- Content-consumption analysis helpers ---
@@ -319,9 +324,10 @@ export class ClaudeDataLoader {
 
   static async loadUsageRecords(
     dataDirectory?: string,
-    options?: { analyzeContent?: boolean }
+    options?: { analyzeContent?: boolean; log?: (line: string) => void }
   ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis | null }> {
     const analyzeContent = options?.analyzeContent !== false; // default true
+    const log = options?.log;
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
       const allFiles: string[] = [];
@@ -335,12 +341,31 @@ export class ClaudeDataLoader {
       }
 
       const sortedFiles = await this.sortFilesByTimestamp(allFiles);
-      const processedHashes = new Set<string>();
+      // hash → records[] index. Some proxies (mimo / CC Switch) write two
+      // records per message: a tokens=0 placeholder when streaming starts,
+      // and the real values when the response finishes. Both records share
+      // the same messageId, so they hash identically. We keep whichever
+      // record has the higher total token sum (issue #18).
+      const processedHashes = new Map<string, number>();
       const records: ClaudeUsageRecord[] = [];
       // Content analysis (last 30 days) is optional — skipped when the user
       // disables it via claudeCodeUsage.enableContentAnalysis.
       const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
       let fileIndex = 0;
+      // Diagnostic counters so the "Show Diagnostic Logs" command can explain
+      // how many records were seen / rejected / deduped without speculation.
+      const stats = {
+        files: sortedFiles.length,
+        linesScanned: 0,
+        parseErrors: 0,
+        rejected: {} as Record<string, number>,
+        replacedByDedup: 0,
+        skippedByDedup: 0,
+        kept: 0,
+        // model name → { count, totalTokens }. totalTokens lets us tell whether
+        // records exist but are all zeros (proxy-placeholder only).
+        models: {} as Record<string, { count: number; tokens: number }>,
+      };
 
       for (const file of sortedFiles) {
         try {
@@ -354,6 +379,7 @@ export class ClaudeDataLoader {
           const sessionInfo = this.parseSessionInfo(file);
 
           for (const line of lines) {
+            stats.linesScanned += 1;
             try {
               const parsed = JSON.parse(line) as unknown;
 
@@ -363,19 +389,13 @@ export class ClaudeDataLoader {
               }
 
               if (!validateUsageRecord(parsed)) {
+                const reason = validationDropReason(parsed);
+                stats.rejected[reason] = (stats.rejected[reason] || 0) + 1;
                 continue;
               }
 
               const data = parsed;
               const uniqueHash = this.createUniqueHash(data);
-
-              if (uniqueHash && processedHashes.has(uniqueHash)) {
-                continue;
-              }
-
-              if (uniqueHash) {
-                processedHashes.add(uniqueHash);
-              }
 
               // Tag the record with the session/project it came from.
               // Prefer the real working directory (`cwd`) recorded in the log line
@@ -392,8 +412,35 @@ export class ClaudeDataLoader {
               }
               const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
               record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
+
+              if (uniqueHash && processedHashes.has(uniqueHash)) {
+                // Duplicate — keep whichever record has more tokens. This
+                // resolves the proxy "placeholder + real value" pair from
+                // issue #18 without needing to detect the proxy.
+                const existingIndex = processedHashes.get(uniqueHash)!;
+                if (this.tokenSum(record) > this.tokenSum(records[existingIndex])) {
+                  records[existingIndex] = record;
+                  stats.replacedByDedup += 1;
+                } else {
+                  stats.skippedByDedup += 1;
+                }
+                continue;
+              }
+
               records.push(record);
+              stats.kept += 1;
+              const modelName =
+                typeof record.message?.model === 'string' ? record.message.model : '<no-model>';
+              if (!stats.models[modelName]) {
+                stats.models[modelName] = { count: 0, tokens: 0 };
+              }
+              stats.models[modelName].count += 1;
+              stats.models[modelName].tokens += this.tokenSum(record);
+              if (uniqueHash) {
+                processedHashes.set(uniqueHash, records.length - 1);
+              }
             } catch (parseError) {
+              stats.parseErrors += 1;
               console.warn(`Failed to parse line in ${file}:`, parseError);
             }
           }
@@ -408,6 +455,31 @@ export class ClaudeDataLoader {
         }
       }
 
+      if (log) {
+        const rejectedSummary = Object.entries(stats.rejected)
+          .map(([reason, count]) => `${reason}=${count}`)
+          .join(', ') || 'none';
+        // List models sorted by kept-record count desc, with each entry's
+        // total token sum. If a model shows up with N records but 0 tokens
+        // it means every record for that model was a proxy zero-placeholder
+        // and the real values were never written — that's the missing-Flash
+        // story.
+        const fmt = (n: number): string =>
+          n >= 1e6 ? `${(n / 1e6).toFixed(1)}M`
+          : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K`
+          : `${n}`;
+        const modelsSummary = Object.entries(stats.models)
+          .sort(([, a], [, b]) => b.count - a.count)
+          .map(([name, m]) => `${name}=${m.count}/${fmt(m.tokens)}`)
+          .join(', ') || 'none';
+        log(
+          `loader: ${stats.files} files, ${stats.linesScanned} lines | ` +
+            `kept=${stats.kept}, dedup-replaced=${stats.replacedByDedup}, ` +
+            `dedup-skipped=${stats.skippedByDedup}, parse-errors=${stats.parseErrors} | ` +
+            `rejected: ${rejectedSummary}`
+        );
+        log(`loader: models seen: ${modelsSummary}`);
+      }
       return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
     } catch (error) {
       console.error('Error loading usage records:', error);
@@ -424,6 +496,15 @@ export class ClaudeDataLoader {
     }
 
     return `${messageId || 'no-msg'}-${requestId || 'no-req'}`;
+  }
+
+  /** Total tokens recorded on a usage record, across all four buckets. Used
+   * to decide which of two records sharing the same uniqueHash to keep
+   * (issue #18 — proxy writes placeholder then real values). */
+  private static tokenSum(r: any): number {
+    const u = r?.message?.usage || {};
+    return (u.input_tokens || 0) + (u.output_tokens || 0)
+      + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
   }
 
   /**

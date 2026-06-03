@@ -15,6 +15,7 @@ export interface Translations {
     thisMonth: string;
     allTime: string;
     refresh: string;
+    autoRefresh: string;
     settings: string;
     totalTokens: string;
     inputTokens: string;
@@ -106,6 +107,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: 'This Month',
       allTime: 'All Time',
       refresh: 'Refresh',
+      autoRefresh: 'Auto refresh',
       settings: 'Settings',
       totalTokens: 'Total Tokens',
       inputTokens: 'Input Tokens',
@@ -206,6 +208,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: "Diesen Monat",
       allTime: "Seit Aufzeichnungsbeginn",
       refresh: "Aktualisieren",
+      autoRefresh: "Auto-Aktualisierung",
       settings: "Einstellungen",
       totalTokens: "Gesamte Token",
       inputTokens: "Eingabe Token",
@@ -309,6 +312,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: '本月',
       allTime: '所有',
       refresh: '重新整理',
+      autoRefresh: '自動刷新',
       settings: '設定',
       totalTokens: '總 Token 數',
       inputTokens: '輸入 Token',
@@ -409,6 +413,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: '本月',
       allTime: '所有',
       refresh: '刷新',
+      autoRefresh: '自动刷新',
       settings: '设置',
       totalTokens: '总 Token 数',
       inputTokens: '输入 Token',
@@ -509,6 +514,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: '今月',
       allTime: 'すべて',
       refresh: '更新',
+      autoRefresh: '自動更新',
       settings: '設定',
       totalTokens: '総トークン数',
       inputTokens: '入力トークン',
@@ -610,6 +616,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       thisMonth: '이번 달',
       allTime: '전체',
       refresh: '새로고침',
+      autoRefresh: '자동 새로고침',
       settings: '설정',
       totalTokens: '총 토큰 수',
       inputTokens: '입력 토큰',

@@ -58,6 +58,13 @@ export class UsageWebviewProvider {
         case 'getAdvice':
           vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
+        case 'setPauseDashboardRefresh':
+          // Persist the in-dashboard toggle so it survives reload and stays in
+          // sync with VS Code Settings.
+          await vscode.workspace
+            .getConfiguration('claudeCodeUsage')
+            .update('pauseDashboardRefresh', !!message.value, vscode.ConfigurationTarget.Global);
+          break;
         case 'tabChanged':
           this.currentTab = message.tab;
           break;
@@ -284,22 +291,37 @@ export class UsageWebviewProvider {
       this.getStyles() +
       `</style>
       </head>
-      <body>
+      <body class="${
+        vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
+          ? 'auto-off'
+          : ''
+      }">
         <div class="container">
           <header>
             <h1>` +
       title +
       `</h1>
             <div class="actions">
-              <button onclick="refresh()" class="btn-secondary">` +
+              <label class="auto-refresh-switch" title="${this.escapeHtml(I18n.t.popup.autoRefresh)}">
+                <span class="auto-refresh-label">${I18n.t.popup.autoRefresh}</span>
+                <span class="switch">
+                  <input type="checkbox" id="autoRefreshCheckbox" ${
+                    vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
+                      ? ''
+                      : 'checked'
+                  } onchange="toggleAutoRefresh()">
+                  <span class="slider"></span>
+                </span>
+              </label>
+              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
       refresh +
       `</button>
               <button onclick="openSettings()" class="btn-secondary">` +
       settings +
       `</button>
             </div>
-          </header>
-
+          </header>` +
+      `
           <div class="tabs">
             <button id="tab-today" class="tab ` +
       todayActive +
@@ -1563,6 +1585,74 @@ export class UsageWebviewProvider {
         background: var(--vscode-button-secondaryHoverBackground);
       }
 
+      /* Refresh-Now button is only relevant when auto-refresh is OFF — hide
+         it by default, show only when the body carries the .auto-off class. */
+      .btn-refresh-now {
+        display: none;
+      }
+      body.auto-off .btn-refresh-now {
+        display: inline-block;
+      }
+
+      /* iOS-style auto-refresh toggle. The label/switch sit next to the other
+         buttons in the header actions row. Slider colour mirrors the
+         status-bar success colour so on/off state reads at a glance. */
+      .auto-refresh-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        user-select: none;
+        font-size: 13px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .auto-refresh-label {
+        white-space: nowrap;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 32px;
+        height: 18px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: var(--vscode-input-background, #888);
+        border: 1px solid var(--vscode-input-border, #555);
+        transition: background-color 0.2s, border-color 0.2s;
+        border-radius: 18px;
+      }
+      .slider::before {
+        position: absolute;
+        content: "";
+        height: 12px;
+        width: 12px;
+        left: 2px;
+        top: 2px;
+        background-color: #fff;
+        transition: transform 0.2s;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+      }
+      .switch input:checked + .slider {
+        background-color: #34c759; /* iOS green when on */
+        border-color: #34c759;
+      }
+      .switch input:checked + .slider::before {
+        transform: translateX(14px);
+      }
+      .switch input:focus + .slider {
+        box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+      }
+
       .tabs {
         display: flex;
         margin-bottom: 20px;
@@ -2395,6 +2485,13 @@ const __dateOpts = (extra) => {
 function refresh() {
   console.log("[DEBUG] refresh called");
   vscode.postMessage({ command: 'refresh' });
+}
+
+function toggleAutoRefresh() {
+  var checkbox = document.getElementById('autoRefreshCheckbox');
+  var nowOff = !checkbox.checked;
+  document.body.classList.toggle('auto-off', nowOff);
+  vscode.postMessage({ command: 'setPauseDashboardRefresh', value: nowOff });
 }
 
 function openSettings() {

@@ -4,6 +4,67 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [2.0.1] — 2026-06-03
+
+### Added
+- **Dashboard "Auto-refresh" toggle** — iOS-style slider in the header
+  pauses automatic webview updates while the status bar continues live.
+  The "Refresh Now" button appears when auto-refresh is off. State persists
+  via `claudeCodeUsage.pauseDashboardRefresh` setting. Addresses
+  issue #17 follow-up (constantly-reloading dashboard during agent work).
+- **`claudeCodeUsage.fileWatching` setting** — disables `fs.watch`-based
+  real-time refresh for users who prefer the calmer interval-only mode.
+- **Diagnostic output channel** — `Claude Code Usage: Show Diagnostic Logs`
+  now logs per-refresh stats: files scanned, records kept/replaced/skipped,
+  rejection reasons, and per-model record counts with token sums. Useful
+  for diagnosing under-reported usage with third-party proxies.
+
+### Fixed
+- **Dedup kept the wrong record** (issue #18, reported by @zhaoxiao9302):
+  proxies such as mimo / CC Switch write a `tokens=0` placeholder first
+  and then a second record with real values sharing the same `messageId`.
+  The dedup now keeps whichever record has the higher total token sum
+  instead of always keeping the first.
+- **DeepSeek pricing wrong** — `deepseek-chat` and `deepseek-reasoner`
+  were priced at V4-Flash rates ($0.14/$0.28); corrected to V4-Pro
+  ($0.435/$0.87, cache hit $0.003625). Added explicit `deepseek-v4-pro`
+  entry. Family fallback now also resolves to Pro tier.
+- **Quota indicator hidden in workspaces without local data** — quota is
+  account-level; it now refreshes unconditionally and is no longer hidden
+  when the workspace has no Claude history or the data directory cannot
+  be found.
+- **Webview / status bar stuck on "Loading…"** (PR #20, @nickearnshaw):
+  added re-entrancy guard so overlapping refresh triggers coalesce instead
+  of piling up. Spinner now only shows on cold start (no data yet);
+  background refreshes keep the existing dashboard visible.
+- **Log timestamps were UTC** — diagnostic output channel now shows the
+  user's local time.
+
+### Added (models)
+- **Opus 4.8** added to the pricing table (same tier as 4.7/4.6/4.5).
+
+### Changed
+- Quota fetch cache: 2 min (v2.0.0) → 120 s (unchanged value, restored
+  from an intermediate 30 s that was too chatty).
+- Validator relaxed: only `timestamp` and numeric `input_tokens` /
+  `output_tokens` are required; secondary fields with unexpected types
+  are accepted rather than causing the whole record to be dropped.
+- `claudeCodeUsage.advice.apiKey` no longer falls back to the pre-2.0
+  flat `adviceApiKey` key (fixes demo-mode never triggering).
+
+### Docs
+- README intro replaced with "The Claude Code coach in your status bar"
+  positioning (EN + 中文 + ja + ko + zh-TW slogan updated).
+- New Troubleshooting entries: missing history (→ `cleanupPeriodDays`),
+  token counts lower than provider dashboard (→ sub-agent note).
+  Thanks @nickearnshaw (PR #21) for the `cleanupPeriodDays` docs.
+
+### Dev
+- `launch.json` `preLaunchTask` fixed so F5 works in a single-root
+  checkout (PR #22, @nickearnshaw).
+
+---
+
 ## [2.0.0] — 2026-05-26
 
 ### Added

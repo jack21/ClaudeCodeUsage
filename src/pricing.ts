@@ -113,9 +113,13 @@ const NON_CLAUDE_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-flash-lite': priced(0.1, 0.4, 0.01),
   'gemini-2.0-flash': priced(0.1, 0.4, 0.025),
 
-  // --- DeepSeek --- https://api-docs.deepseek.com (cache-hit price applied to cache reads)
-  'deepseek-chat': priced(0.14, 0.28, 0.0028),
-  'deepseek-reasoner': priced(0.14, 0.28, 0.0028),
+  // --- DeepSeek --- https://api-docs.deepseek.com/quick_start/pricing/
+  // The `deepseek-chat` alias has pointed to the current V4 Pro tier since
+  // 2024-09; `deepseek-reasoner` is the matched reasoner at the same price.
+  // Don't lump them in with V4 Flash, which is the cheap tier.
+  'deepseek-chat': priced(0.435, 0.87, 0.003625),
+  'deepseek-reasoner': priced(0.435, 0.87, 0.003625),
+  'deepseek-v4-pro': priced(0.435, 0.87, 0.003625),
   'deepseek-v4-flash': priced(0.14, 0.28, 0.0028),
 
   // --- Moonshot / Kimi --- prices published in USD by Moonshot
@@ -140,7 +144,10 @@ const NON_CLAUDE_PRICING: Record<string, ModelPricing> = {
 // so direct lookups stay fast; anything not listed is resolved by getModelPricing()'s
 // family-aware fallback below.
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Claude Opus 4.7 / 4.6
+  // Claude Opus 4.8 / 4.7 / 4.6 — assumed at the current Opus tier rate
+  // ($5 / $25 / $6.25 / $0.5 per MTok). If Anthropic later differentiates
+  // Opus 4.8 pricing, override here or pull via "Refresh Token Pricing".
+  'claude-opus-4-8': OPUS_CURRENT,
   'claude-opus-4-7': OPUS_CURRENT,
   'claude-opus-4-6': OPUS_CURRENT,
 
