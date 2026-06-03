@@ -302,7 +302,17 @@ export class UsageWebviewProvider {
       title +
       `</h1>
             <div class="actions">
-              <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="btn-secondary" title="Toggle dashboard auto-refresh — when off, only the status bar updates automatically and you must press Refresh Now to update this page."></button>
+              <label class="auto-refresh-switch" title="${this.escapeHtml(I18n.t.popup.autoRefresh)}">
+                <span class="auto-refresh-label">${I18n.t.popup.autoRefresh}</span>
+                <span class="switch">
+                  <input type="checkbox" id="autoRefreshCheckbox" ${
+                    vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
+                      ? ''
+                      : 'checked'
+                  } onchange="toggleAutoRefresh()">
+                  <span class="slider"></span>
+                </span>
+              </label>
               <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
       refresh +
       `</button>
@@ -311,16 +321,6 @@ export class UsageWebviewProvider {
       `</button>
             </div>
           </header>` +
-      // Initialise the auto-refresh button label on first render. JS sets it
-      // again on every toggle, but we need it to be correct before any click.
-      `
-          <script>
-            (function(){
-              var off = document.body.classList.contains('auto-off');
-              var btn = document.getElementById('autoRefreshBtn');
-              if (btn) btn.textContent = off ? '⏸ Auto-refresh: OFF' : '🔄 Auto-refresh: ON';
-            })();
-          </script>` +
       `
           <div class="tabs">
             <button id="tab-today" class="tab ` +
@@ -1594,6 +1594,65 @@ export class UsageWebviewProvider {
         display: inline-block;
       }
 
+      /* iOS-style auto-refresh toggle. The label/switch sit next to the other
+         buttons in the header actions row. Slider colour mirrors the
+         status-bar success colour so on/off state reads at a glance. */
+      .auto-refresh-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        user-select: none;
+        font-size: 13px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .auto-refresh-label {
+        white-space: nowrap;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 32px;
+        height: 18px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: var(--vscode-input-background, #888);
+        border: 1px solid var(--vscode-input-border, #555);
+        transition: background-color 0.2s, border-color 0.2s;
+        border-radius: 18px;
+      }
+      .slider::before {
+        position: absolute;
+        content: "";
+        height: 12px;
+        width: 12px;
+        left: 2px;
+        top: 2px;
+        background-color: #fff;
+        transition: transform 0.2s;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+      }
+      .switch input:checked + .slider {
+        background-color: #34c759; /* iOS green when on */
+        border-color: #34c759;
+      }
+      .switch input:checked + .slider::before {
+        transform: translateX(14px);
+      }
+      .switch input:focus + .slider {
+        box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+      }
+
       .tabs {
         display: flex;
         margin-bottom: 20px;
@@ -2429,12 +2488,9 @@ function refresh() {
 }
 
 function toggleAutoRefresh() {
-  var nowOff = !document.body.classList.contains('auto-off');
+  var checkbox = document.getElementById('autoRefreshCheckbox');
+  var nowOff = !checkbox.checked;
   document.body.classList.toggle('auto-off', nowOff);
-  var btn = document.getElementById('autoRefreshBtn');
-  if (btn) {
-    btn.textContent = nowOff ? '⏸ Auto-refresh: OFF' : '🔄 Auto-refresh: ON';
-  }
   vscode.postMessage({ command: 'setPauseDashboardRefresh', value: nowOff });
 }
 
