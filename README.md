@@ -25,7 +25,7 @@ use Claude Code better.
 >
 > **它不是什么**：账单工具。显示金额均为估算值，实际费用请以官方账单为准。
 
-🌐 **Multi-language documentation** (v1 content; v2 translations in 2.0.1):
+🌐 **Multi-language documentation**:
 [English](README-en.md) ·
 [繁體中文](README-zh-TW.md) ·
 [简体中文](README-zh-CN.md) ·
@@ -96,7 +96,7 @@ on the warning prompt to see a static example first.*
 - **Real-time status bar** via `fs.watch` (1.5 s debounce) + idle-aware
   refresh + non-blocking loader (yields every 25 files).
 
-Full changelog: [changelog.md](changelog.md).
+Full changelog: [CHANGELOG.md](CHANGELOG.md).
 Closes upstream issues
 [#7](https://github.com/jack21/ClaudeCodeUsage/issues/7),
 [#10](https://github.com/jack21/ClaudeCodeUsage/issues/10),
@@ -276,7 +276,7 @@ Many code changes in this fork were drafted with assistance from
 
 ## Changelog
 
-The current changelog lives in [**changelog.md**](changelog.md). The
+The current changelog lives in [**CHANGELOG.md**](CHANGELOG.md). The
 most recent 2.0 entry summarises every feature, fix and personalisation
 option in this release.
 

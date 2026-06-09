@@ -1,199 +1,184 @@
 # Claude Code 使用量监控
 
-🌐 **Language | 語言 | 言語 | 언어**: [🏠 Main](README.md) | [English](README-en.md) | [繁體中文](README-zh-TW.md) | **简体中文** | [日本語](README-ja.md) | [한국어](README-ko.md)
+🌐 **语言**: [🏠 Main](README.md) | [English](README-en.md) | [繁體中文](README-zh-TW.md) | **简体中文** | [日本語](README-ja.md) | [한국어](README-ko.md)
 
 ---
 
 **看清你的 Claude Code 用量，让 AI 帮你用得更好。** 不是账单工具，不是多 provider 监控面板。一个专注于 token 精确归因、并用 AI 帮你优化使用习惯的轻量 VS Code 插件。
 
-## 🖼️ 截图
+> **它是什么**：一个 VS Code 状态栏小工具，读取本地 Claude Code 对话日志，按 token × 公开单价估算用量与成本；并提供可选的 AI 建议功能，帮你优化提示词、减少不必要的 token 消耗。
+>
+> **它不是什么**：账单工具。显示金额均为估算值（基于公开的每百万 token 单价），实际费用请以 Anthropic 官方账单为准。
+
+> 截图取自英文界面。
+
+---
+
+## 截图
 
 ### 状态栏
 
-![状态栏预览](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
+![状态栏](images/v2-status-bar-en.png)
+
+*今日成本 · 当前 session 成本 · 5 小时和每周配额利用率。*
+
+将鼠标移到配额指示器上可看到明细：
+
+![配额提示](images/v2-quota-en.png)
+
+*来自真实 `/usage` 数据 —— 利用率百分比、重置倒计时，以及每周重置的星期与时间。*
 
 ### 仪表板
 
-![仪表板预览](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
+![仪表板](images/v2-dashboard-en.png)
 
-## ✨ 功能特色
+*点击状态栏打开完整仪表板。堆叠成本构成图、小时分布、缓存命中率、按 token 类型的成本构成，以及下方的按模型 / 按日表格。*
 
-### 📊 实时监控
+### Content 标签页 —— 看清 token 究竟花在哪
 
-- **状态栏显示**：在 VSCode 状态栏显示今日使用成本
-- **实时更新**：自动数据刷新，可配置更新间隔（最少 30 秒）
-- **零外部依赖**：使用原生 Node.js 模块，确保最大兼容性
+![Content 标签页](images/v2-content-en.png)
 
-### 📈 交互式分析仪表板
+*估算哪些内容消耗你的 token —— 你的提示 vs 工具结果（按工具）vs 助手输出 / 思考。这是优化使用的着力点，统计范围为近 30 天。*
 
-- **多重时间视图**：今日、本月和所有时间的使用视角
-- **交互式图表**：可切换的柱状图表，支持 6 种不同指标：
-  - 成本分析
-  - 输入/输出 tokens
-  - 缓存创建/读取 tokens
-  - 消息数量
-- **每小时使用量分析**：提供今日及特定日期的详细每小时使用分析
-- **可展开的月度数据**：点击"所有时间"中的任何月份查看每日明细
-- **详细表格**：完整的每日/每月使用量分析，支持向下深入查询
-- **模型分析**：各模型的成本和 token 消耗跟踪
+### AI 建议（可选）
 
-![仪表板预览](images/dashboard-preview.png)
+![AI 建议](images/v2-advice-en.png)
 
-### 🌐 多语言支持
+*可选的 AI 顾问，将你的用量汇总加上近期提示的样本发往 OpenAI 兼容 API（默认 DeepSeek V4 Pro），给出具体改写建议。需自备 key，或先点击 `Preview demo` 预览静态示例。*
 
-- **5 种语言**：English, 繁體中文, 简体中文, 日本語, 한국어
-- **自动检测**：自动检测系统语言
-- **手动覆盖**：在设置中选择偏好语言
+---
 
-### 🎨 视觉功能
+## 2.0 新功能
 
-- **自下而上图表**：符合行业标准的图表方向
-- **月度趋势**：所有时间视图显示月度聚合数据，便于长期趋势分析
-- **VSCode 主题集成**：完美配合浅色/深色主题
-- **响应式设计**：针对不同屏幕尺寸优化
+- **真实的 5 小时和每周配额** 显示在状态栏 —— 读取 Claude Code 现有的 OAuth 会话（`~/.claude/.credentials.json`），无需配置。借鉴上游 [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)（[@Dobidop](https://github.com/Dobidop)）。
+- **四个新标签页**：Sessions、Projects、Content、Branches，均可排序。
+- **堆叠成本构成图**，含 Y 轴和参考线。
+- **AI 建议命令**（默认 DeepSeek V4 Pro，`reasoning_effort=max`），未配置 key 时提供示例演示。
+- **多厂商定价**：Opus 4.x、Sonnet 4.x、Haiku 4.5 对照 Anthropic 官方定价；OpenAI、Gemini、DeepSeek、Kimi、GLM、Qwen 等代理场景的参考价，含家族感知回退。`Refresh Token Pricing` 可拉取 LiteLLM 即时价格。
+- **自定义时区** 用于日期显示（`claudeCodeUsage.timezone`）。
+- **浅色主题标签可读性** 修复。
+- 全程 **locale 感知的数字与日期**（德语用 `.`，英语用 `,`）。
+- **实时状态栏**：基于 `fs.watch`（1.5s 防抖）+ 空闲跳过 + 非阻塞加载（每 25 个文件让出事件循环）。
 
-## 📥 下载
+完整变更：[CHANGELOG.md](CHANGELOG.md)。关闭上游 issue [#7](https://github.com/jack21/ClaudeCodeUsage/issues/7)、[#10](https://github.com/jack21/ClaudeCodeUsage/issues/10)、[#11](https://github.com/jack21/ClaudeCodeUsage/issues/11)、[#13](https://github.com/jack21/ClaudeCodeUsage/issues/13)。
 
-### VSCode Marketplace
-
-[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
-
-### Open VSX Registry（适用于 Cursor / Windsurf / Antigravity）
-
-[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+---
 
 ## 安装
 
-1. 从 VSCode 市场安装扩展
-2. 扩展会自动检测您的 Claude Code 数据目录
-3. 开始使用 Claude Code，您的使用量会出现在状态栏中
+### VS Code Marketplace
+
+在扩展视图（`Ctrl+Shift+X`）搜索 **`Claude Code Usage`**，或：
+
+```
+ext install GrowthJack.claude-code-usage
+```
+
+### Cursor / Windsurf / Antigravity（Open VSX）
+
+同一扩展也发布在 [Open VSX Registry](https://open-vsx.org/extension/GrowthJack/claude-code-usage)。
+
+### 从 `.vsix` 文件安装
+
+`Ctrl+Shift+P` → **Extensions: Install from VSIX...** → 选择下载的 `.vsix`。
+
+---
 
 ## 配置
 
-通过 `文件 > 首选项 > 设置` 并搜索「Claude Code Usage」来访问设置：
+打开设置（`Ctrl+,`）搜索 **`Claude Code Usage`**。所有设置均为可选，默认值在合理范围内保持上游行为。
 
-- **刷新间隔**：更新使用数据的频率（最少 30 秒）
-- **数据目录**：自定义 Claude 数据目录路径（留空以自动检测）
-- **语言**：显示语言偏好
-- **小数位数**：成本显示的小数位数
+| 设置 | 默认 | 作用 |
+|---|---|---|
+| `refreshInterval` | `60` | 刷新间隔（秒，最小 30）。 |
+| `dataDirectory` | `""` | 自定义 Claude 数据目录；留空则自动检测。 |
+| `language` | `"auto"` | 界面语言：`auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`。 |
+| `decimalPlaces` | `2` | 成本显示的小数位（0–4）。 |
+| `compactNumbers` | `false` | 用 `1.2M` / `345K` 代替完整数字。 |
+| `timezone` | `""` | 日期显示用的 IANA 时区（如 `Asia/Hong_Kong`）。 |
+| `usageLimitTracking` | `true` | 在状态栏显示真实 5h / 每周配额。 |
+| `enableContentAnalysis` | `true` | 运行 Content 标签页的 token 分析。 |
+| `projectGroupingMode` | `"git"` | Projects 标签分组：`git` / `folder` / `flat`。 |
+| `pauseDashboardRefresh` | `false` | 暂停仪表板自动刷新（也可在仪表板标题栏切换）。 |
+| `fileWatching` | `true` | 启用基于 `fs.watch` 的实时刷新；关闭则仅按间隔刷新。 |
+| `advice.apiKey` | `""` | AI 建议功能的 API key（OpenAI 兼容）。 |
+| `advice.apiUrl` | `https://api.deepseek.com/chat/completions` | chat-completions 端点。 |
+| `advice.model` | `"deepseek-v4-pro"` | 模型名称。 |
+| `advice.reasoningEffort` | `"max"` | 推理强度（DeepSeek V4：`high` / `max`）。 |
 
-## 🚀 使用方式
+---
 
-### 状态栏
+## 成本是如何计算的
 
-- 显示**今日使用成本**，附带脉冲图标
-- 点击打开详细分析仪表板
+状态栏成本为 **`Σ (tokens × 每百万单价)`**，覆盖输入、输出、缓存写入、缓存读取，并按模型汇总。
 
-### 分析仪表板
+- **每百万单价** 来自内置定价表，对照 Anthropic 官方定价页验证，并为可能出现在代理场景的非 Anthropic 模型补充参考价。
+- **`Refresh Token Pricing`**（命令 + 仪表板按钮）从 [LiteLLM 公开数据集](https://github.com/BerriAI/litellm)拉取即时价格作为运行时覆盖。
+- **未知模型快照** 按其所属家族（Opus / Sonnet / Haiku / GPT / Gemini / DeepSeek / Kimi / GLM / Qwen）的当前档位定价，而非盲目回退。
 
-1. **时间标签**：在今日、本月和所有时间视图之间切换
-2. **图表指标**：点击图表上方的标签切换不同指标：
-   - 成本分析
-   - 输入/输出 tokens
-   - 缓存创建/读取 tokens
-   - 消息数量
-3. **每小时分析**：在"今日"标签中查看每小时使用模式
-4. **可展开数据**：
-   - 点击"本月"中的每日项目可查看每小时明细
-   - 点击"所有时间"中的每月项目可查看每日明细
-5. **交互式表格**：图表下方的详细每日/每月分析
-6. **模型分析**：各标签中的模型使用统计
+状态栏**不知道**：
 
-![使用流程](images/usage-flow.png)
+- 你实际的 Anthropic 账单（折扣、免费额度、套餐上限）。
+- 你的代理供应商是否采用不同费率。
+- 任何未记录在本地 `.jsonl` 日志中的内容。
 
-## 📋 系统要求
+**5h / 每周配额指示器**则不同 —— 它通过 OAuth 会话查询 Claude Code 真实的 `/usage` 端点，显示 Anthropic 为你的账户记录的实际百分比。该数值是权威的。
 
-- **Claude Code**：必须安装并运行
-- **VSCode**：1.74.0 或更新版本
-- **Node.js**：仅使用内置模块（无外部依赖）
+---
 
-## 🛠️ 故障排除
+## 隐私
 
-### "无 Claude Code 数据"错误
+- 所有 token / 成本 / session 分析都在**本地**进行，读取你的 `~/.claude/projects/**/*.jsonl` 文件。
+- 配额指示器用 Claude Code 现有的 OAuth token 调用 **`api.anthropic.com/api/oauth/usage`**，不发送任何额外凭证。
+- **AI 建议命令** 是唯一会调用外部服务的功能 —— 且仅在*你*主动触发时。它将用量汇总加上近期提示样本发往你在 `advice.apiUrl` 配置的端点。**需自备 key**，扩展本身不附带任何 key。未配置 key 时，命令会打开一份手写示例，而不调用任何 API。
 
-1. 确保已安装并使用过 Claude Code
-2. 检查扩展首选项中的数据目录设置
-3. 验证 Claude Code 正在 `~/.claude/projects` 或 `~/.config/claude/projects` 生成使用记录
+---
 
-### 图表不更新
+## 疑难排解
 
-1. 切换到不同标签再切回来刷新图表
-2. 检查该时间段是否有实际使用数据
-3. 验证 Claude 使用记录中是否有缓存 tokens
+**"无 Claude Code 数据"**
+- 确认 Claude Code 已安装并至少使用过一次。
+- 检查 `dataDirectory` 设置；自动检测会查 `~/.claude/projects` 和 `~/.config/claude/projects`。
 
-### 性能问题
+**配额行显示 `5h:--% wk:--%`**
+- `~/.claude/.credentials.json` 中的 OAuth token 缺失或过期。登录 Claude Code 一次即可；扩展以只读方式读取凭证文件，并在需要时刷新 bearer。
 
-- 如遇到速度变慢，可增加刷新间隔
-- 扩展使用 1 分钟缓存来减少文件 I/O
+**`Get AI Usage Advice` 返回 404**
+- DeepSeek 当前端点**不**使用 `/v1` 前缀。请用 `https://api.deepseek.com/chat/completions`。扩展会自动剥除多余的 `/v1`。
 
-### 历史记录消失或缺少早期月份数据
+**`Get AI Usage Advice` 显示示例而非真实建议**
+- 说明未在 `claudeCodeUsage.advice.apiKey` 配置 API key。示例文件名带 `…-DEMO-…` 标记并有醒目横幅。在设置中填入 key 后重新运行命令。
 
-Claude Code 会自动删除超过 `cleanupPeriodDays`（默认 **30 天**）的对话日志。已删除的记录无法恢复。要保留更多历史，请在 `~/.claude/settings.json` 中添加：
+**大历史下刷新缓慢**
+- 2.0 每 25 个文件让出一次事件循环；空闲时跳过重算。如仍有问题，提高 `refreshInterval` 或将 `enableContentAnalysis` 设为 `false`。
 
-```json
-{ "cleanupPeriodDays": 365 }
-```
+**历史记录消失或缺少早期月份**
+- Claude Code 会自动删除超过 `cleanupPeriodDays`（默认 **30 天**）的对话日志。已删除的记录无法恢复。要保留更多历史，在 `~/.claude/settings.json` 中添加：
+  ```json
+  { "cleanupPeriodDays": 365 }
+  ```
+  此设置仅对之后生成的日志有效。感谢 [@nickearnshaw](https://github.com/nickearnshaw)（[PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21)）记录此项。
 
-此设置仅对之后生成的日志有效，已删除的记录无法找回。
+**Token 数量低于模型提供商后台**
+- 如果你通过第三方代理使用 Claude Code，且请求经由 sub-agent 或后台 workflow（如 ultracode / 动态工作流），每个 agent 会在子目录写入独立的 `.jsonl` 文件。扩展会读取所有这些文件，但部分代理配置可能根本不写 agent 级记录。在未来版本加入原生工作流归因之前，此处显示的总量可能低于供应商的上游统计。实际消费始终以你的供应商账单页面为准。
 
-### Token 数量低于第三方提供商后台显示
+---
 
-如果你通过代理（如 CC Switch）使用动态工作流（ultracode / workflow），每个子 agent 会将记录写入子目录下独立的 `.jsonl` 文件。插件会扫描这些文件，但部分代理配置可能不会写入 agent 级别的记录，导致统计数量偏低。实际消费请以提供商账单为准，后续版本将改进工作流归因展示。
+## 致谢
 
-## 📝 版本更新日志
+Fork 自 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)。MIT 授权。
 
-### v1.0.8 (2025-11-28)
+- [@Dobidop](https://github.com/Dobidop) —— [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)，读取真实 `/usage` 数据的 OAuth 方案。本版配额指示器借鉴自该工作。
+- [@nickearnshaw](https://github.com/nickearnshaw) —— [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8) locale 感知的数字/日期格式；[PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20) 修复 webview/状态栏卡在 "Loading…"（重入保护 + 仅冷启动显示加载动画）；[PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21) 关于 `cleanupPeriodDays` 的文档。
+- [@brenoneill](https://github.com/brenoneill) —— [PR #14](https://github.com/jack21/ClaudeCodeUsage/pull/14)，自定义数据目录（已并入上游 1.0.8）。
+- [@mxzinke](https://github.com/mxzinke) —— Opus 4.5 / Haiku 4.5 价格 + 德语翻译（上游 1.0.8）。
 
-- 📝 将所有代码注释从繁体中文改为英文
-- 🌍 提升代码的国际化标准
-- 🔧 优化代码可读性与维护性
-- 💰 修正定价表，加入新的 Opus 4.5 / Haiku 4.5 价格（感谢 [@mxzinke](https://github.com/mxzinke)）
-- 🇩🇪 新增德语（de-DE）翻译支持（感谢 [@mxzinke](https://github.com/mxzinke)）
+本 fork 中许多代码改动由 [Claude Code](https://claude.com/claude-code) 协助起草（commit 含 `Co-Authored-By: Claude <noreply@anthropic.com>`）。
 
-### v1.0.7 (2025-11-28)
+**欢迎提出 Issue、PR 与想法** —— 这正是项目成长的方式。
 
-- 🌐 新增每小时使用量标签的多语言翻译支持
-- 🔧 移除代码中硬编码的中文文字，改用 i18n 翻译系统
-- ✨ 确保用户界面的多语言一致性（英文、繁体中文、简体中文、日文、韩文）
-
-### v1.0.6 (2025-08-10)
-
-- 🆕 新增 Claude Opus 4.1 模型定价支持
-- 🔄 更新定价数据以包含 `claude-opus-4-1-20250805` 和 `claude-opus-4-1` 模型 ID
-- 📊 定价与 Opus 4 相同（$15/1M 输入，$75/1M 输出 tokens）
-
-### v1.0.5 (2025-01)
-
-- ⏰ 新增每小时使用量统计与可视化
-- 📈 增强仪表板的每小时细分功能
-- 🔧 改善每小时汇总的数据处理
-
-### v1.0.4 (2025-01)
-
-- 📊 新增全时间数据计算功能
-- 🎨 更新 UI 以显示全时间使用数据与图表和标签
-- 🔄 修正数据更新逻辑以支持新数据结构
-- 🌐 在多语言支持中新增「全时间」翻译
-
-### v1.0.3 (2025-01)
-
-- 🔗 更新 GitHub 仓库 URL
-- 🖼️ 修正 README 图片链接指向新仓库位置
-- 📦 版本升级与仓库迁移
-
-### v1.0.0 (2025-01)
-
-- 🎉 首次完整发行版
-- 📊 状态栏实时 Claude Code 使用量监控
-- 🌐 多语言支持（English, 繁體中文, 简体中文, 日本語, 한국어）
-- 📈 交互式分析仪表板与图表和表格
-- 🎨 VSCode 主题整合与响应式设计
-- ⚙️ 可设定的重新整理间隔与设定
+---
 
 ## 许可证
 
-MIT
-
-## 贡献
-
-欢迎在 GitHub 仓库提出 Issue 和 Pull Request。
+[MIT](LICENSE)
