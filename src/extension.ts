@@ -40,6 +40,14 @@ export class ClaudeCodeUsageExtension {
   // file watcher can both fire while a slow reload is still in flight. Without
   // this, reloads pile up and keep re-asserting the "Loading…" spinner.
   private isRefreshing: boolean = false;
+  // Coalesce: a trigger that arrives mid-load sets this so we run exactly one
+  // more refresh after the current one finishes, instead of dropping the event
+  // (which starved updates during rapid ultracode/sub-agent writes).
+  private pendingRefresh: boolean = false;
+  // Epoch ms of the last observed .jsonl change. Drives activity-aware
+  // refresh cadence: while Claude Code is actively writing we refresh faster
+  // (~15 s, quota cache 20 s); when idle we fall back to the user's interval.
+  private lastActivityAt: number = 0;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -349,6 +357,10 @@ export class ClaudeCodeUsageExtension {
         if (!filename || !String(filename).endsWith('.jsonl')) {
           return;
         }
+        // Mark activity so the polling timer and quota cache switch to the
+        // faster "active" cadence. This fires for sub-agent / workflow files
+        // too, since fs.watch is recursive.
+        this.lastActivityAt = Date.now();
         // Debounce: Claude Code writes lines in bursts and the file mtime
         // changes for every line.
         if (this.watchDebounceTimer) {
@@ -380,18 +392,31 @@ export class ClaudeCodeUsageExtension {
     this.watchedDir = null;
   }
 
+  /** True when Claude Code has written a log line in the last 60 s. */
+  private isActive(): boolean {
+    return Date.now() - this.lastActivityAt < 60000;
+  }
+
   private startAutoRefresh(): void {
-    // Clear existing timer
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
     }
-
-    const config = this.getConfiguration();
-    const intervalMs = Math.max(config.refreshInterval * 1000, 30000); // Minimum 30 seconds
-
-    this.refreshTimer = setInterval(() => {
-      this.refreshData();
-    }, intervalMs);
+    // Self-rescheduling timer with an activity-aware interval: while Claude
+    // Code is actively writing logs we tick every ~15 s (matching the user's
+    // expectation that ultracode / high-consumption runs update promptly);
+    // when idle we use the user's configured interval (min 30 s). fs.watch
+    // already covers near-real-time status-bar cost updates during activity —
+    // this floor guarantees the quota also refreshes during sustained writes
+    // where the debounce never settles.
+    const tick = (): void => {
+      const base = Math.max(this.getConfiguration().refreshInterval * 1000, 30000);
+      const intervalMs = this.isActive() ? Math.min(base, 15000) : base;
+      this.refreshTimer = setTimeout(() => {
+        this.refreshData().finally(tick);
+      }, intervalMs);
+    };
+    tick();
   }
 
   /** Fetch real usage limits via OAuth, cached for 2 minutes. */
@@ -400,9 +425,12 @@ export class ClaudeCodeUsageExtension {
       return null;
     }
     const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
-    // 120-second cache: matches the polling interval and avoids hammering
-    // /usage on every file-watch tick when active sessions write rapidly.
-    if (this.cache.usageLimits && age < 120000) {
+    // Activity-aware cache: 20 s while Claude Code is actively writing (so the
+    // quota keeps pace during high-consumption ultracode runs), 120 s when
+    // idle (avoids hammering /usage on every file-watch tick). The /usage
+    // client has its own 429 cool-down, so 20 s is safe.
+    const ttl = this.isActive() ? 20000 : 120000;
+    if (this.cache.usageLimits && age < ttl) {
       return this.cache.usageLimits;
     }
     const fetched = await this.apiClient.fetchUsageLimits();
@@ -417,6 +445,10 @@ export class ClaudeCodeUsageExtension {
 
   private async refreshData(manualTrigger: boolean = false): Promise<void> {
     if (this.isRefreshing) {
+      // Coalesce: remember that another refresh was requested and run exactly
+      // one more after the current finishes (see finally). Dropping the event
+      // outright starved updates during rapid ultracode / sub-agent writes.
+      this.pendingRefresh = true;
       return;
     }
     this.isRefreshing = true;
@@ -524,12 +556,20 @@ export class ClaudeCodeUsageExtension {
       }
     } finally {
       this.isRefreshing = false;
+      // If triggers arrived mid-load, run one more (background) refresh to pick
+      // up the changes they signalled. The pendingRefresh flag collapses any
+      // number of dropped triggers into a single follow-up.
+      if (this.pendingRefresh) {
+        this.pendingRefresh = false;
+        setTimeout(() => this.refreshData(), 0);
+      }
     }
   }
 
   dispose(): void {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
     }
     this.stopFileWatching();
     this.statusBar.dispose();

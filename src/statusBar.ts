@@ -81,8 +81,16 @@ export class StatusBarManager {
    * Public so it can be refreshed on its own while the rest of the UI is idle.
    */
   updateQuota(usageLimits: ClaudeApiUsageResponse | null): void {
-    const fiveHour = usageLimits?.five_hour;
-    const weekly = usageLimits?.seven_day;
+    // A window's utilization is a point-in-time snapshot only valid until its
+    // resets_at. When the OAuth fetch starts failing (expired creds, 401/403,
+    // offline, rate-limited), maybeFetchUsageLimits keeps handing us the last
+    // successful response — so without this guard we'd keep rendering a value
+    // long after its window rolled over (e.g. a stale "5h:100%" lingering for
+    // hours, even after a plan upgrade or a reset). Drop any window whose reset
+    // time has passed. Adapted from PR #24 by @nickearnshaw.
+    const live = this.liveWindows(usageLimits);
+    const fiveHour = live?.five_hour;
+    const weekly = live?.seven_day;
     if (!fiveHour && !weekly) {
       this.quotaItem.hide();
       return;
@@ -110,8 +118,40 @@ export class StatusBarManager {
       this.quotaItem.backgroundColor = undefined;
     }
 
-    this.quotaItem.tooltip = this.createQuotaTooltip(usageLimits as ClaudeApiUsageResponse);
+    this.quotaItem.tooltip = this.createQuotaTooltip(live as ClaudeApiUsageResponse);
     this.quotaItem.show();
+  }
+
+  /**
+   * Return a copy of the usage response containing only windows still inside
+   * their current period. A window whose resets_at has already passed has
+   * rolled over, so its cached utilization is stale and must not be shown.
+   * A window with an unparseable resets_at is kept (we don't hide data we
+   * can't reason about). Returns null when nothing current remains, which
+   * collapses the indicator instead of showing a wrong figure.
+   * Adapted from PR #24 by @nickearnshaw.
+   */
+  private liveWindows(usageLimits: ClaudeApiUsageResponse | null): ClaudeApiUsageResponse | null {
+    if (!usageLimits) {
+      return null;
+    }
+    const now = Date.now();
+    const current = (limit?: ClaudeUsageLimit): ClaudeUsageLimit | undefined => {
+      if (!limit) {
+        return undefined;
+      }
+      const t = Date.parse(limit.resets_at);
+      return isNaN(t) || t > now ? limit : undefined;
+    };
+    const out: ClaudeApiUsageResponse = {
+      five_hour: current(usageLimits.five_hour),
+      seven_day: current(usageLimits.seven_day),
+      seven_day_opus: current(usageLimits.seven_day_opus)
+    };
+    if (!out.five_hour && !out.seven_day && !out.seven_day_opus) {
+      return null;
+    }
+    return out;
   }
 
   private showNoData(): void {
