@@ -648,33 +648,62 @@ export class ClaudeDataLoader {
     return data;
   }
 
-  static getCurrentSessionData(records: ClaudeUsageRecord[]): SessionData | null {
+  /**
+   * The "current session" shown next to today's cost in the status bar — the
+   * single most-recently-active conversation (one `.jsonl` / `_sessionId`),
+   * scoped to the current workspace when one is given.
+   *
+   * Previously this aggregated *all* records from the last 5 hours across every
+   * project, so every VS Code window showed the same number regardless of which
+   * workspace it was. Now each window reflects its own workspace's current
+   * conversation. Returns null if there's been no activity in the last 5 hours
+   * (so a stale session doesn't masquerade as "current").
+   *
+   * @param workspacePath optional current workspace folder; records whose cwd
+   *   sits under it are preferred. Falls back to all records if the workspace
+   *   has no matching records (e.g. a brand-new folder).
+   */
+  static getCurrentSessionData(records: ClaudeUsageRecord[], workspacePath?: string): SessionData | null {
     if (records.length === 0) {
       return null;
     }
+    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
-    // Sort records by timestamp
-    const sortedRecords = records.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    let pool = records;
+    if (workspacePath) {
+      const wp = norm(workspacePath);
+      const scoped = records.filter((r) => norm(r._projectPath || '').startsWith(wp));
+      if (scoped.length > 0) {
+        pool = scoped;
+      }
+    }
 
-    const now = new Date();
-    const sessionRecords = sortedRecords.filter((record) => {
-      const recordTime = new Date(record.timestamp);
-      const timeDiff = now.getTime() - recordTime.getTime();
-      return timeDiff <= 5 * 60 * 60 * 1000; // 5 hours in milliseconds
-    });
+    // The most recent record identifies the current session.
+    let latest = pool[0];
+    for (const r of pool) {
+      if (new Date(r.timestamp).getTime() > new Date(latest.timestamp).getTime()) {
+        latest = r;
+      }
+    }
 
+    // Recency guard: if the latest activity is older than the 5-hour window,
+    // there is no "current" session to show.
+    if (Date.now() - new Date(latest.timestamp).getTime() > 5 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    const sessionId = latest._sessionId;
+    const sessionRecords = pool.filter((r) => r._sessionId === sessionId);
     if (sessionRecords.length === 0) {
       return null;
     }
 
     const usageData = this.calculateUsageData(sessionRecords);
-    const sessionStart = new Date(sessionRecords[0].timestamp);
-    const sessionEnd = new Date(sessionRecords[sessionRecords.length - 1].timestamp);
-
+    const times = sessionRecords.map((r) => new Date(r.timestamp).getTime());
     return {
       ...usageData,
-      sessionStart,
-      sessionEnd,
+      sessionStart: new Date(Math.min(...times)),
+      sessionEnd: new Date(Math.max(...times)),
     };
   }
 

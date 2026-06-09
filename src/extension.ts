@@ -528,7 +528,11 @@ export class ClaudeCodeUsageExtension {
       }
 
       // Calculate usage data
-      const sessionData = ClaudeDataLoader.getCurrentSessionData(records);
+      // Scope the "current session" to this window's workspace so different
+      // workspaces show their own current conversation rather than a shared
+      // global figure.
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const sessionData = ClaudeDataLoader.getCurrentSessionData(records, workspacePath);
       const todayData = ClaudeDataLoader.getTodayData(records);
       const monthData = ClaudeDataLoader.getThisMonthData(records);
       const allTimeData = ClaudeDataLoader.getAllTimeData(records);
