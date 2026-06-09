@@ -1,0 +1,58 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! A few details make bugs much faster to fix.
+        Tip: the `Claude Code Usage: Show Diagnostic Logs` command prints
+        per-refresh stats (files scanned, records kept/rejected, models seen)
+        that are very helpful for usage/pricing issues.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the dashboard …
+        2. Click …
+        3. …
+  - type: input
+    id: ext-version
+    attributes:
+      label: Extension version
+      placeholder: e.g. 2.0.2
+    validations:
+      required: true
+  - type: input
+    id: cc-version
+    attributes:
+      label: Claude Code version
+      placeholder: e.g. 2.1.160
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other / Remote (SSH, devcontainer, WSL)
+  - type: input
+    id: proxy
+    attributes:
+      label: Proxy / model setup (if relevant)
+      description: e.g. CC Switch + DeepSeek, native Anthropic, LiteLLM proxy…
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic logs (optional)
+      description: Output of `Claude Code Usage: Show Diagnostic Logs`, if applicable.
+      render: text

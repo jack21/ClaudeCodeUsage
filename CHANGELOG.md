@@ -4,6 +4,39 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [2.0.2] — 2026-06-09
+
+### Fixed
+- **Stale quota after reset** — the 5h / weekly indicator could keep showing
+  an old percentage (e.g. a lingering `5h:100%`) long after the window rolled
+  over. A window's utilisation is now dropped once its `resets_at` has passed;
+  if nothing current remains the indicator hides rather than asserting a stale
+  number. Adapted from [PR #24](https://github.com/jack21/ClaudeCodeUsage/pull/24)
+  by [@nickearnshaw](https://github.com/nickearnshaw).
+- **Slow status-bar updates during high-consumption runs** — refresh is now
+  activity-aware: while Claude Code is actively writing logs the poll ticks
+  every ~15 s and the quota cache shrinks to 20 s (so ultracode / workflow
+  runs update promptly); when idle it falls back to the user's interval.
+  Overlapping refresh triggers are coalesced instead of dropped, so rapid
+  sub-agent writes no longer starve updates.
+
+### Added
+- **Stacked cost-composition charts** on the This-Month (daily) and All-Time
+  (monthly) views, with a Y-axis and two reference lines. Each cost bar is
+  split into input / output / cache-write / cache-read, matching the summary's
+  Cost Composition colours — total spend and its breakdown at a glance. The
+  metric switcher still works (single bars for token / message metrics).
+
+### Docs
+- Fixed the `CHANGELOG.md` link casing in the README (was broken on
+  case-sensitive GitHub).
+- Refreshed all language READMEs to v2 (en / zh-TW / ja / ko concise; zh-CN
+  full translation).
+- Added `CONTRIBUTING.md` and GitHub issue templates.
+- Updated `CLAUDE.md` to the v2 architecture and release process.
+
+---
+
 ## [2.0.1] — 2026-06-03
 
 ### Added
