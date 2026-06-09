@@ -48,6 +48,10 @@ export class ClaudeCodeUsageExtension {
   // refresh cadence: while Claude Code is actively writing we refresh faster
   // (~15 s, quota cache 20 s); when idle we fall back to the user's interval.
   private lastActivityAt: number = 0;
+  // Generation token for the self-rescheduling refresh timer. Bumped each time
+  // startAutoRefresh runs so any older timer chain (e.g. left mid-flight by a
+  // config change) stops instead of running concurrently with the new one.
+  private refreshGen: number = 0;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -409,11 +413,19 @@ export class ClaudeCodeUsageExtension {
     // already covers near-real-time status-bar cost updates during activity —
     // this floor guarantees the quota also refreshes during sustained writes
     // where the debounce never settles.
+    const gen = ++this.refreshGen;
     const tick = (): void => {
+      if (gen !== this.refreshGen) {
+        return; // superseded by a newer startAutoRefresh — stop this chain
+      }
       const base = Math.max(this.getConfiguration().refreshInterval * 1000, 30000);
       const intervalMs = this.isActive() ? Math.min(base, 15000) : base;
       this.refreshTimer = setTimeout(() => {
-        this.refreshData().finally(tick);
+        this.refreshData().finally(() => {
+          if (gen === this.refreshGen) {
+            tick();
+          }
+        });
       }, intervalMs);
     };
     tick();

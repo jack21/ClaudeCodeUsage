@@ -159,6 +159,14 @@ export class StatusBarManager {
       if (t > now) {
         return limit; // still current
       }
+      // Expired. If it reset only recently (within ~2 periods), the data is
+      // simply waiting for the next refetch — show 0% for the fresh window.
+      // But if it expired long ago, the fetch has been failing for ages and we
+      // have no trustworthy data: drop it rather than assert a fabricated 0%
+      // (which would falsely imply "full quota available").
+      if (now - t > 2 * periodMs) {
+        return undefined;
+      }
       let next = t;
       while (next <= now) {
         next += periodMs;
