@@ -14,6 +14,7 @@ export interface Translations {
     today: string;
     thisMonth: string;
     allTime: string;
+    workspaceToday: string;
     refresh: string;
     autoRefresh: string;
     settings: string;
@@ -106,6 +107,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: 'Today',
       thisMonth: 'This Month',
       allTime: 'All Time',
+      workspaceToday: 'This project',
       refresh: 'Refresh',
       autoRefresh: 'Auto refresh',
       settings: 'Settings',
@@ -207,6 +209,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: "Heute",
       thisMonth: "Diesen Monat",
       allTime: "Seit Aufzeichnungsbeginn",
+      workspaceToday: "Dieses Projekt",
       refresh: "Aktualisieren",
       autoRefresh: "Auto-Aktualisierung",
       settings: "Einstellungen",
@@ -311,6 +314,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: '今日',
       thisMonth: '本月',
       allTime: '所有',
+      workspaceToday: '本專案',
       refresh: '重新整理',
       autoRefresh: '自動刷新',
       settings: '設定',
@@ -412,6 +416,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: '今日',
       thisMonth: '本月',
       allTime: '所有',
+      workspaceToday: '本项目',
       refresh: '刷新',
       autoRefresh: '自动刷新',
       settings: '设置',
@@ -513,6 +518,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: '今日',
       thisMonth: '今月',
       allTime: 'すべて',
+      workspaceToday: 'このプロジェクト',
       refresh: '更新',
       autoRefresh: '自動更新',
       settings: '設定',
@@ -615,6 +621,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       today: '오늘',
       thisMonth: '이번 달',
       allTime: '전체',
+      workspaceToday: '이 프로젝트',
       refresh: '새로고침',
       autoRefresh: '자동 새로고침',
       settings: '설정',

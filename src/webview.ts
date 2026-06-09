@@ -3109,8 +3109,14 @@ function updateMainChart(metric, container) {
     }
   });
 
-  // Update the hourly chart's Y-axis reference labels, if present.
-  const yvals = targetContainer.querySelectorAll('.hc-yaxis .hc-yval');
+  // Update the main chart's Y-axis reference labels for the new metric.
+  // Scope to the wrap that holds the bars we just updated — the same container
+  // also holds the token-composition chart's own hc-yaxis, so a container-wide
+  // query would find 6 values (not 3) and silently skip the update, leaving
+  // the axis stuck on the previous metric's units.
+  const firstBar = chartBars[0];
+  const wrap = firstBar && firstBar.closest ? firstBar.closest('.hc-wrap') : null;
+  const yvals = wrap ? wrap.querySelectorAll('.hc-yaxis .hc-yval') : [];
   if (yvals.length === 3) {
     yvals[0].textContent = formatValue(maxValue, metric);
     yvals[1].textContent = formatValue(maxValue / 2, metric);

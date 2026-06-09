@@ -663,6 +663,17 @@ export class ClaudeDataLoader {
    *   sits under it are preferred. Falls back to all records if the workspace
    *   has no matching records (e.g. a brand-new folder).
    */
+  /** Records whose working directory sits under the given workspace folder.
+   * Returns all records when no workspace is given. */
+  static filterByWorkspace(records: ClaudeUsageRecord[], workspacePath?: string): ClaudeUsageRecord[] {
+    if (!workspacePath) {
+      return records;
+    }
+    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const wp = norm(workspacePath);
+    return records.filter((r) => norm(r._projectPath || '').startsWith(wp));
+  }
+
   static getCurrentSessionData(records: ClaudeUsageRecord[], workspacePath?: string): SessionData | null {
     if (records.length === 0) {
       return null;

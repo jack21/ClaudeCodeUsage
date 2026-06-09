@@ -430,7 +430,10 @@ export class ClaudeCodeUsageExtension {
     // idle (avoids hammering /usage on every file-watch tick). The /usage
     // client has its own 429 cool-down, so 20 s is safe.
     const ttl = this.isActive() ? 20000 : 120000;
-    if (this.cache.usageLimits && age < ttl) {
+    // Bypass the cache when a cached window has already reset — otherwise the
+    // status bar would show the rolled-forward 0% estimate for up to a full
+    // TTL before the real new-window value arrives.
+    if (this.cache.usageLimits && age < ttl && !this.hasExpiredWindow(this.cache.usageLimits)) {
       return this.cache.usageLimits;
     }
     const fetched = await this.apiClient.fetchUsageLimits();
@@ -441,6 +444,20 @@ export class ClaudeCodeUsageExtension {
     }
     // Keep showing the last known value if a refresh fails.
     return this.cache.usageLimits;
+  }
+
+  /** True if any usage window's reset time has already passed (so the cached
+   * utilisation is stale and a refetch is warranted). */
+  private hasExpiredWindow(u: ClaudeApiUsageResponse): boolean {
+    const now = Date.now();
+    const expired = (w?: { resets_at: string }): boolean => {
+      if (!w) {
+        return false;
+      }
+      const t = Date.parse(w.resets_at);
+      return !isNaN(t) && t <= now;
+    };
+    return expired(u.five_hour) || expired(u.seven_day) || expired(u.seven_day_opus);
   }
 
   private async refreshData(manualTrigger: boolean = false): Promise<void> {
@@ -528,12 +545,14 @@ export class ClaudeCodeUsageExtension {
       }
 
       // Calculate usage data
-      // Scope the "current session" to this window's workspace so different
-      // workspaces show their own current conversation rather than a shared
-      // global figure.
       const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      // "Current session" (per-workspace) is still computed for the webview.
       const sessionData = ClaudeDataLoader.getCurrentSessionData(records, workspacePath);
       const todayData = ClaudeDataLoader.getTodayData(records);
+      // Status-bar secondary number: today's cost for the current workspace.
+      const workspaceTodayData = workspacePath
+        ? ClaudeDataLoader.getTodayData(ClaudeDataLoader.filterByWorkspace(records, workspacePath))
+        : null;
       const monthData = ClaudeDataLoader.getThisMonthData(records);
       const allTimeData = ClaudeDataLoader.getAllTimeData(records);
       const dailyDataForMonth = ClaudeDataLoader.getDailyDataForMonth(records);
@@ -545,7 +564,7 @@ export class ClaudeCodeUsageExtension {
 
       // Update UI — quota was already pushed above, so we pass it again only
       // to keep the success-path signature stable.
-      this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
+      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, usageLimits);
       if (updateWebview) {
         this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
       }
