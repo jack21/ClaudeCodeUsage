@@ -16,7 +16,11 @@ export class StatusBarManager {
     this.quotaItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
     this.quotaItem.command = 'claudeCodeUsage.showDetails';
 
-    this.updateStatusBar();
+    // Visible from t=0: an empty-text status bar item renders as nothing, so
+    // without this the extension appears "missing" until the first full
+    // refresh lands (which can lag behind a slow first quota fetch on a cold
+    // network). Reported as "usage not showing the first time I open VS Code".
+    this.setLoading(true);
   }
 
   setLoading(loading: boolean): void {

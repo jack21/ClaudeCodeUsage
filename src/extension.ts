@@ -52,6 +52,10 @@ export class ClaudeCodeUsageExtension {
   // startAutoRefresh runs so any older timer chain (e.g. left mid-flight by a
   // config change) stops instead of running concurrently with the new one.
   private refreshGen: number = 0;
+  // Early-retry counter for the quota fetch: when a window opens on a cold /
+  // flaky network and the first /usage fetch fails, retry with backoff so the
+  // indicator appears without waiting for the next regular tick.
+  private quotaRetryCount: number = 0;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -419,7 +423,9 @@ export class ClaudeCodeUsageExtension {
         return; // superseded by a newer startAutoRefresh — stop this chain
       }
       const base = Math.max(this.getConfiguration().refreshInterval * 1000, 30000);
-      const intervalMs = this.isActive() ? Math.min(base, 15000) : base;
+      // ~8 s while active: high-consumption models (Fable 5) move the numbers
+      // fast enough that 15 s reads as laggy.
+      const intervalMs = this.isActive() ? Math.min(base, 8000) : base;
       this.refreshTimer = setTimeout(() => {
         this.refreshData().finally(() => {
           if (gen === this.refreshGen) {
@@ -441,7 +447,7 @@ export class ClaudeCodeUsageExtension {
     // quota keeps pace during high-consumption ultracode runs), 120 s when
     // idle (avoids hammering /usage on every file-watch tick). The /usage
     // client has its own 429 cool-down, so 20 s is safe.
-    const ttl = this.isActive() ? 20000 : 120000;
+    const ttl = this.isActive() ? 15000 : 120000;
     // Bypass the cache when a cached window has already reset — otherwise the
     // status bar would show the rolled-forward 0% estimate for up to a full
     // TTL before the real new-window value arrives.
@@ -489,12 +495,28 @@ export class ClaudeCodeUsageExtension {
       // refreshes everything so the user can force-update on demand.
       const updateWebview = manualTrigger || !config.pauseDashboardRefresh;
 
-      // Quota is account-level, decoupled from local data. Refresh and push
-      // it unconditionally, even when the workspace has no Claude history or
-      // when something later fails — otherwise opening VS Code in a fresh
-      // project would hide a quota indicator that ought to be account-wide.
-      const usageLimits = await this.maybeFetchUsageLimits(config);
-      this.statusBar.updateQuota(usageLimits);
+      // Quota is account-level, decoupled from local data. Fire it without
+      // awaiting so a slow/cold OAuth fetch (curl can take seconds, or fail
+      // outright on a fresh window's flaky network) never delays the local
+      // cost figures — the cause of "usage not showing the first time I open
+      // VS Code". When the first fetch yields nothing, retry a few times with
+      // backoff instead of waiting for the next regular tick.
+      this.maybeFetchUsageLimits(config).then((limits) => {
+        this.statusBar.updateQuota(limits);
+        if (limits) {
+          this.quotaRetryCount = 0;
+        } else if (this.quotaRetryCount < 3) {
+          this.quotaRetryCount++;
+          setTimeout(() => {
+            this.maybeFetchUsageLimits(this.getConfiguration()).then((retry) => {
+              if (retry) {
+                this.quotaRetryCount = 0;
+                this.statusBar.updateQuota(retry);
+              }
+            });
+          }, 10000 * this.quotaRetryCount);
+        }
+      });
 
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
@@ -574,9 +596,9 @@ export class ClaudeCodeUsageExtension {
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
-      // Update UI — quota was already pushed above, so we pass it again only
-      // to keep the success-path signature stable.
-      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, usageLimits);
+      // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
+      // above; passing undefined leaves the quota item untouched here.
+      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
       if (updateWebview) {
         this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
       }
