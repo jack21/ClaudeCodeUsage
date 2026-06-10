@@ -348,6 +348,8 @@ export class ClaudeDataLoader {
       // record has the higher total token sum (issue #18).
       const processedHashes = new Map<string, number>();
       const records: ClaudeUsageRecord[] = [];
+      // sessionId → conversation title, harvested from `summary` log lines.
+      const titleBySession: Record<string, string> = {};
       // Content analysis (last 30 days) is optional — skipped when the user
       // disables it via claudeCodeUsage.enableContentAnalysis.
       const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
@@ -386,6 +388,14 @@ export class ClaudeDataLoader {
               // Feed every line into the content analysis (not only usage records).
               if (analysis) {
                 analyzeLine(parsed, analysis);
+              }
+
+              // Conversation title: Claude Code writes a summary line per
+              // session — the same title `claude --resume` shows. Keep the
+              // last one seen (titles get refreshed as the chat evolves).
+              const maybeSummary = parsed as { type?: unknown; summary?: unknown };
+              if (maybeSummary.type === 'summary' && typeof maybeSummary.summary === 'string') {
+                titleBySession[sessionInfo.sessionId] = maybeSummary.summary;
               }
 
               if (!validateUsageRecord(parsed)) {
@@ -455,6 +465,16 @@ export class ClaudeDataLoader {
         }
       }
 
+      // Attach harvested conversation titles. A post-pass because a session's
+      // summary line and its usage records can sit in different files
+      // (sub-agent logs share the parent session's id but carry no summary).
+      for (const record of records) {
+        const title = record._sessionId ? titleBySession[record._sessionId] : undefined;
+        if (title) {
+          record._sessionTitle = title;
+        }
+      }
+
       if (log) {
         const rejectedSummary = Object.entries(stats.rejected)
           .map(([reason, count]) => `${reason}=${count}`)
@@ -513,8 +533,27 @@ export class ClaudeDataLoader {
    * The encoded-cwd folder is the working directory with path separators replaced by '-'.
    */
   private static parseSessionInfo(filePath: string): { sessionId: string; projectName: string; projectPath: string } {
-    const sessionId = path.basename(filePath, '.jsonl');
-    const projectPath = path.basename(path.dirname(filePath));
+    // Layouts under ~/.claude/projects/:
+    //   <proj-encoded>/<session-id>.jsonl                                 (main conversation)
+    //   <proj-encoded>/<session-id>/subagents/workflows/<wf>/agent-*.jsonl (workflow sub-agents)
+    // Walk up from the 'projects' directory so sub-agent files resolve to
+    // their parent session and real project — the old basename-only logic
+    // attributed them to a 'wf_xxx' pseudo-project with an 'agent-xxx'
+    // session id, fragmenting Sessions/Projects aggregation.
+    const parts = filePath.split(/[\\/]/);
+    const projIdx = parts.lastIndexOf(CLAUDE_PROJECTS_DIR_NAME);
+    let projectPath: string;
+    let sessionId = path.basename(filePath, '.jsonl');
+    if (projIdx >= 0 && projIdx + 1 < parts.length - 1) {
+      projectPath = parts[projIdx + 1];
+      if (projIdx + 2 < parts.length - 1) {
+        // File is nested below a session directory: the session is that
+        // directory's name, not the (agent-xxx / journal) file name.
+        sessionId = parts[projIdx + 2];
+      }
+    } else {
+      projectPath = path.basename(path.dirname(filePath));
+    }
     // Use the last meaningful segment of the encoded path as a friendly project name.
     const segments = projectPath.split('-').filter((s) => s.length > 0);
     const projectName = segments.length > 0 ? segments[segments.length - 1] : projectPath || 'unknown';
@@ -663,7 +702,12 @@ export class ClaudeDataLoader {
    *   sits under it are preferred. Falls back to all records if the workspace
    *   has no matching records (e.g. a brand-new folder).
    */
-  /** Records whose working directory sits under the given workspace folder.
+  /** Records belonging to the given workspace folder. Two ways to match:
+   *  1. The record's `cwd` (preferred `_projectPath`) sits under the folder.
+   *  2. The record only has the dash-encoded project directory name (records
+   *     without a `cwd` field fall back to it) and that encoding matches the
+   *     workspace folder encoded the same way Claude Code does
+   *     (`D:\Jiaming\My_Proj` → `d--Jiaming-My-Proj`).
    * Returns all records when no workspace is given. */
   static filterByWorkspace(records: ClaudeUsageRecord[], workspacePath?: string): ClaudeUsageRecord[] {
     if (!workspacePath) {
@@ -671,19 +715,21 @@ export class ClaudeDataLoader {
     }
     const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     const wp = norm(workspacePath);
-    return records.filter((r) => norm(r._projectPath || '').startsWith(wp));
+    const encoded = workspacePath.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    return records.filter((r) => {
+      const p = norm(r._projectPath || '');
+      return p.startsWith(wp) || p === encoded;
+    });
   }
 
   static getCurrentSessionData(records: ClaudeUsageRecord[], workspacePath?: string): SessionData | null {
     if (records.length === 0) {
       return null;
     }
-    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
     let pool = records;
     if (workspacePath) {
-      const wp = norm(workspacePath);
-      const scoped = records.filter((r) => norm(r._projectPath || '').startsWith(wp));
+      const scoped = this.filterByWorkspace(records, workspacePath);
       if (scoped.length > 0) {
         pool = scoped;
       }
@@ -805,8 +851,11 @@ export class ClaudeDataLoader {
       const first = sessionRecords[0];
       const peakContextTokens = sessionRecords.reduce((peak, r) => Math.max(peak, this.recordContextTokens(r)), 0);
 
+      const title = sessionRecords.find((r) => r._sessionTitle)?._sessionTitle;
+
       return {
         sessionId,
+        title,
         projectName: first._projectName || 'unknown',
         projectPath: first._projectPath || '',
         startTime,

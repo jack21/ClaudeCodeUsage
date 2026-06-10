@@ -20,6 +20,9 @@ export interface ClaudeUsageRecord {
   _projectName?: string;
   _projectPath?: string;
   _gitBranch?: string;
+  // Human-readable conversation title from the session's `summary` log line
+  // (what `claude --resume` shows). Populated post-load per session.
+  _sessionTitle?: string;
 }
 
 export interface UsageData {
@@ -54,6 +57,8 @@ export interface SessionData extends UsageData {
 // Per-conversation breakdown: one entry per Claude Code session (.jsonl file).
 export interface SessionUsage {
   sessionId: string;
+  // Conversation title (from the session's summary line), when available.
+  title?: string;
   projectName: string;
   projectPath: string;
   startTime: Date;

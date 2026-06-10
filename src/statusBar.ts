@@ -68,7 +68,10 @@ export class StatusBarManager {
     // share next to the global total. Both reset at midnight (stable), unlike
     // the old "current session" which vanished after 5h idle.
     let text = `$(pulse) ${todayCost}`;
-    const ws = workspaceTodayData && workspaceTodayData.totalCost > 0 ? workspaceTodayData : null;
+    // Show the workspace figure whenever a workspace is open — including
+    // $0.00. Hiding it at zero made the item appear and disappear through the
+    // day, which read as a bug ("where did my number go?").
+    const ws = workspaceTodayData ?? null;
     if (ws) {
       text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
     }
@@ -202,7 +205,7 @@ export class StatusBarManager {
    */
   private createTooltip(todayData: UsageData, workspaceTodayData: UsageData | null): vscode.MarkdownString {
     const t = I18n.t.popup;
-    const ws = workspaceTodayData && workspaceTodayData.totalCost > 0 ? workspaceTodayData : null;
+    const ws = workspaceTodayData;
 
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;

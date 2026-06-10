@@ -919,9 +919,14 @@ export class UsageWebviewProvider {
     let rows = '';
     this.sessionBreakdown.forEach((s) => {
       const d = s.data;
+      // Conversation title (the name `claude --resume` shows); falls back to a
+      // short session id so same-project rows stay distinguishable either way.
+      const fullName = s.title || s.sessionId;
+      const displayName = fullName.length > 40 ? fullName.slice(0, 40) + '…' : fullName;
       rows +=
         '<tr class="sort-row"' +
         ' data-sort-time="' + s.startTime.getTime() + '"' +
+        ' data-sort-session="' + this.escapeHtml(fullName.toLowerCase()) + '"' +
         ' data-sort-project="' + this.escapeHtml((s.projectName || '').toLowerCase()) + '"' +
         ' data-sort-context="' + s.peakContextTokens + '"' +
         ' data-sort-duration="' + (s.endTime.getTime() - s.startTime.getTime()) + '"' +
@@ -929,6 +934,9 @@ export class UsageWebviewProvider {
         '>' +
         '<td class="date-cell" title="' + this.escapeHtml(s.sessionId) + '">' +
         this.escapeHtml(this.formatDateTime(s.startTime)) +
+        '</td>' +
+        '<td class="name-cell" title="' + this.escapeHtml(fullName + ' (' + s.sessionId + ')') + '">' +
+        this.escapeHtml(displayName) +
         '</td>' +
         this.renderProjectCell(s.projectName, s.projectPath) +
         '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
@@ -953,6 +961,7 @@ export class UsageWebviewProvider {
       '<table class="daily-table sortable-table">' +
       '<thead><tr>' +
       th('time', t.startTime) +
+      th('session', t.sessionTitle) +
       th('project', t.project) +
       th('cost', t.cost) +
       th('input', t.inputTokens) +
@@ -1536,14 +1545,14 @@ export class UsageWebviewProvider {
   }
 
   private getShortDate(dateString: string): string {
-    const date = new Date(dateString);
-    // Check if this is a month-only date (ends with -01)
+    // Parse 'YYYY-MM-DD' textually — new Date('YYYY-MM-DD') is UTC midnight,
+    // which shifts the displayed day back by one in negative-UTC timezones.
+    const [y, m, d] = dateString.split('-').map(Number);
+    // Month-only dates (first of month) label as YYYY/MM for monthly charts.
     if (dateString.endsWith('-01')) {
-      // Format as YYYY/MM for monthly data
-      return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      return `${y}/${String(m).padStart(2, '0')}`;
     }
-    // Format as MM/DD for daily data
-    return `${date.getMonth() + 1}/${date.getDate()}`;
+    return `${m}/${d}`;
   }
 
   private formatDate(dateString: string): string {
@@ -3189,10 +3198,10 @@ function renderHourlyData(hourlyData, date) {
   html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  html += '<div class="chart-container">';
+  // hc-wrap is self-contained (own Y-axis + scroll); a fixed-height
+  // chart-container wrapper would add a second scrollbar.
   html += '<div class="chart-content" id="hourly-chart-' + date + '">';
   html += renderHourlyChart(hourlyData, 'cost');
-  html += '</div>';
   html += '</div>';
 
   html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
@@ -3240,10 +3249,9 @@ function renderDailyData(dailyData, monthDate) {
   html += '<button class="chart-tab" data-metric="messages">${I18n.t.popup.messages}</button>';
   html += '</div>';
 
-  html += '<div class="chart-container">';
+  // hc-wrap is self-contained (own Y-axis + scroll); no chart-container.
   html += '<div class="chart-content" id="daily-chart-' + monthDate + '">';
   html += renderDailyChart(dailyData, 'cost');
-  html += '</div>';
   html += '</div>';
 
   html += '<div class="daily-table-container"><table class="daily-table"><thead><tr>';
@@ -3352,14 +3360,19 @@ function griddedChart(items, metric, opts) {
 }
 
 function renderDailyChart(dailyData, metric) {
+  // Parse 'YYYY-MM-DD' textually: new Date('YYYY-MM-DD') is interpreted as
+  // UTC midnight, so getMonth()/getDate() shift back a day in negative-UTC
+  // timezones. String parts are timezone-proof.
+  function parts(dateStr) { return dateStr.split('-').map(Number); }
   return griddedChart(dailyData, metric, {
     keyName: 'date',
     clickable: false,
     // Show month/day (not just the day number) so the axis isn't ambiguous.
-    getLabel: function(it) { var d = new Date(it.date); return (d.getMonth() + 1) + '/' + d.getDate(); },
+    getLabel: function(it) { var p = parts(it.date); return p[1] + '/' + p[2]; },
     getTitle: function(it, v) {
-      var d = new Date(it.date);
-      return d.toLocaleDateString(__locale, __dateOpts()) + ': ' + formatValue(v, metric);
+      var p = parts(it.date);
+      var d = new Date(p[0], p[1] - 1, p[2]); // local-time construction
+      return d.toLocaleDateString(__locale) + ': ' + formatValue(v, metric);
     }
   });
 }
