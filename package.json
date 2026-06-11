@@ -85,7 +85,7 @@
         "claudeCodeUsage.usageLimitTracking": {
           "type": "boolean",
           "default": true,
-          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
+          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json or macOS Keychain) — no configuration needed."
         },
         "claudeCodeUsage.advice.apiKey": {
           "type": "string",
