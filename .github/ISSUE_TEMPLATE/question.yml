@@ -1,0 +1,21 @@
+name: Question / Support
+description: Ask how something works or get help with setup
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quick checks first: the [README](../../blob/main/README.md) covers
+        configuration, how costs are calculated, and troubleshooting (incl.
+        proxies, history retention, and the AI advice feature).
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context (optional)
+      description: Extension version, OS, proxy/model setup — whatever seems relevant.

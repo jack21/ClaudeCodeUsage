@@ -4,7 +4,10 @@
 .github/**
 src/**
 CLAUDE.md
+CLAUDE.local.md
+CONTRIBUTING.md
 probe-*.mjs
+docs/**
 
 .gitignore
 .yarnrc

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ClaudeApiUsageResponse, ClaudeUsageLimit, SessionData, UsageData } from './types';
+import { ClaudeApiUsageResponse, ClaudeUsageLimit, UsageData } from './types';
 import { I18n } from './i18n';
 
 export class StatusBarManager {
@@ -16,7 +16,11 @@ export class StatusBarManager {
     this.quotaItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
     this.quotaItem.command = 'claudeCodeUsage.showDetails';
 
-    this.updateStatusBar();
+    // Visible from t=0: an empty-text status bar item renders as nothing, so
+    // without this the extension appears "missing" until the first full
+    // refresh lands (which can lag behind a slow first quota fetch on a cold
+    // network). Reported as "usage not showing the first time I open VS Code".
+    this.setLoading(true);
   }
 
   setLoading(loading: boolean): void {
@@ -26,7 +30,7 @@ export class StatusBarManager {
 
   updateUsageData(
     todayData: UsageData | null,
-    sessionData?: SessionData | null,
+    workspaceTodayData?: UsageData | null,
     error?: string,
     usageLimits?: ClaudeApiUsageResponse | null
   ): void {
@@ -45,7 +49,7 @@ export class StatusBarManager {
       return;
     }
 
-    this.showTodayData(todayData, sessionData ?? null);
+    this.showTodayData(todayData, workspaceTodayData ?? null);
     // The usageLimits arg is kept for callers that want a single-call update
     // path; quota was already refreshed earlier in this cycle.
     if (usageLimits !== undefined) {
@@ -61,17 +65,23 @@ export class StatusBarManager {
     }
   }
 
-  private showTodayData(todayData: UsageData, sessionData: SessionData | null): void {
+  private showTodayData(todayData: UsageData, workspaceTodayData: UsageData | null): void {
     const todayCost = I18n.formatCurrency(todayData.totalCost);
-    // Primary number = today's cost. When an active session exists, show its
-    // cost as a secondary value so per-session spend is visible at a glance.
+    // Primary number = today's total cost across all projects. Secondary number
+    // = today's cost for the current workspace, so you can see this project's
+    // share next to the global total. Both reset at midnight (stable), unlike
+    // the old "current session" which vanished after 5h idle.
     let text = `$(pulse) ${todayCost}`;
-    if (sessionData && sessionData.messageCount > 0) {
-      text += ` $(history) ${I18n.formatCurrency(sessionData.totalCost)}`;
+    // Show the workspace figure whenever a workspace is open — including
+    // $0.00. Hiding it at zero made the item appear and disappear through the
+    // day, which read as a bug ("where did my number go?").
+    const ws = workspaceTodayData ?? null;
+    if (ws) {
+      text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
     }
     this.statusBarItem.text = text;
 
-    this.statusBarItem.tooltip = this.createTooltip(todayData, sessionData);
+    this.statusBarItem.tooltip = this.createTooltip(todayData, ws);
     this.statusBarItem.backgroundColor = undefined;
   }
 
@@ -81,8 +91,16 @@ export class StatusBarManager {
    * Public so it can be refreshed on its own while the rest of the UI is idle.
    */
   updateQuota(usageLimits: ClaudeApiUsageResponse | null): void {
-    const fiveHour = usageLimits?.five_hour;
-    const weekly = usageLimits?.seven_day;
+    // A window's utilization is a point-in-time snapshot only valid until its
+    // resets_at. When the OAuth fetch starts failing (expired creds, 401/403,
+    // offline, rate-limited), maybeFetchUsageLimits keeps handing us the last
+    // successful response — so without this guard we'd keep rendering a value
+    // long after its window rolled over (e.g. a stale "5h:100%" lingering for
+    // hours, even after a plan upgrade or a reset). Drop any window whose reset
+    // time has passed. Adapted from PR #24 by @nickearnshaw.
+    const live = this.liveWindows(usageLimits);
+    const fiveHour = live?.five_hour;
+    const weekly = live?.seven_day;
     if (!fiveHour && !weekly) {
       this.quotaItem.hide();
       return;
@@ -110,8 +128,67 @@ export class StatusBarManager {
       this.quotaItem.backgroundColor = undefined;
     }
 
-    this.quotaItem.tooltip = this.createQuotaTooltip(usageLimits as ClaudeApiUsageResponse);
+    this.quotaItem.tooltip = this.createQuotaTooltip(live as ClaudeApiUsageResponse);
     this.quotaItem.show();
+  }
+
+  /**
+   * Return a copy of the usage response containing only windows still inside
+   * their current period. A window whose resets_at has already passed has
+   * rolled over, so its cached utilization is stale and must not be shown.
+   * A window with an unparseable resets_at is kept (we don't hide data we
+   * can't reason about). Returns null when nothing current remains, which
+   * collapses the indicator instead of showing a wrong figure.
+   * Adapted from PR #24 by @nickearnshaw.
+   */
+  private liveWindows(usageLimits: ClaudeApiUsageResponse | null): ClaudeApiUsageResponse | null {
+    if (!usageLimits) {
+      return null;
+    }
+    const now = Date.now();
+    const H5 = 5 * 60 * 60 * 1000;
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    // A window's utilization is a point-in-time snapshot valid until resets_at.
+    // Once that passes the window has rolled over: utilisation is back at 0 for
+    // the new period. Rather than show a stale value (the old #24 bug) or hide
+    // the row entirely (which looked like the indicator vanished), we display
+    // 0% and roll the reset time forward by whole periods so the countdown is
+    // sensible. A forced refetch (see extension.maybeFetchUsageLimits) then
+    // replaces this estimate with the real new-window value shortly after.
+    const roll = (limit: ClaudeUsageLimit | undefined, periodMs: number): ClaudeUsageLimit | undefined => {
+      if (!limit) {
+        return undefined;
+      }
+      const t = Date.parse(limit.resets_at);
+      if (isNaN(t)) {
+        return limit; // unparseable — don't reason about it, keep as-is
+      }
+      if (t > now) {
+        return limit; // still current
+      }
+      // Expired. If it reset only recently (within ~2 periods), the data is
+      // simply waiting for the next refetch — show 0% for the fresh window.
+      // But if it expired long ago, the fetch has been failing for ages and we
+      // have no trustworthy data: drop it rather than assert a fabricated 0%
+      // (which would falsely imply "full quota available").
+      if (now - t > 2 * periodMs) {
+        return undefined;
+      }
+      let next = t;
+      while (next <= now) {
+        next += periodMs;
+      }
+      return { utilization: 0, resets_at: new Date(next).toISOString() };
+    };
+    const out: ClaudeApiUsageResponse = {
+      five_hour: roll(usageLimits.five_hour, H5),
+      seven_day: roll(usageLimits.seven_day, WEEK),
+      seven_day_opus: roll(usageLimits.seven_day_opus, WEEK)
+    };
+    if (!out.five_hour && !out.seven_day && !out.seven_day_opus) {
+      return null;
+    }
+    return out;
   }
 
   private showNoData(): void {
@@ -130,15 +207,15 @@ export class StatusBarManager {
    * Hover tooltip as a Markdown table so figures line up in neat, right-aligned
    * columns (a plain-text tooltip cannot align reliably).
    */
-  private createTooltip(todayData: UsageData, sessionData: SessionData | null): vscode.MarkdownString {
+  private createTooltip(todayData: UsageData, workspaceTodayData: UsageData | null): vscode.MarkdownString {
     const t = I18n.t.popup;
-    const session = sessionData && sessionData.messageCount > 0 ? sessionData : null;
+    const ws = workspaceTodayData;
 
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
 
-    if (session) {
-      md.appendMarkdown(`| | $(pulse) ${t.today} | $(history) ${I18n.t.statusBar.currentSession} |\n`);
+    if (ws) {
+      md.appendMarkdown(`| | $(pulse) ${t.today} | $(folder) ${t.workspaceToday} |\n`);
       md.appendMarkdown(`|:--|--:|--:|\n`);
     } else {
       md.appendMarkdown(`| | $(pulse) ${t.today} |\n`);
@@ -146,31 +223,31 @@ export class StatusBarManager {
     }
 
     const row = (label: string, todayValue: string, sessionValue: string): void => {
-      md.appendMarkdown(session ? `| ${label} | ${todayValue} | ${sessionValue} |\n` : `| ${label} | ${todayValue} |\n`);
+      md.appendMarkdown(ws ? `| ${label} | ${todayValue} | ${sessionValue} |\n` : `| ${label} | ${todayValue} |\n`);
     };
 
-    row(t.cost, I18n.formatCurrency(todayData.totalCost), session ? I18n.formatCurrency(session.totalCost) : '');
+    row(t.cost, I18n.formatCurrency(todayData.totalCost), ws ? I18n.formatCurrency(ws.totalCost) : '');
     row(
       t.inputTokens,
       I18n.formatNumber(todayData.totalInputTokens),
-      session ? I18n.formatNumber(session.totalInputTokens) : ''
+      ws ? I18n.formatNumber(ws.totalInputTokens) : ''
     );
     row(
       t.outputTokens,
       I18n.formatNumber(todayData.totalOutputTokens),
-      session ? I18n.formatNumber(session.totalOutputTokens) : ''
+      ws ? I18n.formatNumber(ws.totalOutputTokens) : ''
     );
     row(
       t.cacheCreation,
       I18n.formatNumber(todayData.totalCacheCreationTokens),
-      session ? I18n.formatNumber(session.totalCacheCreationTokens) : ''
+      ws ? I18n.formatNumber(ws.totalCacheCreationTokens) : ''
     );
     row(
       t.cacheRead,
       I18n.formatNumber(todayData.totalCacheReadTokens),
-      session ? I18n.formatNumber(session.totalCacheReadTokens) : ''
+      ws ? I18n.formatNumber(ws.totalCacheReadTokens) : ''
     );
-    row(t.messages, I18n.formatNumber(todayData.messageCount), session ? I18n.formatNumber(session.messageCount) : '');
+    row(t.messages, I18n.formatNumber(todayData.messageCount), ws ? I18n.formatNumber(ws.messageCount) : '');
 
     md.appendMarkdown(`\n\n*Click for detailed breakdown*`);
     return md;

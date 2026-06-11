@@ -105,9 +105,19 @@ export class ClaudeApiClient {
       return null;
     }
     if (this.isTokenExpired(credentials)) {
+      // Claude Code refreshes ~/.claude/.credentials.json itself. Re-read from
+      // disk FIRST — it has very likely already rotated the token — before
+      // attempting our own refresh. Without this, a cached-in-memory expired
+      // token would stick until the extension host restarts, which is exactly
+      // why "quota only comes back after I restart VS Code" was happening.
+      const fresh = await this.loadCredentials();
+      if (fresh && !this.isTokenExpired(fresh)) {
+        this.log('token: expired in memory, re-read a fresh one from disk');
+        return fresh;
+      }
       this.log('token: expired, refreshing');
       try {
-        credentials = await this.refreshAccessToken(credentials);
+        credentials = await this.refreshAccessToken(fresh || credentials);
       } catch (e) {
         this.log(`token: refresh failed: ${(e as Error).message}`);
         return null;
@@ -235,8 +245,12 @@ export class ClaudeApiClient {
       let response = await this.callUsageApi(credentials.claudeAiOauth.accessToken);
 
       if (response.status === 429) {
-        this.rateLimitedUntil = Date.now() + 5 * 60 * 1000;
-        this.log('429: rate-limited, cooling down 5 min');
+        // 60 s cool-down. The old flat 5-minute cool-down made a single 429
+        // look like the indicator had broken (only a restart appeared to fix
+        // it). Paired with the gentler fetch cadence below, 429s should be
+        // rare and short-lived.
+        this.rateLimitedUntil = Date.now() + 60 * 1000;
+        this.log('429: rate-limited, cooling down 60s');
         return null;
       }
 

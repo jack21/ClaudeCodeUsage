@@ -4,6 +4,70 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [2.0.2] — 2026-06-09
+
+### Added
+- **Claude Fable 5 / Mythos 5** pricing ($10 / $50, cache write $12.50,
+  cache read $1 per MTok). Model ids with a `[1m]` long-context suffix are
+  now resolved to their base pricing (also fixes proxy configs like
+  `deepseek-v4-pro[1m]`).
+- **Stacked cost-composition charts** on the Today (hourly), This-Month
+  (daily) and All-Time (monthly) views, with a Y-axis and reference lines.
+  Each cost bar splits into input / output / cache-write / cache-read; the
+  metric switcher still renders single bars for token / message metrics.
+- **Sessions tab "Session" column** — the conversation title (the name
+  `claude --resume` shows), sortable, so same-project sessions are
+  distinguishable.
+- Dashboard **auto-refresh toggle** had already landed in 2.0.1; this release
+  refines its surrounding behaviour.
+
+### Fixed
+- **Quota indicator stale / stuck after reset** — an expired window now shows
+  0% (rolled forward to the new period) and is refetched, instead of lingering
+  on a stale value or vanishing. Adapted from
+  [PR #24](https://github.com/jack21/ClaudeCodeUsage/pull/24) by
+  [@nickearnshaw](https://github.com/nickearnshaw).
+- **Quota "only comes back after I restart VS Code"** — an expired in-memory
+  OAuth token now triggers a re-read of `~/.claude/.credentials.json` (which
+  Claude Code keeps refreshing) before our own refresh; the 429 cool-down was
+  cut from 5 minutes to 60 s; and the `/usage` fetch cadence was made gentler
+  (60 s active / 120 s idle) so rate-limiting is rare.
+- **Usage not showing the first time you open VS Code** — the status bar now
+  shows a loading state immediately and the quota fetch is non-blocking, so
+  local cost figures appear at once and the quota follows.
+  ([#26](https://github.com/jack21/ClaudeCodeUsage/issues/26))
+- **"This project" figure undercounted / disappeared** — per-conversation
+  attribution now keys off the session's home project directory instead of the
+  per-record working directory (which wanders mid-session), and the figure is
+  shown even at $0 instead of vanishing through the day.
+- **Message count** now counts messages you actually typed, excluding API
+  calls, command echoes (`/model` …) and interruption markers (a session that
+  read 106 now reads ~86). Token figures are unchanged.
+- **Per-metric chart Y-axis** now updates when switching metric (it was stuck
+  on the cost units).
+- **Activity-aware refresh** (≈8 s while Claude Code is writing, the user's
+  interval when idle) with coalesced triggers, so high-consumption ultracode /
+  Fable 5 runs update promptly without starving on rapid sub-agent writes.
+- **Sub-agent / workflow log attribution** — records under
+  `subagents/workflows/…` resolve to their parent session and real project
+  (were fragmenting into `wf_*` / `agent-*` pseudo-entries).
+- Drill-down charts: removed a double scrollbar; date labels parse the date
+  textually (UTC parsing shifted labels a day in negative-UTC timezones).
+- `launch.json` `preLaunchTask` fixed so F5 works in a single-root checkout
+  ([PR #22](https://github.com/jack21/ClaudeCodeUsage/pull/22), @nickearnshaw).
+
+### Docs / project
+- Refreshed all language READMEs to v2 (en / zh-TW / ja / ko concise; zh-CN
+  full translation); fixed the `CHANGELOG.md` link casing.
+- Added `CONTRIBUTING.md`, a PR template, and issue templates; documented
+  `cleanupPeriodDays` for history retention
+  ([PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21), @nickearnshaw).
+- Loading-spinner / re-entrancy guard for the webview
+  ([PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20), @nickearnshaw).
+- Updated `CLAUDE.md` to the v2 architecture and release process.
+
+---
+
 ## [2.0.1] — 2026-06-03
 
 ### Added

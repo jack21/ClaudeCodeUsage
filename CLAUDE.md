@@ -1,83 +1,80 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (and human contributors) working in this repository.
 
 ## Project Overview
 
-This is a VSCode extension called "Claude Code Usage" that monitors Claude Code usage and costs in the VSCode status bar. The extension reads Claude Code usage logs and displays real-time statistics including token consumption, costs, and message counts.
+"Claude Code Usage" is a VS Code extension that monitors Claude Code token
+usage and cost estimates in the status bar, with a detailed dashboard webview.
+It reads Claude Code's local `.jsonl` conversation logs and an OAuth-backed
+real `/usage` quota.
 
-## Architecture
+**Positioning (keep this in mind for every change):** Claude-only, lightweight,
+**token-precision over cost-precision**. Cost figures are estimates derived from
+public per-million-token rates — the product value is helping users *see where
+tokens go* and *use Claude Code better* (incl. the AI advice feature). Not a
+billing tool, not a multi-provider monitor.
 
-- **Main Entry Point**: `src/extension.ts` - Contains the main extension class and activation logic
-- **Data Processing**: `src/dataLoader.ts` - Handles loading and parsing Claude usage records from JSONL files
-- **UI Components**: 
-  - `src/statusBar.ts` - Manages the status bar display
-  - `src/webview.ts` - Provides detailed usage breakdown in a webview panel
-- **Internationalization**: `src/i18n.ts` - Multi-language support (English, 繁體中文, 简体中文, Japanese, Korean)
-- **Type Definitions**: `src/types.ts` - Core interfaces for usage data, session data, and configuration
+## Architecture (`src/`)
 
-## Development Commands
+- **`extension.ts`** — main class, activation, refresh orchestration. Owns the
+  adaptive refresh cadence (activity-aware: ~15 s while logs are being written,
+  the user's interval when idle), the re-entrancy guard + coalescing, the
+  `fs.watch` recursive file watcher, and the diagnostic `OutputChannel`.
+- **`dataLoader.ts`** — finds + parses `.jsonl` records; dedup (keeps the
+  higher-token record on a hash collision); aggregation (today / month / all
+  time / sessions / projects / branches); content analysis; diagnostic stats.
+- **`statusBar.ts`** — the two status-bar items (cost + quota). Quota tooltip is
+  an HTML progress bar; `liveWindows()` drops windows whose reset time has
+  passed so a stale value never lingers.
+- **`webview.ts`** — the dashboard (tabs, charts, tables). Large single file:
+  server-rendered HTML + an inlined client script. Cost charts render as
+  gridded stacked compositions.
+- **`pricing.ts`** — pricing table (Anthropic + reference rates for OpenAI /
+  Gemini / DeepSeek / Kimi / GLM / Qwen), family-aware fallback, LiteLLM
+  runtime refresh.
+- **`claudeApiClient.ts`** — OAuth credential read + token refresh + `/usage`
+  fetch. Routes through the system `curl` binary because Anthropic's edge
+  rejects Node's TLS fingerprint.
+- **`advisor.ts`** + **`adviceDemoSample.ts`** — the opt-in AI advice feature
+  and its localised static demo.
+- **`i18n.ts`** — translations for en / de-DE / zh-TW / zh-CN / ja / ko.
+- **`types.ts`** — shared interfaces.
+
+## Build & Release
+
+This repo is built with a **portable Node** (no global install assumed) and
+`@vscode/vsce`. Common commands:
 
 ```bash
-# Compile TypeScript to JavaScript
-npm run compile
-
-# Watch mode for development (automatically recompiles on changes)
-npm run watch
-
-# Prepare for publishing (runs compile)
-npm run vscode:prepublish
-
-# Package extension for distribution
-vsce package
-
-# Install extension locally for testing
-code --install-extension claude-code-usage-<version>.vsix
+npm run compile        # tsc -> out/
+npm run watch          # tsc --watch
+npx @vscode/vsce package   # build a .vsix
 ```
 
-## Testing and Debugging
+- **F5** launches the Extension Development Host for manual testing.
+- **Releases are automated.** Pushing a `v*` tag to the upstream repo triggers
+  `.github/workflows/publish.yml`, which compiles, packages, publishes to the
+  VS Code Marketplace + Open VSX, and attaches the `.vsix` to a GitHub Release.
+  The workflow verifies the tag matches `package.json`'s `version`. So to
+  release: bump `version`, update `CHANGELOG.md`, merge to `main`, then
+  `git tag vX.Y.Z && git push <upstream> vX.Y.Z`.
+- Versioning follows semver: bug-only → patch (`2.0.x`); new user-facing
+  feature → minor (`2.x.0`); breaking UX → major.
 
-- **F5 Key**: Launch Extension Development Host in VSCode to test the extension
-- **Extension Host**: The extension runs in a separate VSCode window for debugging
-- **Console Logs**: Use VSCode Developer Tools Console to view extension logs
+## Conventions
 
-## Key Technical Details
-
-- **Data Source**: Reads from Claude Code's JSONL usage logs located in `~/.config/claude/projects` or `~/.claude/projects`
-- **Caching Strategy**: Implements 1-minute cache to avoid excessive file I/O
-- **Auto-refresh**: Configurable refresh intervals (minimum 30 seconds)
-- **Token Types**: Tracks input, output, cache creation, and cache read tokens
-- **Cost Calculation**: Supports different model pricing with tier-based rates
-- **File Processing**: Native file search without external dependencies (removed tinyglobby and zod)
-- **Data Aggregation**: Processes JSONL files to calculate daily, weekly, monthly, and all-time usage statistics
-
-## Extension Configuration
-
-The extension contributes several VSCode settings under `claudeCodeUsage.*`:
-- `refreshInterval`: How often to update data (default: 60 seconds)
-- `dataDirectory`: Custom path to Claude data directory
-- `language`: Display language preference
-- `decimalPlaces`: Precision for cost display
-
-## Build Output
-
-Compiled JavaScript files are output to the `out/` directory, which serves as the extension's entry point via `package.json`'s `main` field.
-
-## Extension Commands
-
-The extension provides three commands accessible via Command Palette:
-- `Claude Code Usage: Refresh Usage Data` - Manually refresh the usage statistics
-- `Claude Code Usage: Show Usage Details` - Open detailed usage dashboard in webview
-- `Claude Code Usage: Open Settings` - Quick access to extension configuration
+- **Commit hygiene:** one meaningful commit per logical change; avoid a stream
+  of "fix the previous fix" commits. RC branches squash-merge to `main`.
+- **Tests:** pure-logic modules (pricing, aggregation, quota-window handling,
+  i18n) are the high-value test targets. A `node:test` suite is planned
+  (see issue #25).
+- **Data is read-only:** the extension never writes to `~/.claude/`.
 
 ## Documentation Maintenance
 
-**IMPORTANT**: When updating README.md, you MUST simultaneously update all language versions:
-- `README.md` (main, multi-language index)
-- `README-en.md` (English)
-- `README-zh-TW.md` (繁體中文)
-- `README-zh-CN.md` (简体中文)
-- `README-ja.md` (日本語)
-- `README-ko.md` (한국어)
-
-This ensures consistency across all documentation and maintains the multi-language support that users expect.
+When changing user-facing behaviour, update `README.md` (the canonical, fullest
+doc) and keep the language editions reasonably in sync:
+`README-en.md` (concise), `README-zh-CN.md` (full translation — highest-traffic
+locale), `README-zh-TW.md` / `README-ja.md` / `README-ko.md` (concise).
+`CHANGELOG.md` is the authoritative change record.

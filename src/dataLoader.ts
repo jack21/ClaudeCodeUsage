@@ -348,6 +348,11 @@ export class ClaudeDataLoader {
       // record has the higher total token sum (issue #18).
       const processedHashes = new Map<string, number>();
       const records: ClaudeUsageRecord[] = [];
+      // sessionId → conversation title. Current Claude Code writes
+      // `custom-title` (user-set) and `ai-title` (auto) lines; older versions
+      // wrote `summary`. A custom title always wins over an AI one.
+      const aiTitleBySession: Record<string, string> = {};
+      const customTitleBySession: Record<string, string> = {};
       // Content analysis (last 30 days) is optional — skipped when the user
       // disables it via claudeCodeUsage.enableContentAnalysis.
       const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
@@ -362,6 +367,7 @@ export class ClaudeDataLoader {
         replacedByDedup: 0,
         skippedByDedup: 0,
         kept: 0,
+        userPrompts: 0,
         // model name → { count, totalTokens }. totalTokens lets us tell whether
         // records exist but are all zeros (proxy-placeholder only).
         models: {} as Record<string, { count: number; tokens: number }>,
@@ -377,6 +383,10 @@ export class ClaudeDataLoader {
 
           // Each .jsonl file is one Claude Code conversation/session.
           const sessionInfo = this.parseSessionInfo(file);
+          // Sub-agent / workflow logs: count their usage, but never harvest
+          // user prompts from them (their "user" lines are agent-framework
+          // task dispatches, not something the user typed).
+          const isSubagentFile = /[\\/]subagents[\\/]/.test(file);
 
           for (const line of lines) {
             stats.linesScanned += 1;
@@ -386,6 +396,63 @@ export class ClaudeDataLoader {
               // Feed every line into the content analysis (not only usage records).
               if (analysis) {
                 analyzeLine(parsed, analysis);
+              }
+
+              // Conversation title lines. Keep the last seen of each kind —
+              // titles get refreshed as the chat evolves.
+              const lineAny = parsed as Record<string, unknown>;
+              if (lineAny.type === 'ai-title' && typeof lineAny.aiTitle === 'string') {
+                aiTitleBySession[sessionInfo.sessionId] = lineAny.aiTitle;
+              } else if (lineAny.type === 'custom-title' && typeof lineAny.customTitle === 'string') {
+                customTitleBySession[sessionInfo.sessionId] = lineAny.customTitle;
+              } else if (lineAny.type === 'summary' && typeof lineAny.summary === 'string') {
+                // Legacy location (older Claude Code versions).
+                aiTitleBySession[sessionInfo.sessionId] = lineAny.summary;
+              }
+
+              // Genuine user prompts become synthetic zero-usage records so
+              // "Messages" counts what the user actually typed (not API
+              // calls). Excludes meta lines (command output), sidechain
+              // dispatches and anything inside sub-agent logs.
+              if (
+                !isSubagentFile &&
+                (lineAny.type === 'user' || (lineAny.message as { role?: unknown } | undefined)?.role === 'user') &&
+                !lineAny.isMeta &&
+                !lineAny.isSidechain &&
+                typeof lineAny.timestamp === 'string'
+              ) {
+                const content = (lineAny.message as { content?: unknown } | undefined)?.content;
+                const text =
+                  typeof content === 'string'
+                    ? content
+                    : Array.isArray(content)
+                      ? content
+                          .filter((b: { type?: unknown; text?: unknown }) => b?.type === 'text' && typeof b.text === 'string')
+                          .map((b: { text: string }) => b.text)
+                          .join('')
+                      : '';
+                if (text.trim().length > 0 && !this.isSyntheticUserText(text)) {
+                  const prompt: ClaudeUsageRecord = {
+                    timestamp: lineAny.timestamp,
+                    message: { usage: { input_tokens: 0, output_tokens: 0 } },
+                    _isUserPrompt: true,
+                    _sessionId: sessionInfo.sessionId,
+                    _projectDirEncoded: sessionInfo.projectPath,
+                  };
+                  const pcwd = lineAny.cwd;
+                  if (typeof pcwd === 'string' && pcwd.trim() !== '') {
+                    prompt._projectPath = pcwd;
+                    prompt._projectName = this.lastPathSegment(pcwd);
+                  } else {
+                    prompt._projectPath = sessionInfo.projectPath;
+                    prompt._projectName = sessionInfo.projectName;
+                  }
+                  const pBranch = lineAny.gitBranch;
+                  prompt._gitBranch = typeof pBranch === 'string' && pBranch.trim() !== '' ? pBranch : undefined;
+                  records.push(prompt);
+                  stats.userPrompts += 1;
+                  continue;
+                }
               }
 
               if (!validateUsageRecord(parsed)) {
@@ -402,6 +469,7 @@ export class ClaudeDataLoader {
               // over the lossy, dash-encoded folder name when it is available.
               const record = data as ClaudeUsageRecord;
               record._sessionId = sessionInfo.sessionId;
+              record._projectDirEncoded = sessionInfo.projectPath;
               const cwd = (parsed as { cwd?: unknown }).cwd;
               if (typeof cwd === 'string' && cwd.trim() !== '') {
                 record._projectPath = cwd;
@@ -455,6 +523,19 @@ export class ClaudeDataLoader {
         }
       }
 
+      // Attach harvested conversation titles (custom beats AI). A post-pass
+      // because a session's title lines and its usage records can sit in
+      // different files (sub-agent logs share the parent session's id).
+      for (const record of records) {
+        if (!record._sessionId) {
+          continue;
+        }
+        const title = customTitleBySession[record._sessionId] || aiTitleBySession[record._sessionId];
+        if (title) {
+          record._sessionTitle = title;
+        }
+      }
+
       if (log) {
         const rejectedSummary = Object.entries(stats.rejected)
           .map(([reason, count]) => `${reason}=${count}`)
@@ -474,7 +555,8 @@ export class ClaudeDataLoader {
           .join(', ') || 'none';
         log(
           `loader: ${stats.files} files, ${stats.linesScanned} lines | ` +
-            `kept=${stats.kept}, dedup-replaced=${stats.replacedByDedup}, ` +
+            `kept=${stats.kept}, user-prompts=${stats.userPrompts}, ` +
+            `dedup-replaced=${stats.replacedByDedup}, ` +
             `dedup-skipped=${stats.skippedByDedup}, parse-errors=${stats.parseErrors} | ` +
             `rejected: ${rejectedSummary}`
         );
@@ -513,12 +595,53 @@ export class ClaudeDataLoader {
    * The encoded-cwd folder is the working directory with path separators replaced by '-'.
    */
   private static parseSessionInfo(filePath: string): { sessionId: string; projectName: string; projectPath: string } {
-    const sessionId = path.basename(filePath, '.jsonl');
-    const projectPath = path.basename(path.dirname(filePath));
+    // Layouts under ~/.claude/projects/:
+    //   <proj-encoded>/<session-id>.jsonl                                 (main conversation)
+    //   <proj-encoded>/<session-id>/subagents/workflows/<wf>/agent-*.jsonl (workflow sub-agents)
+    // Walk up from the 'projects' directory so sub-agent files resolve to
+    // their parent session and real project — the old basename-only logic
+    // attributed them to a 'wf_xxx' pseudo-project with an 'agent-xxx'
+    // session id, fragmenting Sessions/Projects aggregation.
+    const parts = filePath.split(/[\\/]/);
+    const projIdx = parts.lastIndexOf(CLAUDE_PROJECTS_DIR_NAME);
+    let projectPath: string;
+    let sessionId = path.basename(filePath, '.jsonl');
+    if (projIdx >= 0 && projIdx + 1 < parts.length - 1) {
+      projectPath = parts[projIdx + 1];
+      if (projIdx + 2 < parts.length - 1) {
+        // File is nested below a session directory: the session is that
+        // directory's name, not the (agent-xxx / journal) file name.
+        sessionId = parts[projIdx + 2];
+      }
+    } else {
+      projectPath = path.basename(path.dirname(filePath));
+    }
     // Use the last meaningful segment of the encoded path as a friendly project name.
     const segments = projectPath.split('-').filter((s) => s.length > 0);
     const projectName = segments.length > 0 ? segments[segments.length - 1] : projectPath || 'unknown';
     return { sessionId, projectName, projectPath };
+  }
+
+  /** True if a `user` line's text is a Claude Code system marker rather than
+   * something the user actually typed: an interruption notice, or the echo of
+   * a slash command (`/model`, `/clear`, …) and its output. These otherwise
+   * inflate the "Messages" count (one session showed 106 vs ~80 real prompts:
+   * `[Request interrupted by user]` ×3, `<command-name>/model…` ×8, etc.). */
+  private static isSyntheticUserText(text: string): boolean {
+    const t = text.trim();
+    if (/^\[Request interrupted/i.test(t)) {
+      return true;
+    }
+    // Slash-command echo blocks wrap the invocation/output in these tags.
+    if (
+      t.startsWith('<command-name>') ||
+      t.startsWith('<command-message>') ||
+      t.includes('<local-command-stdout>') ||
+      t.includes('<local-command-caveat>')
+    ) {
+      return true;
+    }
+    return false;
   }
 
   /** Last segment of a path, handling both '/' and '\\' separators. */
@@ -591,6 +714,12 @@ export class ClaudeDataLoader {
     };
 
     for (const record of records) {
+      // Synthetic user-prompt markers: count towards Messages and nothing else.
+      // "Messages" therefore means messages the user typed, not API calls.
+      if (record._isUserPrompt) {
+        data.messageCount++;
+        continue;
+      }
       // Only count records with usage and model (typically assistant type)
       if (!record.message.usage || !record.message.model) {
         continue;
@@ -623,7 +752,8 @@ export class ClaudeDataLoader {
       data.costBreakdown.output += costParts.output;
       data.costBreakdown.cacheWrite += costParts.cacheWrite;
       data.costBreakdown.cacheRead += costParts.cacheRead;
-      data.messageCount++;
+      // messageCount intentionally NOT incremented here — it counts the
+      // synthetic user-prompt markers above, i.e. messages the user typed.
 
       if (!data.modelBreakdown[model]) {
         data.modelBreakdown[model] = {
@@ -648,33 +778,90 @@ export class ClaudeDataLoader {
     return data;
   }
 
-  static getCurrentSessionData(records: ClaudeUsageRecord[]): SessionData | null {
+  /**
+   * The "current session" shown next to today's cost in the status bar — the
+   * single most-recently-active conversation (one `.jsonl` / `_sessionId`),
+   * scoped to the current workspace when one is given.
+   *
+   * Previously this aggregated *all* records from the last 5 hours across every
+   * project, so every VS Code window showed the same number regardless of which
+   * workspace it was. Now each window reflects its own workspace's current
+   * conversation. Returns null if there's been no activity in the last 5 hours
+   * (so a stale session doesn't masquerade as "current").
+   *
+   * @param workspacePath optional current workspace folder; records whose cwd
+   *   sits under it are preferred. Falls back to all records if the workspace
+   *   has no matching records (e.g. a brand-new folder).
+   */
+  /** Records belonging to the given workspace folder.
+   *
+   * Primary match: the session's home project directory (`_projectDirEncoded`,
+   * derived from where the .jsonl lives = where the session was started)
+   * equals the workspace folder encoded the same way Claude Code does
+   * (`D:\Jiaming\My_Proj` → `d--Jiaming-My-Proj`). This attributes the WHOLE
+   * conversation to its workspace even though per-record `cwd` wanders as
+   * work moves between folders mid-session (observed: one session split
+   * 10/71 across two cwds, fragmenting the per-project figure).
+   *
+   * Secondary match: the record's cwd sits under the folder — catches
+   * sessions started elsewhere that did work inside this workspace.
+   *
+   * Returns all records when no workspace is given. */
+  static filterByWorkspace(records: ClaudeUsageRecord[], workspacePath?: string): ClaudeUsageRecord[] {
+    if (!workspacePath) {
+      return records;
+    }
+    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const wp = norm(workspacePath);
+    const encoded = workspacePath.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    return records.filter((r) => {
+      if ((r._projectDirEncoded || '').toLowerCase() === encoded) {
+        return true;
+      }
+      const p = norm(r._projectPath || '');
+      return p.startsWith(wp) || p === encoded;
+    });
+  }
+
+  static getCurrentSessionData(records: ClaudeUsageRecord[], workspacePath?: string): SessionData | null {
     if (records.length === 0) {
       return null;
     }
 
-    // Sort records by timestamp
-    const sortedRecords = records.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    let pool = records;
+    if (workspacePath) {
+      const scoped = this.filterByWorkspace(records, workspacePath);
+      if (scoped.length > 0) {
+        pool = scoped;
+      }
+    }
 
-    const now = new Date();
-    const sessionRecords = sortedRecords.filter((record) => {
-      const recordTime = new Date(record.timestamp);
-      const timeDiff = now.getTime() - recordTime.getTime();
-      return timeDiff <= 5 * 60 * 60 * 1000; // 5 hours in milliseconds
-    });
+    // The most recent record identifies the current session.
+    let latest = pool[0];
+    for (const r of pool) {
+      if (new Date(r.timestamp).getTime() > new Date(latest.timestamp).getTime()) {
+        latest = r;
+      }
+    }
 
+    // Recency guard: if the latest activity is older than the 5-hour window,
+    // there is no "current" session to show.
+    if (Date.now() - new Date(latest.timestamp).getTime() > 5 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    const sessionId = latest._sessionId;
+    const sessionRecords = pool.filter((r) => r._sessionId === sessionId);
     if (sessionRecords.length === 0) {
       return null;
     }
 
     const usageData = this.calculateUsageData(sessionRecords);
-    const sessionStart = new Date(sessionRecords[0].timestamp);
-    const sessionEnd = new Date(sessionRecords[sessionRecords.length - 1].timestamp);
-
+    const times = sessionRecords.map((r) => new Date(r.timestamp).getTime());
     return {
       ...usageData,
-      sessionStart,
-      sessionEnd,
+      sessionStart: new Date(Math.min(...times)),
+      sessionEnd: new Date(Math.max(...times)),
     };
   }
 
@@ -765,8 +952,11 @@ export class ClaudeDataLoader {
       const first = sessionRecords[0];
       const peakContextTokens = sessionRecords.reduce((peak, r) => Math.max(peak, this.recordContextTokens(r)), 0);
 
+      const title = sessionRecords.find((r) => r._sessionTitle)?._sessionTitle;
+
       return {
         sessionId,
+        title,
         projectName: first._projectName || 'unknown',
         projectPath: first._projectPath || '',
         startTime,
@@ -777,7 +967,9 @@ export class ClaudeDataLoader {
     });
 
     return sessions
-      .filter((s) => s.data.messageCount > 0)
+      // messageCount now means user-typed prompts; keep sessions that have
+      // real spend even if no prompt landed in the window (e.g. continuations).
+      .filter((s) => s.data.messageCount > 0 || s.data.totalCost > 0)
       .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())
       .slice(0, limit);
   }

@@ -1,185 +1,79 @@
 # Claude Code 사용량 모니터
 
-🌐 **Language | 語言 | 言語 | 언어**: [🏠 Main](README.md) | [English](README-en.md) | [繁體中文](README-zh-TW.md) | [简体中文](README-zh-CN.md) | [日本語](README-ja.md) | **한국어**
+🌐 **언어**: [🏠 Main](README.md) | [English](README-en.md) | [繁體中文](README-zh-TW.md) | [简体中文](README-zh-CN.md) | [日本語](README-ja.md) | **한국어**
 
 ---
 
-Claude Code를 더 스마트하게 쓰는 방법을 알려주는 상태 표시줄 코치. 청구 도구도, 멀티 프로바이더 모니터도 아닙니다. AI를 활용해 토큰 소비를 분석하고 사용 습관을 개선하는 가벼운 VS Code 확장입니다.
+**Claude Code를 더 스마트하게 쓰는 방법을 알려주는 상태 표시줄 코치.** 청구 도구도, 멀티 프로바이더 모니터도 아닙니다. AI를 활용해 토큰 소비를 분석하고 사용 습관을 개선하는 가벼운 VS Code 확장입니다.
 
-## 🖼️ 스크린샷
+> **무엇인가**: 로컬 Claude Code 대화 로그를 읽어 **토큰 기반**의 사용량과 비용 추정치를 보여주는 VS Code 상태 표시줄 모니터. 프롬프트 개선과 낭비 절감을 제안하는 선택적 AI 어드바이저 포함.
+>
+> **무엇이 아닌가**: 청구 도구가 아닙니다. 표시되는 모든 금액은 공개된 100만 토큰당 단가 기준 추정치입니다. 실제 청구는 Anthropic 계정을 확인하세요.
 
-### 상태바
+> 스크린샷은 영어 UI 기준입니다. 전체 기능 설명은 [메인 README](README.md)를 참고하세요.
 
-![상태바 미리보기](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/status-bar-preview.jpg)
+## 스크린샷
+
+### 상태 표시줄
+
+![상태 표시줄](images/v2-status-bar-en.png)
+
+쿼터 표시기에 마우스를 올리면 상세 내역이 나옵니다:
+
+![쿼터 툴팁](images/v2-quota-en.png)
 
 ### 대시보드
 
-![대시보드 미리보기](https://raw.githubusercontent.com/jack21/ClaudeCodeUsage/refs/heads/main/images/dashboard-preview.jpg)
+![대시보드](images/v2-dashboard-en.png)
 
-## ✨ 기능
+## 기능
 
-### 📊 실시간 모니터링
-
-- **상태바 표시**: VSCode 상태바에 오늘의 사용 비용 표시
-- **실시간 업데이트**: 설정 가능한 간격(최소 30초)으로 자동 데이터 업데이트
-- **의존성 제로**: 네이티브 Node.js 모듈 사용으로 최대 호환성 보장
-
-### 📈 인터랙티브 분석 대시보드
-
-- **다중 시간 뷰**: 오늘, 이번 달, 전체 기간의 관점
-- **인터랙티브 차트**: 6가지 다른 지표로 전환 가능한 막대 차트:
-  - 비용 분석
-  - 입력/출력 토큰
-  - 캐시 생성/읽기 토큰
-  - 메시지 수
-- **시간별 사용량 분석**: 오늘과 특정 날짜의 상세한 시간별 사용량 분석 제공
-- **확장 가능한 월별 데이터**: "전체 기간"에서 임의의 월을 클릭하여 일별 세부사항 보기
-- **상세 테이블**: 드릴다운 기능이 있는 포괄적인 일일/월별 사용량 분석
-- **모델 분석**: 모델별 비용 및 토큰 소비 추적
-
-![대시보드 미리보기](images/dashboard-preview.png)
-
-### 🌐 다국어 지원
-
-- **5개 언어**: English, 繁體中文, 简体中文, 日本語, 한국어
-- **자동 감지**: 시스템 언어 자동 감지
-- **수동 설정**: 설정에서 선호 언어 선택
-
-### 🎨 시각적 기능
-
-- **상향식 차트**: 업계 표준 차트 방향
-- **월별 트렌드**: 전체 기간 뷰에서 월별 집계 데이터 표시로 장기 트렌드 분석 지원
-- **VSCode 테마 통합**: 라이트/다크 테마와의 완벽한 통합
-- **반응형 디자인**: 다양한 화면 크기에 최적화
-
-## 📥 다운로드
-
-### VSCode Marketplace
-
-[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/growthjack.claude-code-usage?style=for-the-badge&logo=visual-studio-code&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=growthjack.claude-code-usage)
-
-### Open VSX Registry（Cursor / Windsurf / Antigravity용）
-
-[![Open VSX](https://img.shields.io/open-vsx/v/GrowthJack/claude-code-usage?style=for-the-badge&logo=eclipseide&label=Open%20VSX%20Registry)](https://marketplace.cursorapi.com/items/?itemName=GrowthJack.claude-code-usage)
+- **상태 표시줄** — 오늘 비용, 현재 세션 비용, 그리고 Claude Code 자체 OAuth 세션에서 읽는 실제 5시간 / 주간 쿼터(`5h:N% wk:N%`). 설정 불필요.
+- **대시보드 탭** — 오늘 / 이번 달 / 전체 기간, 그리고 **Sessions / Projects / Content / Branches**. 모두 정렬 가능.
+- **누적 비용 구성 차트**(Y축과 기준선 포함) — 각 일 / 월의 비용 중 입력·출력·캐시 쓰기·캐시 읽기가 차지하는 비율을 한눈에.
+- **Content 탭** — 어떤 콘텐츠가 토큰을 소비하는지 추정(내 프롬프트 vs 도구 결과 vs 어시스턴트 출력 / 사고).
+- **AI 조언**(선택) — 사용량 요약과 최근 프롬프트 샘플을 OpenAI 호환 API(기본 DeepSeek V4 Pro)로 보내 구체적인 재작성을 제안. 키는 직접 준비하거나, 정적 데모를 먼저 미리보기.
+- **멀티 벤더 가격** — Opus 4.x / Sonnet 4.x / Haiku 4.5는 Anthropic 공식 가격으로 검증. OpenAI / Gemini / DeepSeek / Kimi / GLM / Qwen 참고 가격(패밀리 인식 폴백 포함). `Refresh Token Pricing`으로 LiteLLM 최신 가격 가져오기.
+- **개인화** — 언어, 시간대, 소수 자릿수, 간략 숫자, 프로젝트 그룹화, 대시보드 자동 새로고침 토글.
 
 ## 설치
 
-1. VSCode 마켓플레이스에서 확장 프로그램 설치
-2. 확장 프로그램이 Claude Code 데이터 디렉토리를 자동 감지
-3. Claude Code 사용을 시작하면 상태 표시줄에 사용량이 나타납니다
+확장 보기(`Ctrl+Shift+X`)에서 **`Claude Code Usage`**를 검색하거나:
+
+```
+ext install GrowthJack.claude-code-usage
+```
+
+Cursor / Windsurf용으로 [Open VSX Registry](https://open-vsx.org/extension/GrowthJack/claude-code-usage)에도 게시되어 있습니다.
 
 ## 설정
 
-`파일 > 기본 설정 > 설정`에서 "Claude Code Usage"를 검색하여 접근:
+설정(`Ctrl+,`)을 열고 **`Claude Code Usage`**를 검색하세요. 모두 선택 사항입니다. 가장 유용한 것:
 
-- **새로고침 간격**: 사용 데이터를 업데이트하는 빈도 (최소 30초)
-- **데이터 디렉토리**: 커스텀 Claude 데이터 디렉토리 경로 (비워두면 자동 감지)
-- **언어**: 표시 언어 설정
-- **소수점 자릿수**: 비용 표시의 소수점 자릿수
+- `language` — UI 언어(`auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`).
+- `timezone` — 날짜 표시용 IANA 시간대(예: `Asia/Seoul`).
+- `usageLimitTracking` — 실제 5시간 / 주간 쿼터 표시.
+- `advice.apiKey` — AI 조언 기능용 API 키(OpenAI 호환).
+- `pauseDashboardRefresh` — 대시보드 자동 새로고침 일시정지(대시보드 헤더에서도 토글 가능).
 
-## 🚀 사용법
+전체 설정 표는 [메인 README](README.md#configuration)를 참고하세요.
 
-### 상태바
+## 문제 해결
 
-- 펄스 아이콘과 함께 **오늘의 사용 비용** 표시
-- 클릭하여 상세한 분석 대시보드 열기
+**"No Claude Code Data"** — Claude Code가 설치되어 최소 한 번 사용되었는지 확인하고, `dataDirectory` 설정을 확인하세요(자동 감지는 `~/.claude/projects`를 봅니다).
 
-### 분석 대시보드
+**쿼터가 `5h:--% wk:--%`로 표시** — Claude Code에 한 번 로그인하세요. 확장은 `~/.claude/.credentials.json`을 읽기 전용으로 참조합니다.
 
-1. **시간 탭**: 오늘, 이번 달, 전체 기간 보기 간 전환
-2. **차트 지표**: 차트 위의 탭을 클릭하여 다양한 지표 간 전환:
-   - 비용 분석
-   - 입력/출력 토큰
-   - 캐시 생성/읽기 토큰
-   - 메시지 수
-3. **시간별 분석**: "오늘" 탭에서 시간별 사용 패턴 보기
-4. **확장 가능한 데이터**:
-   - "이번 달"의 일별 항목을 클릭하여 시간별 세부사항 보기
-   - "전체 기간"의 월별 항목을 클릭하여 일별 세부사항 보기
-5. **인터랙티브 테이블**: 차트 아래의 상세한 일별/월별 분석
-6. **모델 분석**: 각 탭의 모델별 사용 통계
+**이전 달 기록 누락** — Claude Code는 `cleanupPeriodDays`(기본 30일)보다 오래된 로그를 삭제합니다. 더 오래 보관하려면 `~/.claude/settings.json`에 `{ "cleanupPeriodDays": 365 }`를 설정하세요. 이미 삭제된 로그는 복구할 수 없습니다.
 
-![사용 흐름](images/usage-flow.png)
+**토큰 수가 프로바이더 대시보드보다 적음** — 일부 프록시 / 동적 워크플로는 에이전트별 기록을 하위 디렉터리에 쓰며 불완전할 수 있습니다. 실제 지출은 프로바이더 청구 페이지를 확인하세요. 네이티브 워크플로 귀속 기능은 계획 중입니다.
 
-## 📋 요구사항
+## 크레딧
 
-- **Claude Code**: 설치되고 실행 중이어야 합니다
-- **VSCode**: 버전 1.74.0 이상
-- **Node.js**: 내장 모듈만 사용 (외부 의존성 없음)
+[`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)에서 포크. MIT 라이선스. 커뮤니티 기여는 [CHANGELOG.md](CHANGELOG.md)에 명시. 많은 코드 변경은 [Claude Code](https://claude.com/claude-code)의 도움으로 작성되었습니다.
 
-## 🛠️ 문제 해결
-
-### "Claude Code 데이터 없음" 오류
-
-1. Claude Code가 설치되고 사용되었는지 확인
-2. 확장 프로그램 설정에서 데이터 디렉토리 설정 확인
-3. Claude Code가 `~/.claude/projects` 또는 `~/.config/claude/projects`에서 사용 로그를 생성하고 있는지 확인
-
-### 차트가 업데이트되지 않음
-
-1. 다른 탭으로 전환했다가 다시 돌아와서 차트 새로고침
-2. 해당 기간에 실제 사용 데이터가 있는지 확인
-3. Claude 사용 기록에 캐시 토큰이 있는지 확인
-
-### 성능 문제
-
-- 속도 저하가 발생하면 새로고침 간격을 늘리세요
-- 확장 프로그램은 파일 I/O를 최소화하기 위해 1분 캐싱을 사용합니다
-
-## 📝 변경 사항
-
-### v1.0.8 (2025-11-28)
-
-- 📝 모든 코드 주석을 번체 중국어에서 영어로 변환
-- 🌍 코드 국제화 표준 향상
-- 🔧 코드 가독성 및 유지 관리 개선
-- 💰 새로운 Opus 4.5 / Haiku 4.5 가격이 포함된 가격표 수정 ([@mxzinke](https://github.com/mxzinke) 감사합니다)
-- 🇩🇪 독일어(de-DE) 번역 지원 추가 ([@mxzinke](https://github.com/mxzinke) 감사합니다)
-
-### v1.0.7 (2025-11-28)
-
-- 🌐 시간별 사용량 레이블에 대한 다국어 번역 지원 추가
-- 🔧 코드에서 하드코딩된 중국어 텍스트 제거 및 i18n 번역 시스템으로 대체
-- ✨ 사용자 인터페이스의 다국어 일관성 보장 (영어, 번체 중국어, 간체 중국어, 일본어, 한국어)
-
-### v1.0.6 (2025-08-10)
-
-- 🆕 Claude Opus 4.1 모델 가격 지원 추가
-- 🔄 `claude-opus-4-1-20250805` 및 `claude-opus-4-1` 모델 ID를 포함한 가격 데이터 업데이트
-- 📊 Opus 4와 동일한 가격 (입력 $15/1M, 출력 $75/1M 토큰)
-
-### v1.0.5 (2025-01)
-
-- ⏰ 시간별 사용량 통계 및 시각화 추가
-- 📈 시간별 세부 기능으로 대시보드 강화
-- 🔧 시간별 집계를 위한 데이터 처리 개선
-
-### v1.0.4 (2025-01)
-
-- 📊 전체 기간 데이터 계산 기능 추가
-- 🎨 차트와 레이블로 전체 기간 사용 데이터를 표시하도록 UI 업데이트
-- 🔄 새로운 데이터 구조를 지원하도록 데이터 업데이트 로직 수정
-- 🌐 다국어 지원에 "전체 기간" 번역 추가
-
-### v1.0.3 (2025-01)
-
-- 🔗 GitHub 저장소 URL 업데이트
-- 🖼️ README 이미지 링크를 새 저장소 위치로 수정
-- 📦 버전 업그레이드 및 저장소 마이그레이션
-
-### v1.0.0 (2025-01)
-
-- 🎉 최초 완전 릴리스 버전
-- 📊 상태 표시줄에서 실시간 Claude Code 사용량 모니터링
-- 🌐 다국어 지원 (English, 繁體中文, 简体中文, 日本語, 한국어)
-- 📈 차트와 테이블이 포함된 인터랙티브 분석 대시보드
-- 🎨 VSCode 테마 통합 및 반응형 디자인
-- ⚙️ 구성 가능한 새로 고침 간격 및 설정
+**이슈, PR, 아이디어를 환영합니다** —— 그것이 프로젝트가 성장하는 방식입니다.
 
 ## 라이선스
 
-MIT
-
-## 기여
-
-GitHub 저장소에서 Issue와 Pull Request를 환영합니다.
+[MIT](LICENSE)

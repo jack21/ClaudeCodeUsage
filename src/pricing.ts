@@ -27,7 +27,16 @@ const MILL = 1_000_000;
 // `cache_creation_input_token_cost` below uses the 5-minute write rate.
 // =====================================================================
 
-// Opus 4.5 / 4.6 / 4.7 — current Opus tier ($5 / $25)
+// Fable 5 / Mythos 5 — frontier tier ($10 / $50), verified 2026-06-09
+// https://platform.claude.com/docs/en/about-claude/pricing
+const FABLE_5: ModelPricing = {
+  input_cost_per_token: 10 / MILL,
+  output_cost_per_token: 50 / MILL,
+  cache_creation_input_token_cost: 12.5 / MILL,
+  cache_read_input_token_cost: 1 / MILL,
+};
+
+// Opus 4.5 / 4.6 / 4.7 / 4.8 — current Opus tier ($5 / $25)
 const OPUS_CURRENT: ModelPricing = {
   input_cost_per_token: 5 / MILL,
   output_cost_per_token: 25 / MILL,
@@ -144,9 +153,12 @@ const NON_CLAUDE_PRICING: Record<string, ModelPricing> = {
 // so direct lookups stay fast; anything not listed is resolved by getModelPricing()'s
 // family-aware fallback below.
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Claude Opus 4.8 / 4.7 / 4.6 — assumed at the current Opus tier rate
-  // ($5 / $25 / $6.25 / $0.5 per MTok). If Anthropic later differentiates
-  // Opus 4.8 pricing, override here or pull via "Refresh Token Pricing".
+  // Claude Fable 5 / Mythos 5 (2026-06) — frontier tier
+  'claude-fable-5': FABLE_5,
+  'claude-mythos-5': FABLE_5,
+
+  // Claude Opus 4.8 / 4.7 / 4.6 — current Opus tier rate, verified 2026-06-09
+  // against the official pricing page ($5 / $25 / $6.25 / $0.5 per MTok).
   'claude-opus-4-8': OPUS_CURRENT,
   'claude-opus-4-7': OPUS_CURRENT,
   'claude-opus-4-6': OPUS_CURRENT,
@@ -205,6 +217,9 @@ function inferPricingByFamily(modelName: string): { pricing: ModelPricing; famil
   const name = modelName.toLowerCase();
 
   // --- Anthropic / Claude ---
+  if (name.includes('fable') || name.includes('mythos')) {
+    return { pricing: FABLE_5, family: 'Fable 5 (frontier tier)' };
+  }
   if (name.includes('haiku')) {
     if (name.includes('haiku-3') || name.includes('-3-5-haiku') || name.includes('-3-haiku')) {
       return { pricing: HAIKU_35, family: 'Haiku 3.5' };
@@ -252,6 +267,12 @@ export function getModelPricing(modelName: string | undefined): ModelPricing | n
   if (!modelName) {
     return null;
   }
+
+  // Strip a trailing bracket suffix like "[1m]" (long-context variant marker
+  // used in Claude Code model settings, e.g. "claude-fable-5[1m]"). 1M-context
+  // variants are billed at standard per-token rates, so the base model's
+  // pricing applies.
+  modelName = modelName.replace(/\[[^\]]*\]\s*$/, '');
 
   // Try different variation matches (similar to ccusage logic)
   const variations = [modelName, `anthropic/${modelName}`, `claude-3-5-${modelName}`, `claude-3-${modelName}`, `claude-${modelName}`];

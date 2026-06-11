@@ -40,6 +40,22 @@ export class ClaudeCodeUsageExtension {
   // file watcher can both fire while a slow reload is still in flight. Without
   // this, reloads pile up and keep re-asserting the "Loading…" spinner.
   private isRefreshing: boolean = false;
+  // Coalesce: a trigger that arrives mid-load sets this so we run exactly one
+  // more refresh after the current one finishes, instead of dropping the event
+  // (which starved updates during rapid ultracode/sub-agent writes).
+  private pendingRefresh: boolean = false;
+  // Epoch ms of the last observed .jsonl change. Drives activity-aware
+  // refresh cadence: while Claude Code is actively writing we refresh faster
+  // (~15 s, quota cache 20 s); when idle we fall back to the user's interval.
+  private lastActivityAt: number = 0;
+  // Generation token for the self-rescheduling refresh timer. Bumped each time
+  // startAutoRefresh runs so any older timer chain (e.g. left mid-flight by a
+  // config change) stops instead of running concurrently with the new one.
+  private refreshGen: number = 0;
+  // One-shot cold-start retry for the quota fetch: when a window opens on a
+  // flaky network and the very first /usage fetch fails, try once more shortly
+  // after so the indicator appears without waiting for the next regular tick.
+  private quotaColdRetryDone: boolean = false;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -349,6 +365,10 @@ export class ClaudeCodeUsageExtension {
         if (!filename || !String(filename).endsWith('.jsonl')) {
           return;
         }
+        // Mark activity so the polling timer and quota cache switch to the
+        // faster "active" cadence. This fires for sub-agent / workflow files
+        // too, since fs.watch is recursive.
+        this.lastActivityAt = Date.now();
         // Debounce: Claude Code writes lines in bursts and the file mtime
         // changes for every line.
         if (this.watchDebounceTimer) {
@@ -380,18 +400,41 @@ export class ClaudeCodeUsageExtension {
     this.watchedDir = null;
   }
 
+  /** True when Claude Code has written a log line in the last 60 s. */
+  private isActive(): boolean {
+    return Date.now() - this.lastActivityAt < 60000;
+  }
+
   private startAutoRefresh(): void {
-    // Clear existing timer
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
     }
-
-    const config = this.getConfiguration();
-    const intervalMs = Math.max(config.refreshInterval * 1000, 30000); // Minimum 30 seconds
-
-    this.refreshTimer = setInterval(() => {
-      this.refreshData();
-    }, intervalMs);
+    // Self-rescheduling timer with an activity-aware interval: while Claude
+    // Code is actively writing logs we tick every ~15 s (matching the user's
+    // expectation that ultracode / high-consumption runs update promptly);
+    // when idle we use the user's configured interval (min 30 s). fs.watch
+    // already covers near-real-time status-bar cost updates during activity —
+    // this floor guarantees the quota also refreshes during sustained writes
+    // where the debounce never settles.
+    const gen = ++this.refreshGen;
+    const tick = (): void => {
+      if (gen !== this.refreshGen) {
+        return; // superseded by a newer startAutoRefresh — stop this chain
+      }
+      const base = Math.max(this.getConfiguration().refreshInterval * 1000, 30000);
+      // ~8 s while active: high-consumption models (Fable 5) move the numbers
+      // fast enough that 15 s reads as laggy.
+      const intervalMs = this.isActive() ? Math.min(base, 8000) : base;
+      this.refreshTimer = setTimeout(() => {
+        this.refreshData().finally(() => {
+          if (gen === this.refreshGen) {
+            tick();
+          }
+        });
+      }, intervalMs);
+    };
+    tick();
   }
 
   /** Fetch real usage limits via OAuth, cached for 2 minutes. */
@@ -400,9 +443,19 @@ export class ClaudeCodeUsageExtension {
       return null;
     }
     const age = Date.now() - this.cache.usageLimitsLastUpdate.getTime();
-    // 120-second cache: matches the polling interval and avoids hammering
-    // /usage on every file-watch tick when active sessions write rapidly.
-    if (this.cache.usageLimits && age < 120000) {
+    // Activity-aware cache: 20 s while Claude Code is actively writing (so the
+    // quota keeps pace during high-consumption ultracode runs), 120 s when
+    // idle (avoids hammering /usage on every file-watch tick). The /usage
+    // client has its own 429 cool-down, so 20 s is safe.
+    // Quota changes slowly (a coarse %), and /usage is an undocumented
+    // endpoint that 429s if hit too often. Keep this well above the local
+    // refresh cadence: 60 s while active, 120 s idle. Local cost still updates
+    // every ~8 s via the fs watcher — only the quota number is throttled.
+    const ttl = this.isActive() ? 60000 : 120000;
+    // Bypass the cache when a cached window has already reset — otherwise the
+    // status bar would show the rolled-forward 0% estimate for up to a full
+    // TTL before the real new-window value arrives.
+    if (this.cache.usageLimits && age < ttl && !this.hasExpiredWindow(this.cache.usageLimits)) {
       return this.cache.usageLimits;
     }
     const fetched = await this.apiClient.fetchUsageLimits();
@@ -415,8 +468,26 @@ export class ClaudeCodeUsageExtension {
     return this.cache.usageLimits;
   }
 
+  /** True if any usage window's reset time has already passed (so the cached
+   * utilisation is stale and a refetch is warranted). */
+  private hasExpiredWindow(u: ClaudeApiUsageResponse): boolean {
+    const now = Date.now();
+    const expired = (w?: { resets_at: string }): boolean => {
+      if (!w) {
+        return false;
+      }
+      const t = Date.parse(w.resets_at);
+      return !isNaN(t) && t <= now;
+    };
+    return expired(u.five_hour) || expired(u.seven_day) || expired(u.seven_day_opus);
+  }
+
   private async refreshData(manualTrigger: boolean = false): Promise<void> {
     if (this.isRefreshing) {
+      // Coalesce: remember that another refresh was requested and run exactly
+      // one more after the current finishes (see finally). Dropping the event
+      // outright starved updates during rapid ultracode / sub-agent writes.
+      this.pendingRefresh = true;
       return;
     }
     this.isRefreshing = true;
@@ -428,12 +499,26 @@ export class ClaudeCodeUsageExtension {
       // refreshes everything so the user can force-update on demand.
       const updateWebview = manualTrigger || !config.pauseDashboardRefresh;
 
-      // Quota is account-level, decoupled from local data. Refresh and push
-      // it unconditionally, even when the workspace has no Claude history or
-      // when something later fails — otherwise opening VS Code in a fresh
-      // project would hide a quota indicator that ought to be account-wide.
-      const usageLimits = await this.maybeFetchUsageLimits(config);
-      this.statusBar.updateQuota(usageLimits);
+      // Quota is account-level, decoupled from local data. Fire it without
+      // awaiting so a slow/cold OAuth fetch (curl can take seconds, or fail
+      // outright on a fresh window's flaky network) never delays the local
+      // cost figures — the cause of "usage not showing the first time I open
+      // VS Code". On a cold start with no quota yet, do ONE gentle retry after
+      // ~8 s; beyond that the regular ticks take over. We deliberately do not
+      // retry-storm: repeated /usage hits are what trigger the 429 cool-down.
+      this.maybeFetchUsageLimits(config).then((limits) => {
+        this.statusBar.updateQuota(limits);
+        if (!limits && !this.cache.usageLimits && !this.quotaColdRetryDone) {
+          this.quotaColdRetryDone = true;
+          setTimeout(() => {
+            this.maybeFetchUsageLimits(this.getConfiguration()).then((retry) => {
+              if (retry) {
+                this.statusBar.updateQuota(retry);
+              }
+            });
+          }, 8000);
+        }
+      });
 
       // Find Claude data directory
       const dataDirectory = await ClaudeDataLoader.findClaudeDataDirectory(
@@ -496,8 +581,14 @@ export class ClaudeCodeUsageExtension {
       }
 
       // Calculate usage data
-      const sessionData = ClaudeDataLoader.getCurrentSessionData(records);
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      // "Current session" (per-workspace) is still computed for the webview.
+      const sessionData = ClaudeDataLoader.getCurrentSessionData(records, workspacePath);
       const todayData = ClaudeDataLoader.getTodayData(records);
+      // Status-bar secondary number: today's cost for the current workspace.
+      const workspaceTodayData = workspacePath
+        ? ClaudeDataLoader.getTodayData(ClaudeDataLoader.filterByWorkspace(records, workspacePath))
+        : null;
       const monthData = ClaudeDataLoader.getThisMonthData(records);
       const allTimeData = ClaudeDataLoader.getAllTimeData(records);
       const dailyDataForMonth = ClaudeDataLoader.getDailyDataForMonth(records);
@@ -507,9 +598,9 @@ export class ClaudeCodeUsageExtension {
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
 
-      // Update UI — quota was already pushed above, so we pass it again only
-      // to keep the success-path signature stable.
-      this.statusBar.updateUsageData(todayData, sessionData, undefined, usageLimits);
+      // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
+      // above; passing undefined leaves the quota item untouched here.
+      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
       if (updateWebview) {
         this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
       }
@@ -524,12 +615,20 @@ export class ClaudeCodeUsageExtension {
       }
     } finally {
       this.isRefreshing = false;
+      // If triggers arrived mid-load, run one more (background) refresh to pick
+      // up the changes they signalled. The pendingRefresh flag collapses any
+      // number of dropped triggers into a single follow-up.
+      if (this.pendingRefresh) {
+        this.pendingRefresh = false;
+        setTimeout(() => this.refreshData(), 0);
+      }
     }
   }
 
   dispose(): void {
     if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
     }
     this.stopFileWatching();
     this.statusBar.dispose();

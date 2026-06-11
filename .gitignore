@@ -10,3 +10,6 @@ node_modules
 .env.*
 *.env.local
 secrets.json
+
+# Personal, per-maintainer Claude Code notes (the shared CLAUDE.md is committed).
+CLAUDE.local.md
