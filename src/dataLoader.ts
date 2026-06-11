@@ -422,15 +422,16 @@ export class ClaudeDataLoader {
                 typeof lineAny.timestamp === 'string'
               ) {
                 const content = (lineAny.message as { content?: unknown } | undefined)?.content;
-                const hasText =
+                const text =
                   typeof content === 'string'
-                    ? content.trim().length > 0
-                    : Array.isArray(content) &&
-                      content.some(
-                        (b: { type?: unknown; text?: unknown }) =>
-                          b?.type === 'text' && typeof b.text === 'string' && b.text.trim().length > 0
-                      );
-                if (hasText) {
+                    ? content
+                    : Array.isArray(content)
+                      ? content
+                          .filter((b: { type?: unknown; text?: unknown }) => b?.type === 'text' && typeof b.text === 'string')
+                          .map((b: { text: string }) => b.text)
+                          .join('')
+                      : '';
+                if (text.trim().length > 0 && !this.isSyntheticUserText(text)) {
                   const prompt: ClaudeUsageRecord = {
                     timestamp: lineAny.timestamp,
                     message: { usage: { input_tokens: 0, output_tokens: 0 } },
@@ -619,6 +620,28 @@ export class ClaudeDataLoader {
     const segments = projectPath.split('-').filter((s) => s.length > 0);
     const projectName = segments.length > 0 ? segments[segments.length - 1] : projectPath || 'unknown';
     return { sessionId, projectName, projectPath };
+  }
+
+  /** True if a `user` line's text is a Claude Code system marker rather than
+   * something the user actually typed: an interruption notice, or the echo of
+   * a slash command (`/model`, `/clear`, …) and its output. These otherwise
+   * inflate the "Messages" count (one session showed 106 vs ~80 real prompts:
+   * `[Request interrupted by user]` ×3, `<command-name>/model…` ×8, etc.). */
+  private static isSyntheticUserText(text: string): boolean {
+    const t = text.trim();
+    if (/^\[Request interrupted/i.test(t)) {
+      return true;
+    }
+    // Slash-command echo blocks wrap the invocation/output in these tags.
+    if (
+      t.startsWith('<command-name>') ||
+      t.startsWith('<command-message>') ||
+      t.includes('<local-command-stdout>') ||
+      t.includes('<local-command-caveat>')
+    ) {
+      return true;
+    }
+    return false;
   }
 
   /** Last segment of a path, handling both '/' and '\\' separators. */

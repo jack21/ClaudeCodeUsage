@@ -52,10 +52,10 @@ export class ClaudeCodeUsageExtension {
   // startAutoRefresh runs so any older timer chain (e.g. left mid-flight by a
   // config change) stops instead of running concurrently with the new one.
   private refreshGen: number = 0;
-  // Early-retry counter for the quota fetch: when a window opens on a cold /
-  // flaky network and the first /usage fetch fails, retry with backoff so the
-  // indicator appears without waiting for the next regular tick.
-  private quotaRetryCount: number = 0;
+  // One-shot cold-start retry for the quota fetch: when a window opens on a
+  // flaky network and the very first /usage fetch fails, try once more shortly
+  // after so the indicator appears without waiting for the next regular tick.
+  private quotaColdRetryDone: boolean = false;
 
   constructor(private context: vscode.ExtensionContext) {
     console.log('Claude Code Usage Extension: Constructor called');
@@ -447,7 +447,11 @@ export class ClaudeCodeUsageExtension {
     // quota keeps pace during high-consumption ultracode runs), 120 s when
     // idle (avoids hammering /usage on every file-watch tick). The /usage
     // client has its own 429 cool-down, so 20 s is safe.
-    const ttl = this.isActive() ? 15000 : 120000;
+    // Quota changes slowly (a coarse %), and /usage is an undocumented
+    // endpoint that 429s if hit too often. Keep this well above the local
+    // refresh cadence: 60 s while active, 120 s idle. Local cost still updates
+    // every ~8 s via the fs watcher — only the quota number is throttled.
+    const ttl = this.isActive() ? 60000 : 120000;
     // Bypass the cache when a cached window has already reset — otherwise the
     // status bar would show the rolled-forward 0% estimate for up to a full
     // TTL before the real new-window value arrives.
@@ -499,22 +503,20 @@ export class ClaudeCodeUsageExtension {
       // awaiting so a slow/cold OAuth fetch (curl can take seconds, or fail
       // outright on a fresh window's flaky network) never delays the local
       // cost figures — the cause of "usage not showing the first time I open
-      // VS Code". When the first fetch yields nothing, retry a few times with
-      // backoff instead of waiting for the next regular tick.
+      // VS Code". On a cold start with no quota yet, do ONE gentle retry after
+      // ~8 s; beyond that the regular ticks take over. We deliberately do not
+      // retry-storm: repeated /usage hits are what trigger the 429 cool-down.
       this.maybeFetchUsageLimits(config).then((limits) => {
         this.statusBar.updateQuota(limits);
-        if (limits) {
-          this.quotaRetryCount = 0;
-        } else if (this.quotaRetryCount < 3) {
-          this.quotaRetryCount++;
+        if (!limits && !this.cache.usageLimits && !this.quotaColdRetryDone) {
+          this.quotaColdRetryDone = true;
           setTimeout(() => {
             this.maybeFetchUsageLimits(this.getConfiguration()).then((retry) => {
               if (retry) {
-                this.quotaRetryCount = 0;
                 this.statusBar.updateQuota(retry);
               }
             });
-          }, 10000 * this.quotaRetryCount);
+          }, 8000);
         }
       });
 
