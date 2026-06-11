@@ -1,27 +1,43 @@
-name: Feature request
-description: Suggest an idea or improvement
+name: 💡 Feature request
+description: Suggest a new capability or an improvement to an existing one.
+title: "[Feature]: "
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea! Heads-up on scope: this extension is intentionally
-        **Claude-only and lightweight**, focused on **token attribution** and
-        AI-assisted usage improvement. Multi-provider monitoring and full
-        billing reconciliation are out of scope. Ideas that sharpen token
-        insight or the advice experience are the best fit.
+        Thanks for the idea! One thing up front so we share the same picture of scope: this extension is intentionally **Claude-only, lightweight, and focused on token attribution and AI-assisted usage improvement**. Multi-provider dashboards and full billing reconciliation are deliberately out of scope. Requests that sharpen token insight, attribution, or the advice experience are the best fit and the most likely to ship.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched [existing issues](../../issues?q=is%3Aissue) and didn't find this request.
+          required: true
+        - label: This fits the project's scope (Claude-only, lightweight, token-attribution focused).
+          required: false
   - type: textarea
     id: problem
     attributes:
       label: What problem would this solve?
-      description: The user need behind the request, not just the solution.
+      description: Describe the underlying need, not just the solution. What are you trying to understand or do that the extension makes hard today?
+      placeholder: I can't tell which of my installed skills are actually worth the context they cost me.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed solution
+      description: What would you like the extension to do? A rough sketch is fine.
+    validations:
+      required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered (optional)
+      label: Alternatives you've considered
+      description: Other approaches, existing workarounds, or other tools — and why they fall short.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Mock-ups, links, or examples that make the request concrete.

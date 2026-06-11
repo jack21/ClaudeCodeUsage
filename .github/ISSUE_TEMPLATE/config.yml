@@ -1,1 +1,10 @@
+# Templates keep reports actionable; the links below cover the common
+# "how do I…" cases. Blank issues stay enabled for now.
 blank_issues_enabled: true
+contact_links:
+  - name: 📖 Setup & troubleshooting (README)
+    url: https://github.com/jack21/ClaudeCodeUsage/blob/main/README.md
+    about: Configuration, how costs are calculated, proxies, history retention, and the AI advice feature — most setup questions are answered here.
+  - name: 🛍️ Marketplace Q&A
+    url: https://marketplace.visualstudio.com/items?itemName=GrowthJack.claude-code-usage&ssr=false#qna
+    about: General questions are also welcome on the VS Code Marketplace Q&A tab.
