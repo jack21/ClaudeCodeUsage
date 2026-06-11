@@ -1,21 +1,33 @@
-name: Question / Support
-description: Ask how something works or get help with setup
+name: ❓ Question / Support
+description: Ask how something works, or get help with setup.
+title: "[Question]: "
 labels: [question]
 body:
   - type: markdown
     attributes:
       value: |
-        Quick checks first: the [README](../../blob/main/README.md) covers
-        configuration, how costs are calculated, and troubleshooting (incl.
-        proxies, history retention, and the AI advice feature).
+        Happy to help! Two things answer most questions on the spot: the README's **Configuration** and **Troubleshooting** sections cover proxies, how costs are calculated, history retention, and the AI advice feature; and the `Claude Code Usage: Show Diagnostic Logs` command shows exactly what the extension is reading from your logs.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I checked the README (Configuration + Troubleshooting) and searched [existing issues](../../issues?q=is%3Aissue).
+          required: true
   - type: textarea
     id: question
     attributes:
       label: Your question
+      description: What would you like to know, or get working?
     validations:
       required: true
   - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Steps you've already taken and what you saw. Diagnostic-log output helps a lot for any "the numbers look wrong" question.
+  - type: textarea
     id: context
     attributes:
-      label: Context (optional)
-      description: Extension version, OS, proxy/model setup — whatever seems relevant.
+      label: Context
+      description: Extension version, VS Code version, OS, and your model/proxy setup (native Anthropic, CC Switch + DeepSeek, a proxy, …) — whatever seems relevant.
