@@ -53,14 +53,17 @@ npx @vscode/vsce package   # build a .vsix
 ```
 
 - **F5** launches the Extension Development Host for manual testing.
-- **Releases are automated.** Pushing a `v*` tag to the upstream repo triggers
-  `.github/workflows/publish.yml`, which compiles, packages, publishes to the
-  VS Code Marketplace + Open VSX, and attaches the `.vsix` to a GitHub Release.
-  The workflow verifies the tag matches `package.json`'s `version`. So to
-  release: bump `version`, update `CHANGELOG.md`, merge to `main`, then
-  `git tag vX.Y.Z && git push <upstream> vX.Y.Z`.
-- Versioning follows semver: bug-only → patch (`2.0.x`); new user-facing
-  feature → minor (`2.x.0`); breaking UX → major.
+- **Releases are merge-and-auto-release.** As labelled PRs merge to `main`,
+  `.github/workflows/release-drafter.yml` keeps a **draft GitHub Release** up to
+  date (categorised notes + next semver version from the PR labels). To ship, a
+  maintainer reviews that draft and clicks **Publish** — which creates the tag
+  and triggers `.github/workflows/publish.yml`. Publish checks out the released
+  commit, stamps `package.json`'s version *from the release tag* (no hand-bump),
+  compiles, packages, publishes to the VS Code Marketplace + Open VSX, and
+  attaches the `.vsix`. So to release: just **Publish the draft Release** — no
+  manual `version` bump, no `git tag`.
+- Versioning follows semver and is driven by PR labels: `fix`/none → patch
+  (`2.0.x`); `feature` → minor (`2.x.0`); `breaking` → major.
 
 ## Conventions
 

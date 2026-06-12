@@ -14,11 +14,13 @@ Keep the section headings; fill what applies, delete what doesn't.
 
 ## Type of change
 
-<!-- Keep one: -->
-- [ ] Bug fix (non-breaking)
-- [ ] New feature (non-breaking)
-- [ ] Breaking change (existing behaviour differs afterwards)
-- [ ] Documentation / CI / chore
+<!-- Keep one. This maps to the release label that sets the version bump —
+     a `fix/…`, `feat/…` or `docs/…` branch name applies it automatically; a
+     maintainer can adjust. -->
+- [ ] Bug fix (non-breaking) → `fix` (patch)
+- [ ] New feature (non-breaking) → `feature` (minor)
+- [ ] Breaking change (existing behaviour differs afterwards) → `breaking` (major)
+- [ ] Documentation / CI / chore → `docs` / `ci` / `chore` (patch)
 
 ## How was this tested?
 

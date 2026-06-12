@@ -1,0 +1,36 @@
+# Drafts the next GitHub Release as PRs merge, and auto-labels PRs.
+#
+# On every push to main, release-drafter (re)builds a single DRAFT Release with
+# categorised notes and the next semver version inferred from the merged PRs'
+# labels (config in .github/release-drafter.yml). Nothing is published here — the
+# maintainer reviews the draft and clicks "Publish release" when ready, which
+# creates the tag and triggers publish.yml.
+#
+# On pull_request events it applies labels from the branch/title so contributors
+# don't have to. NOTE: GitHub only grants the labelling token write access for
+# PRs from branches in THIS repo; for PRs opened from forks the autolabeler is a
+# no-op and a maintainer applies the label at merge time. (Switching to
+# pull_request_target would cover forks but runs untrusted PR context with write
+# scope, so we deliberately don't.)
+
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    permissions:
+      contents: write        # create / update the draft release
+      pull-requests: write    # apply autolabels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
