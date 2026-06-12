@@ -2,9 +2,9 @@
 //
 // Approach: Node's built-in test runner (`node:test` + `node:assert`) against
 // the *compiled* output — zero new runtime/dev dependencies. Tests live in
-// `src/test/` so `tsc` (rootDir: src) emits them to `out/test/`, then
-// `node --test out/test/` runs every `*.test.js` there. See the `test` script
-// in package.json.
+// `src/test/` so `tsc` (rootDir: src) emits them to `out/test/`, then the
+// `test` script runs `node --test out/test/*.test.js` — a shell-expanded glob,
+// so it works on Node 20 too (node's own glob support only landed in 21).
 //
 // Only pure, dependency-free modules belong here — anything importing the
 // `vscode` API needs the heavier @vscode/test-electron harness instead. This
