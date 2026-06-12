@@ -47,9 +47,12 @@ npm test          # compiles, then runs node --test over out/test/*.test.js
 
 CI runs the same command on every PR (`.github/workflows/test.yml`).
 
-**Where tests live.** Put test files in `src/test/` named `*.test.ts`. Because
-`tsc` is configured with `rootDir: src`, they compile to `out/test/` where the
-runner picks them up. They're excluded from the packaged `.vsix`.
+**Where tests live.** Put test files **directly** in `src/test/`, named
+`*.test.ts`. Because `tsc` is configured with `rootDir: src`, they compile to
+`out/test/` where the runner picks them up, and they're excluded from the
+packaged `.vsix`. Keep the directory flat — the `test` script globs
+`out/test/*.test.js` (a single level, so it stays portable across Node
+versions), which means files in nested subfolders would be silently skipped.
 
 **What to test.** This harness is for **pure, dependency-free logic** — modules
 that don't import the `vscode` API:
