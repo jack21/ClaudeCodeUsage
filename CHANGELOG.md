@@ -4,6 +4,30 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [2.1.0] — Unreleased
+
+### Added
+- **Workflows tab** — one row per dynamic-workflow run (ultracode dispatch):
+  start time, derived workflow name, project, agent count, cost, token split,
+  **cache hit rate** and duration; expands to a per-agent breakdown. The cache
+  hit rate is the headline diagnostic: native-Claude workflows reuse the
+  prompt cache across agents (observed ~75%), a provider without cross-agent
+  caching shows ~0% — i.e. the same workflow costs disproportionately more.
+  A summary strip shows this month's workflow count, cost and cost share.
+- **Sub-agent attribution in the loader** — records from `subagents/` logs
+  now carry the workflow id, agent id and agent type (from
+  `agent-*.meta.json`), resolved from the file path so worktree-isolated
+  agents attribute correctly.
+
+### Fixed
+- **"Get AI Usage Advice" hanging or failing with `terminated`** — the
+  request now has a 120 s timeout with a clear error, one retry, and a
+  fallback to the system `curl` (the same transport of last resort the quota
+  client uses); the prompt-sample payload is capped (40 prompts × 1500 chars).
+- **Advice prompt samples polluted by agent traffic** — sub-agent logs,
+  meta/sidechain lines and agent-framework scaffolding text are no longer
+  harvested as "user prompts" for the advice feature.
+
 ## [2.0.2] — 2026-06-09
 
 ### Added

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData, WorkflowUsage } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -22,6 +22,7 @@ export class UsageWebviewProvider {
   private projectBreakdown: ProjectGroup[] = [];
   private contentAnalysis: ContentAnalysis | null = null;
   private branchBreakdown: BranchUsage[] = [];
+  private workflowBreakdown: WorkflowUsage[] = [];
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -118,7 +119,8 @@ export class UsageWebviewProvider {
     sessionBreakdown: SessionUsage[] = [],
     projectBreakdown: ProjectGroup[] = [],
     contentAnalysis: ContentAnalysis | null = null,
-    branchBreakdown: BranchUsage[] = []
+    branchBreakdown: BranchUsage[] = [],
+    workflowBreakdown: WorkflowUsage[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -137,6 +139,7 @@ export class UsageWebviewProvider {
     this.projectBreakdown = projectBreakdown;
     this.contentAnalysis = contentAnalysis;
     this.branchBreakdown = branchBreakdown;
+    this.workflowBreakdown = workflowBreakdown;
 
     if (this.panel) {
       this.updateWebview();
@@ -257,6 +260,7 @@ export class UsageWebviewProvider {
     const projects = I18n.t.popup.projects;
     const contentTab = I18n.t.popup.contentAnalysis;
     const branchesTab = I18n.t.popup.branches;
+    const workflowsTab = I18n.t.popup.workflows;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
@@ -265,6 +269,7 @@ export class UsageWebviewProvider {
     const projectsActive = this.currentTab === 'projects' ? 'active' : '';
     const contentActive = this.currentTab === 'content' ? 'active' : '';
     const branchesActive = this.currentTab === 'branches' ? 'active' : '';
+    const workflowsActive = this.currentTab === 'workflows' ? 'active' : '';
 
     // The Content tab is hidden when content analysis is disabled via
     // claudeCodeUsage.enableContentAnalysis (the analyser returned null).
@@ -356,6 +361,11 @@ export class UsageWebviewProvider {
       `" onclick="showTab('branches')">` +
       branchesTab +
       `</button>
+            <button id="tab-workflows" class="tab ` +
+      workflowsActive +
+      `" onclick="showTab('workflows')">` +
+      workflowsTab +
+      `</button>
           </div>
 
           <div id="today" class="tab-content ` +
@@ -407,6 +417,14 @@ export class UsageWebviewProvider {
       `">
             ` +
       this.renderBranchData() +
+      `
+          </div>
+
+          <div id="workflows" class="tab-content ` +
+      workflowsActive +
+      `">
+            ` +
+      this.renderWorkflowData() +
       `
           </div>
         </div>
@@ -1203,6 +1221,127 @@ export class UsageWebviewProvider {
       '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
+      '</div>'
+    );
+  }
+
+  /** Cache hit rate of input-side tokens: cacheRead / (input + cacheWrite + cacheRead). */
+  private cacheHitRate(d: UsageData): number | null {
+    const denominator = d.totalInputTokens + d.totalCacheCreationTokens + d.totalCacheReadTokens;
+    return denominator > 0 ? d.totalCacheReadTokens / denominator : null;
+  }
+
+  private formatPercent(value: number | null): string {
+    return value === null ? '-' : (value * 100).toFixed(value >= 0.1 ? 0 : 1) + '%';
+  }
+
+  /**
+   * "Workflows" tab: one row per dynamic-workflow run (ultracode dispatch),
+   * expandable to its per-agent breakdown. The cache hit rate is the headline
+   * diagnostic — it tells whether the provider reuses the prompt cache across
+   * a workflow's agents (see the hint line / V2.1-WORKFLOW-SPEC §Phase 2).
+   */
+  private renderWorkflowData(): string {
+    if (!this.workflowBreakdown || this.workflowBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    // Summary strip: workflow count + cost this calendar month, and that
+    // cost's share of the month's total spend.
+    const now = new Date();
+    const thisMonth = this.workflowBreakdown.filter(
+      (w) => w.endTime.getFullYear() === now.getFullYear() && w.endTime.getMonth() === now.getMonth()
+    );
+    const monthWorkflowCost = thisMonth.reduce((sum, w) => sum + w.data.totalCost, 0);
+    const monthTotalCost = this.monthData ? this.monthData.totalCost : 0;
+    const monthShare = monthTotalCost > 0 ? monthWorkflowCost / monthTotalCost : null;
+    const summaryStrip =
+      '<p class="table-hint">' +
+      t.workflowsThisMonth + ': ' + thisMonth.length +
+      ' · ' + I18n.formatCurrency(monthWorkflowCost) +
+      (monthShare !== null ? ' · ' + this.formatPercent(monthShare) + ' ' + t.workflowCostShare : '') +
+      '</p>';
+
+    let rows = '';
+    this.workflowBreakdown.forEach((w, idx) => {
+      const groupId = 'wf' + idx;
+      const d = w.data;
+      rows +=
+        '<tr class="sort-row project-group-row" data-group="' + groupId + '"' +
+        ' data-sort-time="' + w.startTime.getTime() + '"' +
+        ' data-sort-name="' + this.escapeHtml(w.name.toLowerCase()) + '"' +
+        ' data-sort-project="' + this.escapeHtml((w.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-agents="' + w.agentCount + '"' +
+        ' data-sort-cachehit="' + (this.cacheHitRate(d) ?? -1) + '"' +
+        ' data-sort-duration="' + (w.endTime.getTime() - w.startTime.getTime()) + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
+        '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(w.startTime)) + '</td>' +
+        '<td class="name-cell" title="' + this.escapeHtml(w.workflowId) + '">' +
+        '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
+        this.escapeHtml(w.name) +
+        '</td>' +
+        '<td>' + this.escapeHtml(w.projectName) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(w.agentCount) + '</td>' +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(d)) + '</td>' +
+        '<td class="number-cell">' + this.escapeHtml(this.formatDuration(w.startTime, w.endTime)) + '</td>' +
+        '</tr>';
+      w.agents.forEach((agent) => {
+        const ad = agent.data;
+        const shortId = agent.agentId.replace(/^agent-/, '').slice(0, 12);
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(agent.startTime)) + '</td>' +
+          '<td class="name-cell project-child-cell" title="' + this.escapeHtml(agent.agentId) + '">' +
+          this.escapeHtml(shortId) +
+          '</td>' +
+          '<td></td>' +
+          '<td></td>' +
+          '<td class="cost-cell">' + I18n.formatCurrency(ad.totalCost) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalInputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalOutputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalCacheCreationTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalCacheReadTokens) + '</td>' +
+          '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(ad)) + '</td>' +
+          '<td class="number-cell">' + this.escapeHtml(this.formatDuration(agent.startTime, agent.endTime)) + '</td>' +
+          '</tr>';
+      });
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.workflowBreakdown + '</h3>' +
+      summaryStrip +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('time', t.startTime) +
+      th('name', t.workflowName) +
+      th('project', t.project) +
+      th('agents', t.agents) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('cachehit', t.cacheHitRate) +
+      th('duration', t.duration) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '<p class="table-hint">' + t.workflowCacheHint + '</p>' +
       '</div>'
     );
   }

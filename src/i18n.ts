@@ -68,6 +68,14 @@ export interface Translations {
     branches: string;
     branchBreakdown: string;
     branch: string;
+    workflows: string;
+    workflowBreakdown: string;
+    workflowName: string;
+    agents: string;
+    agent: string;
+    workflowsThisMonth: string;
+    workflowCostShare: string;
+    workflowCacheHint: string;
     sessionTitle: string;
     getAdvice: string;
     adviceNeedsKey: string;
@@ -162,6 +170,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: 'Branches',
       branchBreakdown: 'Branch Usage',
       branch: 'Branch',
+      workflows: 'Workflows',
+      workflowBreakdown: 'Workflow Usage',
+      workflowName: 'Workflow',
+      agents: 'Agents',
+      agent: 'Agent',
+      workflowsThisMonth: 'Workflows this month',
+      workflowCostShare: "share of this month's cost",
+      workflowCacheHint:
+        'Cache hit rate = cache reads ÷ all input-side tokens. Native Claude workflows reuse the prompt cache across agents (high rate); a provider without cross-agent caching shows ~0% — the same workflow costs disproportionately more there.',
       sessionTitle: 'Session',
       getAdvice: 'Get AI Advice',
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
@@ -265,6 +282,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: "Branches",
       branchBreakdown: "Nutzung nach Branch",
       branch: "Branch",
+      workflows: "Workflows",
+      workflowBreakdown: "Nutzung nach Workflow",
+      workflowName: "Workflow",
+      agents: "Agenten",
+      agent: "Agent",
+      workflowsThisMonth: "Workflows diesen Monat",
+      workflowCostShare: "Anteil an den Monatskosten",
+      workflowCacheHint:
+        "Cache-Trefferrate = Cache-Lesevorgänge ÷ alle eingabeseitigen Tokens. Native Claude-Workflows nutzen den Prompt-Cache agentenübergreifend (hohe Rate); ein Anbieter ohne agentenübergreifenden Cache zeigt ~0 % — derselbe Workflow kostet dort unverhältnismäßig mehr.",
       sessionTitle: "Sitzung",
       getAdvice: "KI-Rat holen",
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
@@ -371,6 +397,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: '分支',
       branchBreakdown: '各分支使用量',
       branch: '分支',
+      workflows: '工作流',
+      workflowBreakdown: '各工作流使用量',
+      workflowName: '工作流',
+      agents: '代理數',
+      agent: '代理',
+      workflowsThisMonth: '本月工作流',
+      workflowCostShare: '佔本月成本',
+      workflowCacheHint:
+        '快取命中率 = 快取讀取 ÷ 全部輸入側 token。原生 Claude 工作流可在代理間重用提示快取（命中率高）；不支援跨代理快取的供應商約為 0%——同樣的工作流在那裡的成本會高出許多。',
       sessionTitle: '會話',
       getAdvice: '取得 AI 建議',
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
@@ -474,6 +509,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: '分支',
       branchBreakdown: '各分支使用量',
       branch: '分支',
+      workflows: '工作流',
+      workflowBreakdown: '各工作流使用量',
+      workflowName: '工作流',
+      agents: '代理数',
+      agent: '代理',
+      workflowsThisMonth: '本月工作流',
+      workflowCostShare: '占本月成本',
+      workflowCacheHint:
+        '缓存命中率 = 缓存读取 ÷ 全部输入侧 token。原生 Claude 工作流可在代理间复用提示缓存（命中率高）；不支持跨代理缓存的供应商约为 0%——同样的工作流在那里的成本会高出许多。',
       sessionTitle: '会话',
       getAdvice: '获取 AI 建议',
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
@@ -577,6 +621,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: 'ブランチ',
       branchBreakdown: 'ブランチ別使用量',
       branch: 'ブランチ',
+      workflows: 'ワークフロー',
+      workflowBreakdown: 'ワークフロー別使用量',
+      workflowName: 'ワークフロー',
+      agents: 'エージェント数',
+      agent: 'エージェント',
+      workflowsThisMonth: '今月のワークフロー',
+      workflowCostShare: '今月のコストに占める割合',
+      workflowCacheHint:
+        'キャッシュヒット率 = キャッシュ読取 ÷ 入力側トークン全体。ネイティブ Claude のワークフローはエージェント間でプロンプトキャッシュを再利用します（高い率）。エージェント間キャッシュのないプロバイダーでは約 0% となり、同じワークフローのコストが大幅に高くなります。',
       sessionTitle: 'セッション',
       getAdvice: 'AI アドバイスを取得',
       adviceNeedsKey: '設定で API キーを入力してください。',
@@ -681,6 +734,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       branches: '브랜치',
       branchBreakdown: '브랜치별 사용량',
       branch: '브랜치',
+      workflows: '워크플로',
+      workflowBreakdown: '워크플로별 사용량',
+      workflowName: '워크플로',
+      agents: '에이전트 수',
+      agent: '에이전트',
+      workflowsThisMonth: '이번 달 워크플로',
+      workflowCostShare: '이번 달 비용 중 비율',
+      workflowCacheHint:
+        '캐시 적중률 = 캐시 읽기 ÷ 전체 입력측 토큰. 네이티브 Claude 워크플로는 에이전트 간 프롬프트 캐시를 재사용합니다(높은 적중률). 에이전트 간 캐시가 없는 공급자는 약 0%로, 같은 워크플로 비용이 훨씬 더 많이 듭니다.',
       sessionTitle: '세션',
       getAdvice: 'AI 조언 받기',
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',
