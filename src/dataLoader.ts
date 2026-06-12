@@ -15,6 +15,7 @@ import {
   SessionData,
   SessionUsage,
   UsageData,
+  WorkflowUsage,
 } from './types';
 
 // Constants
@@ -372,6 +373,11 @@ export class ClaudeDataLoader {
       // Content analysis (last 30 days) is optional — skipped when the user
       // disables it via claudeCodeUsage.enableContentAnalysis.
       const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
+      // Per-refresh caches for sub-agent attribution lookups: agent type from
+      // agent-*.meta.json (keyed by meta path) and workflow display name from
+      // the session's workflows/scripts dir (keyed by workflow id).
+      const agentTypeCache = new Map<string, string>();
+      const workflowNameCache = new Map<string, string>();
       let fileIndex = 0;
       // Diagnostic counters so the "Show Diagnostic Logs" command can explain
       // how many records were seen / rejected / deduped without speculation.
@@ -403,6 +409,27 @@ export class ClaudeDataLoader {
           // user prompts from them (their "user" lines are agent-framework
           // task dispatches, not something the user typed).
           const isSubagentFile = /[\\/]subagents[\\/]/.test(file);
+          // Sub-agent attribution, derived from the file path — NOT from cwd:
+          // worktree-isolated agents have a cwd pointing at a temporary git
+          // worktree (see docs/V2.1-WORKFLOW-SPEC.md §2.2).
+          let agentInfo: {
+            agentId: string;
+            agentType: string;
+            workflowId?: string;
+            workflowName?: string;
+          } | null = null;
+          if (isSubagentFile) {
+            const agentId = path.basename(file, '.jsonl');
+            const agentType = await this.readAgentType(file, agentTypeCache);
+            const wfMatch = file.match(/[\\/]subagents[\\/]workflows[\\/](wf_[^\\/]+)[\\/]/);
+            if (wfMatch) {
+              const workflowId = wfMatch[1];
+              const workflowName = await this.resolveWorkflowName(file, workflowId, workflowNameCache);
+              agentInfo = { agentId, agentType, workflowId, workflowName };
+            } else {
+              agentInfo = { agentId, agentType };
+            }
+          }
 
           for (const line of lines) {
             stats.linesScanned += 1;
@@ -496,6 +523,12 @@ export class ClaudeDataLoader {
               }
               const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
               record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
+              if (agentInfo) {
+                record._agentId = agentInfo.agentId;
+                record._agentType = agentInfo.agentType;
+                record._workflowId = agentInfo.workflowId;
+                record._workflowName = agentInfo.workflowName;
+              }
 
               if (uniqueHash && processedHashes.has(uniqueHash)) {
                 // Duplicate — keep whichever record has more tokens. This
@@ -988,6 +1021,127 @@ export class ClaudeDataLoader {
       .filter((s) => s.data.messageCount > 0 || s.data.totalCost > 0)
       .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())
       .slice(0, limit);
+  }
+
+  /** Agent type from the sibling agent-*.meta.json ("unknown" when absent). */
+  private static async readAgentType(jsonlPath: string, cache: Map<string, string>): Promise<string> {
+    const metaPath = jsonlPath.replace(/\.jsonl$/i, '.meta.json');
+    const cached = cache.get(metaPath);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let agentType = 'unknown';
+    try {
+      const parsed = JSON.parse(await readFile(metaPath, 'utf-8')) as { agentType?: unknown };
+      if (typeof parsed.agentType === 'string' && parsed.agentType.trim() !== '') {
+        agentType = parsed.agentType.trim();
+      }
+    } catch {
+      // Missing or malformed meta file — journal.jsonl has none, for example.
+    }
+    cache.set(metaPath, agentType);
+    return agentType;
+  }
+
+  /**
+   * Human-readable workflow name, derived from the generated script file
+   * `<session-dir>/workflows/scripts/<name>-wf_<id>.js`. Falls back to the
+   * workflow id when no script matches (the wf_*.json shape is not a stable
+   * API, so the script filename is the dependable source).
+   */
+  private static async resolveWorkflowName(
+    agentFilePath: string,
+    workflowId: string,
+    cache: Map<string, string>
+  ): Promise<string> {
+    const cached = cache.get(workflowId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let name = workflowId;
+    const m = agentFilePath.match(/^(.*)[\\/]subagents[\\/]workflows[\\/]/);
+    if (m) {
+      const scriptsDir = path.join(m[1], 'workflows', 'scripts');
+      try {
+        const entries = await fs.promises.readdir(scriptsDir);
+        const suffix = `-${workflowId}.js`;
+        const hit = entries.find((e) => e.endsWith(suffix));
+        if (hit) {
+          name = hit.slice(0, -suffix.length);
+        }
+      } catch {
+        // No scripts directory — keep the id.
+      }
+    }
+    cache.set(workflowId, name);
+    return name;
+  }
+
+  /**
+   * Group sub-agent records by workflow run (ultracode dispatch) and aggregate
+   * usage per run, with a per-agent breakdown for drill-down.
+   * Returns workflows sorted by most recent activity first.
+   * @param records All loaded usage records
+   * @param limit Maximum number of workflows to return (default 50)
+   */
+  static getWorkflowBreakdown(records: ClaudeUsageRecord[], limit: number = 50): WorkflowUsage[] {
+    const recordsByWorkflow: Record<string, ClaudeUsageRecord[]> = {};
+    for (const record of records) {
+      if (!record._workflowId) {
+        continue;
+      }
+      if (!recordsByWorkflow[record._workflowId]) {
+        recordsByWorkflow[record._workflowId] = [];
+      }
+      recordsByWorkflow[record._workflowId].push(record);
+    }
+
+    const timeRange = (rs: ClaudeUsageRecord[]): { start: Date; end: Date } => {
+      const timestamps = rs.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
+      return {
+        start: timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0),
+        end: timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0),
+      };
+    };
+
+    const workflows: WorkflowUsage[] = Object.entries(recordsByWorkflow).map(([workflowId, wfRecords]) => {
+      const recordsByAgent: Record<string, ClaudeUsageRecord[]> = {};
+      for (const r of wfRecords) {
+        const agentId = r._agentId || 'unknown';
+        if (!recordsByAgent[agentId]) {
+          recordsByAgent[agentId] = [];
+        }
+        recordsByAgent[agentId].push(r);
+      }
+      const agents = Object.entries(recordsByAgent)
+        .map(([agentId, agentRecords]) => {
+          const range = timeRange(agentRecords);
+          return {
+            agentId,
+            data: this.calculateUsageData(agentRecords),
+            startTime: range.start,
+            endTime: range.end,
+          };
+        })
+        .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+      const first = wfRecords[0];
+      const range = timeRange(wfRecords);
+      return {
+        workflowId,
+        name: first._workflowName || workflowId,
+        sessionId: first._sessionId || 'unknown',
+        projectPath: first._projectPath || '',
+        projectName: first._projectName || 'unknown',
+        startTime: range.start,
+        endTime: range.end,
+        agentCount: agents.length,
+        data: this.calculateUsageData(wfRecords),
+        agents,
+      };
+    });
+
+    return workflows.sort((a, b) => b.endTime.getTime() - a.endTime.getTime()).slice(0, limit);
   }
 
   /** Normalise a path for case-insensitive comparison and grouping. */

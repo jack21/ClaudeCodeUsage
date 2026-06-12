@@ -30,6 +30,18 @@ export interface ClaudeUsageRecord {
   // Synthetic marker record for one genuine user prompt (zero usage).
   // messageCount counts these, so "Messages" means what users typed.
   _isUserPrompt?: boolean;
+  // --- Sub-agent attribution (set when the source file sits under a
+  // `subagents/` directory; see V2.1-WORKFLOW-SPEC §2) ---
+  // Workflow run id ("wf_…") when the file sits under subagents/workflows/.
+  _workflowId?: string;
+  // Sub-agent log file basename without extension, e.g. "agent-a1b2c3".
+  _agentId?: string;
+  // From the sibling agent-*.meta.json: "workflow-subagent", "Explore",
+  // "general-purpose", … — "unknown" when the meta file is missing/bad.
+  _agentType?: string;
+  // Human-readable workflow name, derived at load time from the session's
+  // workflows/scripts/<name>-wf_<id>.js file (resolved once per refresh).
+  _workflowName?: string;
 }
 
 export interface UsageData {
@@ -165,6 +177,22 @@ export interface ModelPricing {
 }
 
 export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko';
+
+// One Claude Code dynamic-workflow run (trigger word "ultracode"): tens to
+// hundreds of sub-agents fanned out under a single wf_<id>, each with its own
+// usage log. Aggregated across all of the run's agent files.
+export interface WorkflowUsage {
+  workflowId: string;          // "wf_fcfc35cc-5d5"
+  name: string;                // derived human name, or the id when unknown
+  sessionId: string;           // parent session
+  projectPath: string;
+  projectName: string;
+  startTime: Date;             // min record timestamp across agents
+  endTime: Date;               // max record timestamp
+  agentCount: number;
+  data: UsageData;             // aggregated across all agent files
+  agents: { agentId: string; data: UsageData; startTime: Date; endTime: Date }[];
+}
 
 // Per-git-branch usage aggregate.
 export interface BranchUsage {
