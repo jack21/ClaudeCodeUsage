@@ -8,8 +8,10 @@
 #   major → "breaking"          minor → "feature"/"enhancement"
 #   patch → everything else (the default)
 #
-# PRs are auto-labelled from their branch/title prefix (see `autolabeler` below),
-# so contributors don't have to label by hand and maintainers can just merge.
+# A version label is set by the maintainer when they merge (the PR template shows
+# the mapping; unlabeled defaults to patch). The `autolabeler` block below is
+# kept ready but only runs if a pull_request trigger is added to the workflow —
+# see the note in .github/workflows/release-drafter.yml.
 
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'

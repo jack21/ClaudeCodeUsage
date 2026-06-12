@@ -14,9 +14,8 @@ Keep the section headings; fill what applies, delete what doesn't.
 
 ## Type of change
 
-<!-- Keep one. This maps to the release label that sets the version bump —
-     a `fix/…`, `feat/…` or `docs/…` branch name applies it automatically; a
-     maintainer can adjust. -->
+<!-- Keep one. A maintainer applies the matching label at merge; that label sets
+     the release version bump. -->
 - [ ] Bug fix (non-breaking) → `fix` (patch)
 - [ ] New feature (non-breaking) → `feature` (minor)
 - [ ] Breaking change (existing behaviour differs afterwards) → `breaking` (major)

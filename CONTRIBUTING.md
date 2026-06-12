@@ -50,9 +50,10 @@ welcome.
 Releases are automated and contributor-friendly — you never touch versions or
 tags:
 
-1. **Open a PR.** It's auto-labelled from your branch/title prefix (`fix/…`,
-   `feat/…`, `docs/…`); a maintainer can adjust the label. The label decides the
-   version bump (`feature` → minor, `breaking` → major, otherwise patch).
+1. **Open a PR** (a `fix/…`, `feat/…` or `docs/…` branch name keeps the intent
+   clear). A maintainer applies the matching label when merging — that label sets
+   the version bump (`feature` → minor, `breaking` → major, otherwise patch;
+   unlabeled → patch).
 2. **A maintainer merges it.** [Release Drafter](https://github.com/release-drafter/release-drafter)
    then adds your change to a continuously-updated **draft GitHub Release** and
    recomputes the next version.
