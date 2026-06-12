@@ -45,6 +45,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   Full panel in the Content tab; a compact strip (≥5% lines only) on the
   Today tab.
 
+- **AI advice fed with the new signals** — the advice prompt now includes
+  the multi-agent runs (per-run cost, agent fan-out, cache hit rate per
+  provider), the estimated thinking share and the usage-attribution panel
+  (characteristics + top skills/subagents/plugins/models), so the model can
+  give targeted advice instead of generic tips. New optional setting
+  `claudeCodeUsage.advice.userContext`: free-text background about you/the
+  project; when set, the advice ends with a "Personalised for this project"
+  section calibrated against it.
+
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the
   request now has a 120 s timeout with a clear error, one retry, and a

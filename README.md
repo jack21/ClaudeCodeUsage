@@ -76,6 +76,27 @@ on the warning prompt to see a static example first.*
 
 ---
 
+## What's new in 2.1
+
+- **Workflows tab** — every multi-agent run in one place: dynamic-workflow
+  runs (ultracode) *and* ad-hoc sub-agent batches, with per-run cost, agent
+  count, models used, **cache hit rate** (the "is my provider workflow-ready"
+  diagnostic) and a per-agent drill-down labelled by each agent's task.
+- **Usage tracking panel** — the official `/usage` "what's contributing"
+  view, but multi-provider and with five scopes (Day / Week / Month /
+  session / project): >150k-context share, 8h+-session share,
+  subagent-heavy share, workflow share, plus Skills / Subagents / Plugins /
+  Models breakdowns. Compact card on the Today tab.
+- **Thinking share** per session (Sessions column + Today card) with an
+  `/effort` hint when it runs high.
+- **Workflow quota guard** — a dismissible banner before you start a run
+  the remaining 5-hour window can't finish
+  (`claudeCodeUsage.workflowQuotaWarnPercent`).
+- **AI advice 2.0** — fed with the new signals (runs, cache hit rates,
+  attribution, thinking share); optional `advice.userContext` adds a
+  "Personalised for this project" section. Transport hardened: timeout,
+  retry, curl fallback — no more silent hangs.
+
 ## What's new in 2.0
 
 - **Real 5-hour and weekly quota** in the status bar — reads Claude Code's

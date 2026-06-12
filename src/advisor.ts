@@ -15,14 +15,17 @@ export interface AdviceOptions {
   language: string;
   // '', 'high' or 'max' — passed as reasoning_effort for models that support it.
   reasoningEffort?: string;
+  // Free-text background about the user/project; when set, the reply ends
+  // with a "Personalised for this project" section calibrated against it.
+  userContext?: string;
   // Abort the request after this long (reasoning models can take minutes).
   timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-function buildSystemPrompt(language: string): string {
-  return (
+function buildSystemPrompt(language: string, userContext?: string): string {
+  let prompt =
     'You are a coaching advisor that helps a developer use the Claude Code AI ' +
     'coding agent more effectively. You are given a breakdown of their usage and ' +
     'a sample of their actual prompts. Your PRIMARY goal: advise how to write ' +
@@ -30,10 +33,19 @@ function buildSystemPrompt(language: string): string {
     'correctly and efficiently — point at concrete weaknesses in the sample ' +
     'prompts and show better rewrites. SECONDARY goal: where it does not hurt ' +
     'clarity, suggest ways to reduce token consumption. Be concrete and ' +
-    'actionable, use short sections and bullet points. ' +
+    'actionable, use short sections and bullet points. ';
+  const ctx = (userContext || '').trim();
+  if (ctx !== '') {
+    prompt +=
+      'The user provided this background about themself and the project: ' +
+      `"${ctx.slice(0, 1000)}". End your reply with a final section titled ` +
+      '"Personalised for this project" that calibrates the advice against this ' +
+      'background instead of generic best practice. ';
+  }
+  prompt +=
     `IMPORTANT: write your entire reply in ${language}, regardless of the ` +
-    'language(s) used in the sample prompts.'
-  );
+    'language(s) used in the sample prompts.';
+  return prompt;
 }
 
 /** Normalise an OpenAI-compatible endpoint URL, fixing common mistakes. */
@@ -61,7 +73,7 @@ export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
     model: options.model,
     stream: false,
     messages: [
-      { role: 'system', content: buildSystemPrompt(options.language || 'English') },
+      { role: 'system', content: buildSystemPrompt(options.language || 'English', options.userContext) },
       { role: 'user', content: options.summary },
     ],
   };

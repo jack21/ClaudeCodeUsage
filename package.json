@@ -109,6 +109,11 @@
           "default": "deepseek-v4-pro",
           "description": "Model name used by the advice feature."
         },
+        "claudeCodeUsage.advice.userContext": {
+          "type": "string",
+          "default": "",
+          "description": "Optional background about yourself or the project (e.g. \"non-programmer building a VS Code extension; expect heavy exploratory tool use\"). When set, AI advice ends with a 'Personalised for this project' section calibrated against it."
+        },
         "claudeCodeUsage.advice.reasoningEffort": {
           "type": "string",
           "enum": [

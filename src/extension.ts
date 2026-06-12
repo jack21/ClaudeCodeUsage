@@ -8,6 +8,7 @@ import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
 import { ClaudeApiClient } from './claudeApiClient';
 import { getUsageAdvice } from './advisor';
+import { buildAdviceSummary } from './adviceSummary';
 import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
 
@@ -112,72 +113,6 @@ export class ClaudeCodeUsageExtension {
     }
   }
 
-  /**
-   * Build the advice prompt for a scope. Includes a usage summary, the content
-   * breakdown, and a sample of the developer's actual prompts so the model can
-   * critique instruction quality.
-   * @param scope 'overall' or a project group path
-   */
-  private buildAdviceSummary(records: any[], analysis: ContentAnalysis, scope: string, scopeLabel: string): string {
-    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const isOverall = scope === 'overall';
-    const scopedRecords = isOverall
-      ? records
-      : records.filter((r) => norm(r._projectPath || '').startsWith(norm(scope)));
-    const usage = ClaudeDataLoader.getAllTimeData(scopedRecords);
-    const prompts = isOverall
-      ? analysis.recentPrompts
-      : analysis.recentPrompts.filter((p) => norm(p.cwd).startsWith(norm(scope)));
-    // Cap the payload: oversized request bodies are one suspected cause of the
-    // intermittent "terminated" failures on flaky networks (v2.1.0 Phase 0).
-    const promptSample = prompts.slice(-40).map((p) => ({ ...p, text: p.text.slice(0, 1500) }));
-
-    const lines: string[] = [];
-    lines.push(`Scope: ${isOverall ? 'overall (all projects)' : scopeLabel}`);
-    lines.push(
-      `Usage: cost $${usage.totalCost.toFixed(2)}, input ${usage.totalInputTokens}, ` +
-        `output ${usage.totalOutputTokens}, cache-write ${usage.totalCacheCreationTokens}, ` +
-        `cache-read ${usage.totalCacheReadTokens}, messages ${usage.messageCount}`
-    );
-    lines.push(`Models used: ${Object.keys(usage.modelBreakdown).join(', ') || 'n/a'}`);
-    lines.push('');
-    lines.push('Content token breakdown, all projects, last 30 days (estimated):');
-    for (const c of analysis.categories) {
-      const pct =
-        analysis.totalEstimatedTokens > 0
-          ? ((c.estimatedTokens / analysis.totalEstimatedTokens) * 100).toFixed(1)
-          : '0';
-      lines.push(`- ${c.key}: ~${c.estimatedTokens} tokens (${pct}%)`);
-    }
-    lines.push('');
-    // Safety valve on top of the per-prompt caps: skip the prompts section
-    // entirely if it would still exceed ~80 KB.
-    const promptBlockChars = promptSample.reduce((sum, p) => sum + p.text.length, 0);
-    if (promptSample.length === 0 || promptBlockChars > 80_000) {
-      lines.push('=== No recent user prompts captured for this scope ===');
-      lines.push(
-        'No prompt samples are available. Base your advice on the aggregate usage above and ' +
-          'on general Claude Code best practices for writing clearer, more complete and more ' +
-          'effective instructions. Also note any easy token savings the aggregates suggest.'
-      );
-    } else {
-      lines.push(`=== Sample of ${promptSample.length} recent user prompts (review these for instruction quality) ===`);
-      promptSample.forEach((p, i) => {
-        lines.push(`[Prompt ${i + 1}]`);
-        lines.push(p.text);
-        lines.push('');
-      });
-      lines.push('=== End of prompts ===');
-      lines.push('');
-      lines.push(
-        'Based primarily on the prompts above, give specific advice on how to write clearer, ' +
-          'more complete and more effective instructions for Claude Code, with concrete rewrite ' +
-          'examples drawn from the samples. Secondarily, note any easy token savings.'
-      );
-    }
-    return lines.join('\n');
-  }
-
   private async getAdvice(): Promise<void> {
     const config = this.getConfiguration();
     if (!config.adviceApiKey || config.adviceApiKey.trim() === '') {
@@ -212,7 +147,7 @@ export class ClaudeCodeUsageExtension {
       return;
     }
 
-    const summary = this.buildAdviceSummary(records, analysis, picked.scope, picked.label);
+    const summary = buildAdviceSummary(records, analysis, picked.scope, picked.label);
 
     await this.runAdviceRequest(config, picked.scope, picked.label, summary);
   }
@@ -248,6 +183,7 @@ export class ClaudeCodeUsageExtension {
             apiUrl: config.adviceApiUrl,
             model: config.adviceModel,
             reasoningEffort: config.adviceReasoningEffort,
+            userContext: config.adviceUserContext,
             language: I18n.getLanguageName(),
             summary
           });
@@ -315,6 +251,7 @@ export class ClaudeCodeUsageExtension {
       adviceModel: config.get<string>('advice.model') || config.get<string>('adviceModel', 'deepseek-v4-pro'),
       adviceReasoningEffort:
         config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
+      adviceUserContext: config.get<string>('advice.userContext', ''),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
       projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
       fileWatching: config.get('fileWatching', true),
