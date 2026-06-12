@@ -417,6 +417,7 @@ export class ClaudeDataLoader {
             agentType: string;
             workflowId?: string;
             workflowName?: string;
+            task?: string;
           } | null = null;
           if (isSubagentFile) {
             const agentId = path.basename(file, '.jsonl');
@@ -451,6 +452,33 @@ export class ClaudeDataLoader {
               } else if (lineAny.type === 'summary' && typeof lineAny.summary === 'string') {
                 // Legacy location (older Claude Code versions).
                 aiTitleBySession[sessionInfo.sessionId] = lineAny.summary;
+              }
+
+              // A sub-agent log's first user message is the task that was
+              // dispatched to the agent — capture it (truncated) as the
+              // agent's display label for the Workflows drill-down.
+              if (agentInfo && agentInfo.task === undefined) {
+                const role =
+                  (lineAny.message as { role?: unknown } | undefined)?.role ?? lineAny.type;
+                if (role === 'user') {
+                  const content = (lineAny.message as { content?: unknown } | undefined)?.content;
+                  const text =
+                    typeof content === 'string'
+                      ? content
+                      : Array.isArray(content)
+                        ? content
+                            .filter(
+                              (b: { type?: unknown; text?: unknown }) =>
+                                b?.type === 'text' && typeof b.text === 'string'
+                            )
+                            .map((b: { text: string }) => b.text)
+                            .join(' ')
+                        : '';
+                  const trimmed = text.replace(/\s+/g, ' ').trim();
+                  if (trimmed.length > 0) {
+                    agentInfo.task = trimmed.slice(0, 200);
+                  }
+                }
               }
 
               // Genuine user prompts become synthetic zero-usage records so
@@ -528,6 +556,7 @@ export class ClaudeDataLoader {
                 record._agentType = agentInfo.agentType;
                 record._workflowId = agentInfo.workflowId;
                 record._workflowName = agentInfo.workflowName;
+                record._agentTask = agentInfo.task;
               }
 
               if (uniqueHash && processedHashes.has(uniqueHash)) {
@@ -1118,6 +1147,7 @@ export class ClaudeDataLoader {
           const range = timeRange(agentRecords);
           return {
             agentId,
+            task: agentRecords.find((r) => r._agentTask)?._agentTask,
             data: this.calculateUsageData(agentRecords),
             startTime: range.start,
             endTime: range.end,

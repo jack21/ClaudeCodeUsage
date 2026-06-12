@@ -42,6 +42,9 @@ export interface ClaudeUsageRecord {
   // Human-readable workflow name, derived at load time from the session's
   // workflows/scripts/<name>-wf_<id>.js file (resolved once per refresh).
   _workflowName?: string;
+  // First user message of a sub-agent log = the task dispatched to that
+  // agent (truncated). Gives the per-agent drill-down a readable label.
+  _agentTask?: string;
 }
 
 export interface UsageData {
@@ -191,7 +194,14 @@ export interface WorkflowUsage {
   endTime: Date;               // max record timestamp
   agentCount: number;
   data: UsageData;             // aggregated across all agent files
-  agents: { agentId: string; data: UsageData; startTime: Date; endTime: Date }[];
+  agents: {
+    agentId: string;
+    // Task text dispatched to the agent (first user message, truncated).
+    task?: string;
+    data: UsageData;
+    startTime: Date;
+    endTime: Date;
+  }[];
 }
 
 // Per-git-branch usage aggregate.

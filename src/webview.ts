@@ -1235,6 +1235,25 @@ export class UsageWebviewProvider {
     return value === null ? '-' : (value * 100).toFixed(value >= 0.1 ? 0 : 1) + '%';
   }
 
+  /** Compact model label: "claude-sonnet-4-5-20250929[1m]" → "sonnet-4-5". */
+  private shortModelName(model: string): string {
+    return model
+      .replace(/^claude-/, '')
+      .replace(/\[1m\]$/, '')
+      .replace(/-20\d{6}$/, '');
+  }
+
+  /** Distinct models in a usage aggregate, most expensive first, shortened. */
+  private modelList(d: UsageData): { short: string; full: string } {
+    const sorted = Object.entries(d.modelBreakdown)
+      .sort(([, a], [, b]) => b.cost - a.cost)
+      .map(([model]) => model);
+    return {
+      short: sorted.map((m) => this.shortModelName(m)).join(', '),
+      full: sorted.join(', '),
+    };
+  }
+
   /**
    * "Workflows" tab: one row per dynamic-workflow run (ultracode dispatch),
    * expandable to its per-agent breakdown. The cache hit rate is the headline
@@ -1268,11 +1287,13 @@ export class UsageWebviewProvider {
     this.workflowBreakdown.forEach((w, idx) => {
       const groupId = 'wf' + idx;
       const d = w.data;
+      const models = this.modelList(d);
       rows +=
         '<tr class="sort-row project-group-row" data-group="' + groupId + '"' +
         ' data-sort-time="' + w.startTime.getTime() + '"' +
         ' data-sort-name="' + this.escapeHtml(w.name.toLowerCase()) + '"' +
         ' data-sort-project="' + this.escapeHtml((w.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-model="' + this.escapeHtml(models.short.toLowerCase()) + '"' +
         ' data-sort-agents="' + w.agentCount + '"' +
         ' data-sort-cachehit="' + (this.cacheHitRate(d) ?? -1) + '"' +
         ' data-sort-duration="' + (w.endTime.getTime() - w.startTime.getTime()) + '"' +
@@ -1284,6 +1305,7 @@ export class UsageWebviewProvider {
         this.escapeHtml(w.name) +
         '</td>' +
         '<td>' + this.escapeHtml(w.projectName) + '</td>' +
+        '<td title="' + this.escapeHtml(models.full) + '">' + this.escapeHtml(models.short) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(w.agentCount) + '</td>' +
         '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
@@ -1295,15 +1317,29 @@ export class UsageWebviewProvider {
         '</tr>';
       w.agents.forEach((agent) => {
         const ad = agent.data;
+        const agentModels = this.modelList(ad);
         const shortId = agent.agentId.replace(/^agent-/, '').slice(0, 12);
+        // Label the agent by the task it was dispatched (first user message
+        // of its log); the opaque hex id moves to the second line + tooltip.
+        const taskLabel = agent.task
+          ? agent.task.length > 70
+            ? agent.task.slice(0, 70) + '…'
+            : agent.task
+          : shortId;
+        const nameCell = agent.task
+          ? '<div class="project-name">' + this.escapeHtml(taskLabel) + '</div>' +
+            '<div class="project-path">' + this.escapeHtml(shortId) + '</div>'
+          : this.escapeHtml(shortId);
         rows +=
           '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
           '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(agent.startTime)) + '</td>' +
-          '<td class="name-cell project-child-cell" title="' + this.escapeHtml(agent.agentId) + '">' +
-          this.escapeHtml(shortId) +
+          '<td class="name-cell project-child-cell" title="' +
+          this.escapeHtml(agent.task ? agent.task + ' (' + agent.agentId + ')' : agent.agentId) +
+          '">' +
+          nameCell +
           '</td>' +
           '<td></td>' +
-          '<td></td>' +
+          '<td title="' + this.escapeHtml(agentModels.full) + '">' + this.escapeHtml(agentModels.short) + '</td>' +
           '<td class="cost-cell">' + I18n.formatCurrency(ad.totalCost) + '</td>' +
           '<td class="number-cell">' + I18n.formatNumber(ad.totalInputTokens) + '</td>' +
           '<td class="number-cell">' + I18n.formatNumber(ad.totalOutputTokens) + '</td>' +
@@ -1329,6 +1365,7 @@ export class UsageWebviewProvider {
       th('time', t.startTime) +
       th('name', t.workflowName) +
       th('project', t.project) +
+      th('model', t.model) +
       th('agents', t.agents) +
       th('cost', t.cost) +
       th('input', t.inputTokens) +

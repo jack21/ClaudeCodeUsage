@@ -71,6 +71,7 @@ export interface Translations {
     workflows: string;
     workflowBreakdown: string;
     workflowName: string;
+    model: string;
     agents: string;
     agent: string;
     workflowsThisMonth: string;
@@ -173,6 +174,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: 'Workflows',
       workflowBreakdown: 'Workflow Usage',
       workflowName: 'Workflow',
+      model: 'Model',
       agents: 'Agents',
       agent: 'Agent',
       workflowsThisMonth: 'Workflows this month',
@@ -285,6 +287,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: "Workflows",
       workflowBreakdown: "Nutzung nach Workflow",
       workflowName: "Workflow",
+      model: "Modell",
       agents: "Agenten",
       agent: "Agent",
       workflowsThisMonth: "Workflows diesen Monat",
@@ -400,6 +403,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: '工作流',
       workflowBreakdown: '各工作流使用量',
       workflowName: '工作流',
+      model: '模型',
       agents: '代理數',
       agent: '代理',
       workflowsThisMonth: '本月工作流',
@@ -512,6 +516,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: '工作流',
       workflowBreakdown: '各工作流使用量',
       workflowName: '工作流',
+      model: '模型',
       agents: '代理数',
       agent: '代理',
       workflowsThisMonth: '本月工作流',
@@ -624,6 +629,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: 'ワークフロー',
       workflowBreakdown: 'ワークフロー別使用量',
       workflowName: 'ワークフロー',
+      model: 'モデル',
       agents: 'エージェント数',
       agent: 'エージェント',
       workflowsThisMonth: '今月のワークフロー',
@@ -737,6 +743,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflows: '워크플로',
       workflowBreakdown: '워크플로별 사용량',
       workflowName: '워크플로',
+      model: '모델',
       agents: '에이전트 수',
       agent: '에이전트',
       workflowsThisMonth: '이번 달 워크플로',
