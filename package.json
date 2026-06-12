@@ -87,6 +87,13 @@
           "default": true,
           "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
         },
+        "claudeCodeUsage.workflowQuotaWarnPercent": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Show a dismissible warning banner in the dashboard when the remaining 5-hour quota drops below this percentage — a guard against starting a workflow (ultracode) run that the window can't finish. Set 0 to disable."
+        },
         "claudeCodeUsage.advice.apiKey": {
           "type": "string",
           "default": "",

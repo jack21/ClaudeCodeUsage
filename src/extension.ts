@@ -513,12 +513,14 @@ export class ClaudeCodeUsageExtension {
       // retry-storm: repeated /usage hits are what trigger the 429 cool-down.
       this.maybeFetchUsageLimits(config).then((limits) => {
         this.statusBar.updateQuota(limits);
+        this.webviewProvider.updateQuota(limits);
         if (!limits && !this.cache.usageLimits && !this.quotaColdRetryDone) {
           this.quotaColdRetryDone = true;
           setTimeout(() => {
             this.maybeFetchUsageLimits(this.getConfiguration()).then((retry) => {
               if (retry) {
                 this.statusBar.updateQuota(retry);
+                this.webviewProvider.updateQuota(retry);
               }
             });
           }, 8000);

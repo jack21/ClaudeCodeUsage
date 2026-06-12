@@ -20,6 +20,14 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   now carry the workflow id, agent id and agent type (from
   `agent-*.meta.json`), resolved from the file path so worktree-isolated
   agents attribute correctly.
+- **Thinking share** — estimated thinking-token share per session (new
+  sortable Sessions column, ⚠ + `/effort` hint above 60%) and a one-line
+  summary on the Today tab. Estimated from text length, like the rest of
+  the content analysis.
+- **Workflow quota guard** — a dismissible dashboard banner when the
+  remaining 5-hour quota drops below `workflowQuotaWarnPercent` (default
+  50%, 0 disables): interrupted workflow runs lose their prompt cache and
+  re-run ~40% more expensive. The status bar stays untouched.
 
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the

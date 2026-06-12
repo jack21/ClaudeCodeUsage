@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData, WorkflowUsage } from './types';
+import { BranchUsage, ClaudeApiUsageResponse, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData, WorkflowUsage } from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -23,6 +23,10 @@ export class UsageWebviewProvider {
   private contentAnalysis: ContentAnalysis | null = null;
   private branchBreakdown: BranchUsage[] = [];
   private workflowBreakdown: WorkflowUsage[] = [];
+  // Real quota utilisation (pushed asynchronously) for the workflow quota
+  // guard banner; dismissal lasts for the lifetime of this window.
+  private usageLimits: ClaudeApiUsageResponse | null = null;
+  private quotaWarnDismissed: boolean = false;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -68,6 +72,10 @@ export class UsageWebviewProvider {
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
+          break;
+        case 'dismissQuotaWarn':
+          this.quotaWarnDismissed = true;
+          this.updateWebview();
           break;
         case 'getHourlyData':
           const dateString = message.date;
@@ -151,6 +159,53 @@ export class UsageWebviewProvider {
     if (this.panel) {
       this.updateWebview();
     }
+  }
+
+  /** Receive quota utilisation (decoupled from local data; see extension.ts). */
+  updateQuota(usageLimits: ClaudeApiUsageResponse | null): void {
+    if (!usageLimits) {
+      return;
+    }
+    const changed = JSON.stringify(usageLimits) !== JSON.stringify(this.usageLimits);
+    this.usageLimits = usageLimits;
+    // Re-render only on change so the cheap quota poll doesn't redraw the
+    // dashboard (and reset scroll position) every tick.
+    if (changed && this.panel && !this.isLoading) {
+      this.updateWebview();
+    }
+  }
+
+  /** Quota-guard banner: warns before starting a workflow run on a nearly
+   * exhausted 5-hour window. Threshold via workflowQuotaWarnPercent (0 = off);
+   * dismissible per window-session. Status bar stays untouched. */
+  private renderQuotaBanner(): string {
+    if (this.quotaWarnDismissed) {
+      return '';
+    }
+    const warnPercent = vscode.workspace
+      .getConfiguration('claudeCodeUsage')
+      .get<number>('workflowQuotaWarnPercent', 50);
+    const fiveHour = this.usageLimits?.five_hour;
+    if (!warnPercent || warnPercent <= 0 || !fiveHour || typeof fiveHour.utilization !== 'number') {
+      return '';
+    }
+    // An already-reset window means a fresh quota — never warn on stale data.
+    const resetsAt = Date.parse(fiveHour.resets_at);
+    if (!isNaN(resetsAt) && resetsAt <= Date.now()) {
+      return '';
+    }
+    const remaining = Math.max(0, Math.round(100 - fiveHour.utilization));
+    if (remaining >= warnPercent) {
+      return '';
+    }
+    const text = I18n.t.popup.quotaWarnBanner.replace('{remaining}', String(remaining));
+    return (
+      '<div class="quota-banner">' +
+      '<span class="quota-banner-text">⚠ ' + this.escapeHtml(text) + '</span>' +
+      '<button class="quota-banner-dismiss" title="' + this.escapeHtml(I18n.t.popup.dismiss) +
+      '" onclick="dismissQuotaWarn()">✕</button>' +
+      '</div>'
+    );
   }
 
   private updateWebview(): void {
@@ -326,6 +381,7 @@ export class UsageWebviewProvider {
       `</button>
             </div>
           </header>` +
+      this.renderQuotaBanner() +
       `
           <div class="tabs">
             <button id="tab-today" class="tab ` +
@@ -442,7 +498,7 @@ export class UsageWebviewProvider {
       return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
-    const todaySummary = this.renderUsageData(this.todayData);
+    const todaySummary = this.renderUsageData(this.todayData) + this.renderTodayThinkingLine();
 
     let hourlyBreakdown = '';
     if (this.hourlyDataForToday.length > 0) {
@@ -934,6 +990,10 @@ export class UsageWebviewProvider {
 
     const t = I18n.t.popup;
 
+    // Thinking share per session is only available while content analysis is
+    // enabled; the column collapses to "-" otherwise (estimate, see hint).
+    const thinkingMap = this.contentAnalysis ? this.contentAnalysis.thinkingBySession : null;
+
     let rows = '';
     this.sessionBreakdown.forEach((s) => {
       const d = s.data;
@@ -941,12 +1001,17 @@ export class UsageWebviewProvider {
       // short session id so same-project rows stay distinguishable either way.
       const fullName = s.title || s.sessionId;
       const displayName = fullName.length > 40 ? fullName.slice(0, 40) + '…' : fullName;
+      const ts = thinkingMap ? thinkingMap[s.sessionId] : undefined;
+      const thinkingShare = ts && ts.assistantTotal > 0 ? ts.thinking / ts.assistantTotal : null;
+      // Effort hint for thinking-heavy sessions — tooltip only, no popups.
+      const thinkingTitle = thinkingShare !== null && thinkingShare > 0.6 ? t.effortHint : '';
       rows +=
         '<tr class="sort-row"' +
         ' data-sort-time="' + s.startTime.getTime() + '"' +
         ' data-sort-session="' + this.escapeHtml(fullName.toLowerCase()) + '"' +
         ' data-sort-project="' + this.escapeHtml((s.projectName || '').toLowerCase()) + '"' +
         ' data-sort-context="' + s.peakContextTokens + '"' +
+        ' data-sort-thinking="' + (thinkingShare ?? -1) + '"' +
         ' data-sort-duration="' + (s.endTime.getTime() - s.startTime.getTime()) + '"' +
         this.usageSortAttrs(d) +
         '>' +
@@ -963,6 +1028,9 @@ export class UsageWebviewProvider {
         '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(s.peakContextTokens) + '</td>' +
+        '<td class="number-cell"' + (thinkingTitle ? ' title="' + this.escapeHtml(thinkingTitle) + '"' : '') + '>' +
+        (thinkingShare !== null ? this.formatPercent(thinkingShare) + (thinkingShare > 0.6 ? ' ⚠' : '') : '-') +
+        '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
         '<td class="number-cell">' + this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) + '</td>' +
         '</tr>';
@@ -987,12 +1055,14 @@ export class UsageWebviewProvider {
       th('cachecreate', t.cacheCreation) +
       th('cacheread', t.cacheRead) +
       th('context', t.peakContext) +
+      th('thinking', t.thinkingShare) +
       th('messages', t.messages) +
       th('duration', t.duration) +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
+      '<p class="table-hint">' + t.thinkingShare + ': ' + t.estimatedNote + '</p>' +
       '</div>'
     );
   }
@@ -1222,6 +1292,27 @@ export class UsageWebviewProvider {
       '</table>' +
       '</div>' +
       '</div>'
+    );
+  }
+
+  /** One-line estimated thinking share for today (hidden when no data). */
+  private renderTodayThinkingLine(): string {
+    if (!this.contentAnalysis) {
+      return '';
+    }
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const key = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    const ts = this.contentAnalysis.thinkingByDay[key];
+    if (!ts || ts.assistantTotal <= 0) {
+      return '';
+    }
+    const share = ts.thinking / ts.assistantTotal;
+    const hint = share > 0.6 ? ' · ' + I18n.t.popup.effortHint : '';
+    return (
+      '<p class="table-hint">' +
+      I18n.t.popup.thinkingShare + ': ~' + this.formatPercent(share) + hint +
+      '</p>'
     );
   }
 
@@ -2447,6 +2538,31 @@ export class UsageWebviewProvider {
         margin: 0 0 8px 0;
       }
 
+      .quota-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 0 0 12px 0;
+        padding: 8px 10px;
+        border: 1px solid var(--vscode-inputValidation-warningBorder, #d8a200);
+        background: var(--vscode-inputValidation-warningBackground, rgba(216, 162, 0, 0.15));
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .quota-banner-text {
+        flex: 1;
+      }
+      .quota-banner-dismiss {
+        flex: none;
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0 2px;
+      }
+
       th.sortable {
         cursor: pointer;
         user-select: none;
@@ -2736,6 +2852,10 @@ function refreshPricing() {
 function getAdvice() {
   console.log("[DEBUG] getAdvice called");
   vscode.postMessage({ command: 'getAdvice' });
+}
+
+function dismissQuotaWarn() {
+  vscode.postMessage({ command: 'dismissQuotaWarn' });
 }
 
 function toggleProjectGroup(groupId) {

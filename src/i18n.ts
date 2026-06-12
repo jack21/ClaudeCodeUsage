@@ -77,6 +77,10 @@ export interface Translations {
     workflowsThisMonth: string;
     workflowCostShare: string;
     workflowCacheHint: string;
+    thinkingShare: string;
+    effortHint: string;
+    quotaWarnBanner: string;
+    dismiss: string;
     sessionTitle: string;
     getAdvice: string;
     adviceNeedsKey: string;
@@ -181,6 +185,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: "share of this month's cost",
       workflowCacheHint:
         'Cache hit rate = cache reads ÷ all input-side tokens. Native Claude workflows reuse the prompt cache across agents (high rate); a provider without cross-agent caching shows ~0% — the same workflow costs disproportionately more there.',
+      thinkingShare: 'Thinking %',
+      effortHint: 'High thinking share — consider /effort high instead of xhigh for tasks like this.',
+      quotaWarnBanner:
+        'Only {remaining}% of your 5-hour window is left. A workflow run can consume a large share of it — consider waiting for the reset: interrupted runs lose their prompt cache and re-run ~40% more expensive.',
+      dismiss: 'Dismiss',
       sessionTitle: 'Session',
       getAdvice: 'Get AI Advice',
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
@@ -294,6 +303,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: "Anteil an den Monatskosten",
       workflowCacheHint:
         "Cache-Trefferrate = Cache-Lesevorgänge ÷ alle eingabeseitigen Tokens. Native Claude-Workflows nutzen den Prompt-Cache agentenübergreifend (hohe Rate); ein Anbieter ohne agentenübergreifenden Cache zeigt ~0 % — derselbe Workflow kostet dort unverhältnismäßig mehr.",
+      thinkingShare: "Denkanteil",
+      effortHint: "Hoher Denkanteil — für solche Aufgaben /effort high statt xhigh erwägen.",
+      quotaWarnBanner:
+        "Nur noch {remaining}% des 5-Stunden-Fensters übrig. Ein Workflow-Lauf kann einen großen Teil davon verbrauchen — besser auf den Reset warten: unterbrochene Läufe verlieren ihren Prompt-Cache und kosten beim Neustart ~40% mehr.",
+      dismiss: "Ausblenden",
       sessionTitle: "Sitzung",
       getAdvice: "KI-Rat holen",
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
@@ -410,6 +424,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '佔本月成本',
       workflowCacheHint:
         '快取命中率 = 快取讀取 ÷ 全部輸入側 token。原生 Claude 工作流可在代理間重用提示快取（命中率高）；不支援跨代理快取的供應商約為 0%——同樣的工作流在那裡的成本會高出許多。',
+      thinkingShare: '思考佔比',
+      effortHint: '思考佔比偏高——此類任務可考慮用 /effort high 取代 xhigh。',
+      quotaWarnBanner:
+        '5 小時窗口僅剩 {remaining}%。一次工作流運行可能消耗其中很大一部分——建議等待重置後再啟動：中斷的運行會遺失提示快取，重跑成本約高 40%。',
+      dismiss: '關閉',
       sessionTitle: '會話',
       getAdvice: '取得 AI 建議',
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
@@ -523,6 +542,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '占本月成本',
       workflowCacheHint:
         '缓存命中率 = 缓存读取 ÷ 全部输入侧 token。原生 Claude 工作流可在代理间复用提示缓存（命中率高）；不支持跨代理缓存的供应商约为 0%——同样的工作流在那里的成本会高出许多。',
+      thinkingShare: '思考占比',
+      effortHint: '思考占比偏高——此类任务可考虑用 /effort high 取代 xhigh。',
+      quotaWarnBanner:
+        '5 小时窗口仅剩 {remaining}%。一次工作流运行可能消耗其中很大一部分——建议等待重置后再启动：中断的运行会丢失提示缓存，重跑成本约高 40%。',
+      dismiss: '关闭',
       sessionTitle: '会话',
       getAdvice: '获取 AI 建议',
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
@@ -636,6 +660,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '今月のコストに占める割合',
       workflowCacheHint:
         'キャッシュヒット率 = キャッシュ読取 ÷ 入力側トークン全体。ネイティブ Claude のワークフローはエージェント間でプロンプトキャッシュを再利用します（高い率）。エージェント間キャッシュのないプロバイダーでは約 0% となり、同じワークフローのコストが大幅に高くなります。',
+      thinkingShare: '思考割合',
+      effortHint: '思考割合が高め — このようなタスクでは xhigh ではなく /effort high の利用を検討してください。',
+      quotaWarnBanner:
+        '5 時間ウィンドウの残りは {remaining}% のみです。ワークフロー実行はその大部分を消費する可能性があります — リセットを待つことを検討してください。中断された実行はプロンプトキャッシュを失い、再実行は約 40% 高くなります。',
+      dismiss: '閉じる',
       sessionTitle: 'セッション',
       getAdvice: 'AI アドバイスを取得',
       adviceNeedsKey: '設定で API キーを入力してください。',
@@ -750,6 +779,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '이번 달 비용 중 비율',
       workflowCacheHint:
         '캐시 적중률 = 캐시 읽기 ÷ 전체 입력측 토큰. 네이티브 Claude 워크플로는 에이전트 간 프롬프트 캐시를 재사용합니다(높은 적중률). 에이전트 간 캐시가 없는 공급자는 약 0%로, 같은 워크플로 비용이 훨씬 더 많이 듭니다.',
+      thinkingShare: '사고 비율',
+      effortHint: '사고 비율이 높습니다 — 이런 작업에는 xhigh 대신 /effort high를 고려하세요.',
+      quotaWarnBanner:
+        '5시간 윈도우가 {remaining}%만 남았습니다. 워크플로 실행은 그중 큰 부분을 소비할 수 있습니다 — 리셋을 기다리는 것을 고려하세요. 중단된 실행은 프롬프트 캐시를 잃어 재실행 비용이 약 40% 더 듭니다.',
+      dismiss: '닫기',
       sessionTitle: '세션',
       getAdvice: 'AI 조언 받기',
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',

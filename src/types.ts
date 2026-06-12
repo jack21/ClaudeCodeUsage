@@ -124,6 +124,13 @@ export interface ContentSlice {
   count: number;
 }
 
+// Estimated thinking vs. total assistant-output tokens for one session/day.
+// Share = thinking / assistantTotal. Estimated from text length.
+export interface ThinkingShare {
+  thinking: number;
+  assistantTotal: number;
+}
+
 // Estimated breakdown of which conversation content consumes tokens. Token
 // figures are estimated from character counts, so treat them as approximate —
 // the relative shares are the reliable signal.
@@ -134,6 +141,10 @@ export interface ContentAnalysis {
   // Recent user prompts (last 30 days), for the AI-advice feature. Each carries
   // its working directory so advice can be scoped to a project.
   recentPrompts: { cwd: string; text: string }[];
+  // Thinking-token share per session id and per local day ("YYYY-MM-DD"),
+  // last 30 days (analysis window).
+  thinkingBySession: Record<string, ThinkingShare>;
+  thinkingByDay: Record<string, ThinkingShare>;
 }
 
 export interface ExtensionConfig {

@@ -14,6 +14,7 @@ import {
   ProjectUsage,
   SessionData,
   SessionUsage,
+  ThinkingShare,
   UsageData,
   WorkflowUsage,
 } from './types';
@@ -111,11 +112,24 @@ interface AnalysisAcc {
   seenUuids: Set<string>;
   cutoffMs: number;
   prompts: { cwd: string; text: string }[];
+  // Estimated thinking vs. total assistant-output tokens, per session and per
+  // local day ("YYYY-MM-DD") — feeds the thinking-share column / Today line.
+  thinkingBySession: Record<string, ThinkingShare>;
+  thinkingByDay: Record<string, ThinkingShare>;
 }
 
 // cutoffMs: ignore log lines older than this (0 = no cutoff).
 function newAnalysisAcc(cutoffMs: number): AnalysisAcc {
-  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>(), cutoffMs, prompts: [] };
+  return {
+    cat: {},
+    tools: {},
+    toolIdToName: {},
+    seenUuids: new Set<string>(),
+    cutoffMs,
+    prompts: [],
+    thinkingBySession: {},
+    thinkingByDay: {},
+  };
 }
 
 // Collect an actual user prompt (capped + truncated) for the AI-advice feature.
@@ -190,7 +204,8 @@ function addToBucket(map: Record<string, AnalysisBucket>, key: string, text: str
 // isSubagentFile: lines from sub-agent / workflow logs still count toward the
 // token-consumption buckets, but their "user" lines are agent-framework task
 // dispatches — never harvest them as prompt samples for the AI-advice feature.
-function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false): void {
+// sessionId: parent session of the source file (for the thinking-share maps).
+function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sessionId = ''): void {
   if (!parsed || typeof parsed !== 'object') {
     return;
   }
@@ -218,24 +233,57 @@ function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false): voi
   const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : '';
 
   if (role === 'assistant') {
+    // Thinking share: estimated thinking tokens vs. all assistant output
+    // (text + thinking + tool-call JSON), per session and per local day.
+    const trackThinking = (thinkingTokens: number, totalTokens: number): void => {
+      if (totalTokens <= 0) {
+        return;
+      }
+      const add = (map: Record<string, ThinkingShare>, key: string): void => {
+        if (!key) {
+          return;
+        }
+        if (!map[key]) {
+          map[key] = { thinking: 0, assistantTotal: 0 };
+        }
+        map[key].thinking += thinkingTokens;
+        map[key].assistantTotal += totalTokens;
+      };
+      add(acc.thinkingBySession, sessionId);
+      const ts = typeof parsed.timestamp === 'string' ? new Date(parsed.timestamp) : null;
+      if (ts && !isNaN(ts.getTime())) {
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        add(acc.thinkingByDay, `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}`);
+      }
+    };
     if (Array.isArray(content)) {
+      let thinkingTokens = 0;
+      let totalTokens = 0;
       for (const block of content) {
         if (!block || typeof block !== 'object') {
           continue;
         }
         if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'assistantText', block.text);
+          totalTokens += estimateTokens(block.text);
         } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
           addToBucket(acc.cat, 'assistantThinking', block.thinking);
+          const est = estimateTokens(block.thinking);
+          thinkingTokens += est;
+          totalTokens += est;
         } else if (block.type === 'tool_use') {
           if (typeof block.id === 'string' && typeof block.name === 'string') {
             acc.toolIdToName[block.id] = block.name;
           }
-          addToBucket(acc.cat, 'toolCalls', JSON.stringify(block.input || {}));
+          const inputJson = JSON.stringify(block.input || {});
+          addToBucket(acc.cat, 'toolCalls', inputJson);
+          totalTokens += estimateTokens(inputJson);
         }
       }
+      trackThinking(thinkingTokens, totalTokens);
     } else if (typeof content === 'string') {
       addToBucket(acc.cat, 'assistantText', content);
+      trackThinking(0, estimateTokens(content));
     }
   } else if (role === 'user') {
     // Prompt samples must be genuine top-level user messages: nothing from
@@ -278,6 +326,8 @@ function finalizeAnalysis(acc: AnalysisAcc): ContentAnalysis {
     toolResultBreakdown: toSlices(acc.tools),
     totalEstimatedTokens: categories.reduce((sum, c) => sum + c.estimatedTokens, 0),
     recentPrompts: acc.prompts.slice(-300),
+    thinkingBySession: acc.thinkingBySession,
+    thinkingByDay: acc.thinkingByDay,
   };
 }
 
@@ -439,7 +489,7 @@ export class ClaudeDataLoader {
 
               // Feed every line into the content analysis (not only usage records).
               if (analysis) {
-                analyzeLine(parsed, analysis, isSubagentFile);
+                analyzeLine(parsed, analysis, isSubagentFile, sessionInfo.sessionId);
               }
 
               // Conversation title lines. Keep the last seen of each kind —
