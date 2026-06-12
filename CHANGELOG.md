@@ -28,6 +28,18 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   remaining 5-hour quota drops below `workflowQuotaWarnPercent` (default
   50%, 0 disables): interrupted workflow runs lose their prompt cache and
   re-run ~40% more expensive. The status bar stays untouched.
+- **Usage attribution panel** ("What's contributing to your usage?") —
+  modelled on the official `/usage` screen but multi-provider and with five
+  scopes (Day / Week / Month / per-session / per-project, vs. Day/Week
+  officially). Characteristic lines (independent signals, not a breakdown):
+  share of usage at >150k context, from 8h+ active sessions, from
+  subagent-heavy sessions, from workflow runs, plus the top skill and top
+  plugin once they exceed 10%. Tables: Skills, Subagents (by agent type),
+  Plugins, Models. Skill shares follow the official methodology — the
+  session's usage at/after the skill's invocation counts toward it (shares
+  overlap by design); trivial commands like /model and /clear are excluded.
+  Full panel in the Content tab; a compact strip (≥5% lines only) on the
+  Today tab.
 
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the

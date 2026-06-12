@@ -6,6 +6,8 @@ import * as path from 'path';
 // Removed zod dependency - using native validation instead
 import { calculateCostBreakdown } from './pricing';
 import {
+  AttributionEntry,
+  AttributionScope,
   BranchUsage,
   ClaudeUsageRecord,
   ContentAnalysis,
@@ -14,7 +16,9 @@ import {
   ProjectUsage,
   SessionData,
   SessionUsage,
+  SkillUse,
   ThinkingShare,
+  UsageAttribution,
   UsageData,
   WorkflowUsage,
 } from './types';
@@ -116,6 +120,10 @@ interface AnalysisAcc {
   // local day ("YYYY-MM-DD") — feeds the thinking-share column / Today line.
   thinkingBySession: Record<string, ThinkingShare>;
   thinkingByDay: Record<string, ThinkingShare>;
+  // Skill / slash-command invocations (capped) + tool_use_id → skillUses index
+  // so the matching tool result's size can be attributed to the skill.
+  skillUses: SkillUse[];
+  skillByToolId: Record<string, number>;
 }
 
 // cutoffMs: ignore log lines older than this (0 = no cutoff).
@@ -129,7 +137,33 @@ function newAnalysisAcc(cutoffMs: number): AnalysisAcc {
     prompts: [],
     thinkingBySession: {},
     thinkingByDay: {},
+    skillUses: [],
+    skillByToolId: {},
   };
+}
+
+const MAX_SKILL_USES = 5000;
+
+// Session-management slash commands: invoking them says nothing about what
+// the usage was for, but the at-or-after attribution rule would credit them
+// with everything that follows. Real skills (from the Skill tool) and
+// substantive commands like /code-review are never filtered.
+const TRIVIAL_COMMANDS = new Set([
+  '/model', '/clear', '/compact', '/help', '/config', '/status', '/cost',
+  '/doctor', '/login', '/logout', '/exit', '/resume', '/usage',
+  '/usage-credits', '/extra-usage', '/context', '/memory', '/goal',
+  '/todos', '/release-notes', '/fast', '/effort', '/permissions', '/hooks',
+  '/mcp', '/agents', '/export', '/rewind', '/init', '/add-dir', '/ide',
+]);
+
+// Local "YYYY-MM-DD" key for a log line's timestamp ('' when unparsable).
+function localDayKey(timestamp: unknown): string {
+  const ts = typeof timestamp === 'string' ? new Date(timestamp) : null;
+  if (!ts || isNaN(ts.getTime())) {
+    return '';
+  }
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}`;
 }
 
 // Collect an actual user prompt (capped + truncated) for the AI-advice feature.
@@ -148,6 +182,30 @@ function collectPrompt(acc: AnalysisAcc, cwd: string, text: string): void {
   if (acc.prompts.length > 600) {
     acc.prompts.shift();
   }
+}
+
+// Detect a slash-command echo (<command-name>/foo</command-name>…) and record
+// it as a skill use; the echo block's size approximates the injected prompt.
+function collectCommandUse(acc: AnalysisAcc, text: string, sessionId: string, timestamp: unknown): void {
+  if (acc.skillUses.length >= MAX_SKILL_USES || !text.startsWith('<command-name>')) {
+    return;
+  }
+  const m = text.match(/^<command-name>([^<]{1,80})<\/command-name>/);
+  if (!m) {
+    return;
+  }
+  const name = m[1].trim();
+  if (TRIVIAL_COMMANDS.has(name.toLowerCase())) {
+    return;
+  }
+  const ts = typeof timestamp === 'string' ? Date.parse(timestamp) : NaN;
+  acc.skillUses.push({
+    name,
+    sessionId,
+    day: localDayKey(timestamp),
+    ts: isNaN(ts) ? 0 : ts,
+    estTokens: estimateTokens(text),
+  });
 }
 
 // Rough token estimate from text length (CJK characters are denser than ASCII).
@@ -250,11 +308,7 @@ function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sess
         map[key].assistantTotal += totalTokens;
       };
       add(acc.thinkingBySession, sessionId);
-      const ts = typeof parsed.timestamp === 'string' ? new Date(parsed.timestamp) : null;
-      if (ts && !isNaN(ts.getTime())) {
-        const pad = (n: number): string => String(n).padStart(2, '0');
-        add(acc.thinkingByDay, `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}`);
-      }
+      add(acc.thinkingByDay, localDayKey(parsed.timestamp));
     };
     if (Array.isArray(content)) {
       let thinkingTokens = 0;
@@ -274,6 +328,20 @@ function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sess
         } else if (block.type === 'tool_use') {
           if (typeof block.id === 'string' && typeof block.name === 'string') {
             acc.toolIdToName[block.id] = block.name;
+            // Skill invocations: remember the tool_use_id so the matching
+            // tool result's size can be attributed to the skill.
+            const skillName = (block.input as { skill?: unknown } | undefined)?.skill;
+            if (block.name === 'Skill' && typeof skillName === 'string' && acc.skillUses.length < MAX_SKILL_USES) {
+              acc.skillByToolId[block.id] = acc.skillUses.length;
+              const skillTs = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) : NaN;
+              acc.skillUses.push({
+                name: skillName,
+                sessionId,
+                day: localDayKey(parsed.timestamp),
+                ts: isNaN(skillTs) ? 0 : skillTs,
+                estTokens: 0,
+              });
+            }
           }
           const inputJson = JSON.stringify(block.input || {});
           addToBucket(acc.cat, 'toolCalls', inputJson);
@@ -291,6 +359,7 @@ function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sess
     const allowPromptSample = !isSubagentFile && !parsed.isMeta && !parsed.isSidechain;
     if (typeof content === 'string') {
       addToBucket(acc.cat, 'userPrompts', content);
+      collectCommandUse(acc, content, sessionId, parsed.timestamp);
       if (allowPromptSample) {
         collectPrompt(acc, cwd, content);
       }
@@ -303,8 +372,15 @@ function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sess
           const text = blockText(block.content);
           addToBucket(acc.cat, 'toolResults', text);
           addToBucket(acc.tools, acc.toolIdToName[block.tool_use_id] || 'unknown', text);
+          // The injected skill prompt comes back as the Skill tool's result —
+          // its size is the best available estimate of the skill's footprint.
+          const skillIdx = acc.skillByToolId[block.tool_use_id];
+          if (skillIdx !== undefined && acc.skillUses[skillIdx]) {
+            acc.skillUses[skillIdx].estTokens += estimateTokens(text);
+          }
         } else if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'userPrompts', block.text);
+          collectCommandUse(acc, block.text, sessionId, parsed.timestamp);
           if (allowPromptSample) {
             collectPrompt(acc, cwd, block.text);
           }
@@ -328,6 +404,7 @@ function finalizeAnalysis(acc: AnalysisAcc): ContentAnalysis {
     recentPrompts: acc.prompts.slice(-300),
     thinkingBySession: acc.thinkingBySession,
     thinkingByDay: acc.thinkingByDay,
+    skillUses: acc.skillUses,
   };
 }
 
@@ -1222,6 +1299,233 @@ export class ClaudeDataLoader {
     });
 
     return workflows.sort((a, b) => b.endTime.getTime() - a.endTime.getTime()).slice(0, limit);
+  }
+
+  /** Estimated cost of one record, with the same skip rules calculateUsageData
+   * applies (synthetic markers, error records, zero-token placeholders → 0). */
+  private static recordCost(record: ClaudeUsageRecord): number {
+    if (record._isUserPrompt || !record.message.usage || !record.message.model) {
+      return 0;
+    }
+    if (record.message.model === '<synthetic>' || record.isApiErrorMessage) {
+      return 0;
+    }
+    if (this.tokenSum(record) === 0) {
+      return 0;
+    }
+    const parts = calculateCostBreakdown(record.message.usage, record.message.model);
+    return parts.input + parts.output + parts.cacheWrite + parts.cacheRead;
+  }
+
+  /**
+   * "What's contributing to your usage?" — modelled on the official /usage
+   * screen, but covering every model/provider in the logs and five scopes
+   * (day / week / month / one session / one project). Characteristics are
+   * independent signals weighted by estimated cost, NOT a breakdown; the
+   * skills/plugins tables are weighted by estimated tokens (text length).
+   */
+  static getUsageAttribution(
+    records: ClaudeUsageRecord[],
+    analysis: ContentAnalysis | null,
+    scope: AttributionScope
+  ): UsageAttribution {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const minTs =
+      scope.kind === 'day' ? startOfDay
+      : scope.kind === 'week' ? now.getTime() - 7 * 24 * 60 * 60 * 1000
+      : scope.kind === 'month' ? now.getTime() - 30 * 24 * 60 * 60 * 1000
+      : 0;
+    const normScope = scope.projectPath ? this.normalizePath(scope.projectPath) : '';
+
+    const scoped = records.filter((r) => {
+      if (r._isUserPrompt) {
+        return false;
+      }
+      if (scope.kind === 'session') {
+        return r._sessionId === scope.sessionId;
+      }
+      if (scope.kind === 'project') {
+        return this.normalizePath(r._projectPath || '').startsWith(normScope);
+      }
+      const t = Date.parse(r.timestamp);
+      return !isNaN(t) && t >= minTs;
+    });
+
+    // Skill / plugin activation points. A skill's usage share is the weight
+    // of all scoped records in the same session at or after its (earliest)
+    // invocation — the official /usage methodology ("usage that came from
+    // this skill"); shares overlap by design. Plugins use the earliest
+    // invocation among their skills, so a plugin never double-counts itself.
+    type SkillStart = { key: string; ts: number; isPlugin: boolean };
+    const startsBySession: Record<string, SkillStart[]> = {};
+    const skillMeta: Record<string, { count: number; estTokens: number }> = {};
+    const pluginMeta: Record<string, { count: number; estTokens: number }> = {};
+    const skillW: Record<string, number> = {};
+    const pluginW: Record<string, number> = {};
+    if (analysis && analysis.skillUses.length > 0) {
+      let uses = analysis.skillUses;
+      if (scope.kind === 'session') {
+        uses = uses.filter((u) => u.sessionId === scope.sessionId);
+      } else if (scope.kind === 'project') {
+        const sessionIds = new Set(scoped.map((r) => r._sessionId));
+        uses = uses.filter((u) => sessionIds.has(u.sessionId));
+      } else {
+        // "YYYY-MM-DD" compares correctly as a string.
+        const minDay = localDayKey(new Date(minTs).toISOString());
+        uses = uses.filter((u) => u.day >= minDay);
+      }
+      // key → session → earliest invocation ts (skills and plugins separately)
+      const skillEarliest: Record<string, Record<string, number>> = {};
+      const pluginEarliest: Record<string, Record<string, number>> = {};
+      const note = (
+        key: string,
+        u: SkillUse,
+        meta: Record<string, { count: number; estTokens: number }>,
+        earliest: Record<string, Record<string, number>>
+      ): void => {
+        if (!meta[key]) {
+          meta[key] = { count: 0, estTokens: 0 };
+        }
+        meta[key].count += 1;
+        meta[key].estTokens += u.estTokens;
+        if (!earliest[key]) {
+          earliest[key] = {};
+        }
+        const prev = earliest[key][u.sessionId];
+        if (prev === undefined || u.ts < prev) {
+          earliest[key][u.sessionId] = u.ts;
+        }
+      };
+      for (const u of uses) {
+        note(u.name, u, skillMeta, skillEarliest);
+        const colon = u.name.indexOf(':');
+        if (colon > 0) {
+          note(u.name.slice(0, colon), u, pluginMeta, pluginEarliest);
+        }
+      }
+      const pushStarts = (earliest: Record<string, Record<string, number>>, isPlugin: boolean): void => {
+        for (const [key, sessions] of Object.entries(earliest)) {
+          for (const [sessionId, ts] of Object.entries(sessions)) {
+            if (!startsBySession[sessionId]) {
+              startsBySession[sessionId] = [];
+            }
+            startsBySession[sessionId].push({ key, ts, isPlugin });
+          }
+        }
+      };
+      pushStarts(skillEarliest, false);
+      pushStarts(pluginEarliest, true);
+    }
+
+    // One pass: total weight, characteristic weights, per-session aggregates
+    // (for the long-session / subagent-heavy signals), the model split and
+    // the skill/plugin activation weights.
+    let totalCost = 0;
+    let totalTokens = 0;
+    let largeContextW = 0;
+    let workflowW = 0;
+    const bySession: Record<string, { weight: number; subagentWeight: number; hours: Set<number> }> = {};
+    const byAgentType: Record<string, { weight: number; count: number }> = {};
+    const byModel: Record<string, { weight: number; count: number }> = {};
+    for (const r of scoped) {
+      const w = this.recordCost(r);
+      if (w <= 0) {
+        continue;
+      }
+      totalCost += w;
+      totalTokens += this.tokenSum(r);
+      if (this.recordContextTokens(r) > 150_000) {
+        largeContextW += w;
+      }
+      if (r._workflowId) {
+        workflowW += w;
+      }
+      const sessionId = r._sessionId || 'unknown';
+      if (!bySession[sessionId]) {
+        bySession[sessionId] = { weight: 0, subagentWeight: 0, hours: new Set<number>() };
+      }
+      const sess = bySession[sessionId];
+      sess.weight += w;
+      if (r._agentId) {
+        sess.subagentWeight += w;
+        const agentType = r._agentType || 'unknown';
+        if (!byAgentType[agentType]) {
+          byAgentType[agentType] = { weight: 0, count: 0 };
+        }
+        byAgentType[agentType].weight += w;
+        byAgentType[agentType].count += 1;
+      }
+      const t = Date.parse(r.timestamp);
+      if (!isNaN(t)) {
+        sess.hours.add(Math.floor(t / 3_600_000));
+        // Usage at or after a skill/plugin invocation counts toward it.
+        const starts = startsBySession[sessionId];
+        if (starts) {
+          for (const start of starts) {
+            if (t >= start.ts) {
+              const target = start.isPlugin ? pluginW : skillW;
+              target[start.key] = (target[start.key] || 0) + w;
+            }
+          }
+        }
+      }
+      const model = r.message.model as string;
+      if (!byModel[model]) {
+        byModel[model] = { weight: 0, count: 0 };
+      }
+      byModel[model].weight += w;
+      byModel[model].count += 1;
+    }
+
+    let longSessionW = 0;
+    let subagentHeavyW = 0;
+    for (const sess of Object.values(bySession)) {
+      if (sess.hours.size >= 8) {
+        longSessionW += sess.weight;
+      }
+      if (sess.subagentWeight > sess.weight * 0.5) {
+        subagentHeavyW += sess.weight;
+      }
+    }
+
+    const shareOfCost = (w: number): number => (totalCost > 0 ? w / totalCost : 0);
+    const toEntries = (map: Record<string, { weight: number; count: number }>): AttributionEntry[] =>
+      Object.entries(map)
+        .map(([key, v]) => ({ key, share: shareOfCost(v.weight), count: v.count }))
+        .sort((a, b) => b.share - a.share);
+
+    // Skills / plugins: cost-weighted activation shares + the invocation
+    // counts / injected-prompt estimates gathered above.
+    const toSkillEntries = (
+      weights: Record<string, number>,
+      meta: Record<string, { count: number; estTokens: number }>
+    ): AttributionEntry[] =>
+      Object.entries(meta)
+        .map(([key, m]) => ({
+          key,
+          share: shareOfCost(weights[key] || 0),
+          count: m.count,
+          estTokens: m.estTokens,
+        }))
+        .sort((a, b) => b.share - a.share || b.count - a.count);
+    const skills = toSkillEntries(skillW, skillMeta);
+    const plugins = toSkillEntries(pluginW, pluginMeta);
+
+    return {
+      totalCost,
+      totalTokens,
+      characteristics: {
+        largeContext: shareOfCost(largeContextW),
+        longSessions: shareOfCost(longSessionW),
+        subagentHeavy: shareOfCost(subagentHeavyW),
+        workflows: shareOfCost(workflowW),
+      },
+      skills,
+      subagents: toEntries(byAgentType),
+      plugins,
+      models: toEntries(byModel),
+    };
   }
 
   /** Normalise a path for case-insensitive comparison and grouping. */

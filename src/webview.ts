@@ -1,7 +1,20 @@
 import * as vscode from 'vscode';
+import { ClaudeDataLoader } from './dataLoader';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { BranchUsage, ClaudeApiUsageResponse, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData, WorkflowUsage } from './types';
+import {
+  AttributionScope,
+  BranchUsage,
+  ClaudeApiUsageResponse,
+  ContentAnalysis,
+  ProjectGroup,
+  ProjectUsage,
+  SessionData,
+  SessionUsage,
+  UsageAttribution,
+  UsageData,
+  WorkflowUsage,
+} from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -77,6 +90,22 @@ export class UsageWebviewProvider {
           this.quotaWarnDismissed = true;
           this.updateWebview();
           break;
+        case 'getAttribution': {
+          // Recompute the attribution panel for a new scope (Day / Week /
+          // Month / one session / one project) and push the rendered HTML.
+          if (this.panel && message.scope) {
+            const attr = ClaudeDataLoader.getUsageAttribution(
+              this.allRecords,
+              this.contentAnalysis,
+              message.scope as AttributionScope
+            );
+            this.panel.webview.postMessage({
+              command: 'attributionResponse',
+              html: this.renderAttributionPanel(attr),
+            });
+          }
+          break;
+        }
         case 'getHourlyData':
           const dateString = message.date;
           if (dateString && this.panel) {
@@ -498,7 +527,8 @@ export class UsageWebviewProvider {
       return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
-    const todaySummary = this.renderUsageData(this.todayData) + this.renderTodayThinkingLine();
+    const todaySummary =
+      this.renderUsageData(this.todayData) + this.renderTodayThinkingLine() + this.renderTodayAttributionStrip();
 
     let hourlyBreakdown = '';
     if (this.hourlyDataForToday.length > 0) {
@@ -1474,6 +1504,164 @@ export class UsageWebviewProvider {
     );
   }
 
+  /** Inner panel of the usage-attribution section: disclaimer, the
+   * characteristic lines (independent signals, not a breakdown) and the
+   * Skills / Subagents / Plugins / Models tables. Re-rendered per scope. */
+  private renderAttributionPanel(attr: UsageAttribution): string {
+    const t = I18n.t.popup;
+    if (attr.totalCost <= 0) {
+      return '<p class="table-hint">' + t.noDataMessage + '</p>';
+    }
+    const pct = (share: number): string => String(Math.round(share * 100));
+
+    let html = '<p class="table-hint">' + t.attrDisclaimer + '</p>';
+
+    const charLine = (share: number, template: string, hint: string, name?: string): string => {
+      if (share < 0.01) {
+        return '';
+      }
+      let text = template.replace('{pct}', pct(share));
+      if (name !== undefined) {
+        text = text.replace('{name}', name);
+      }
+      return (
+        '<div class="attr-char">' + this.escapeHtml(text) +
+        '<div class="attr-hint">' + this.escapeHtml(hint) + '</div></div>'
+      );
+    };
+    const c = attr.characteristics;
+    html += charLine(c.largeContext, t.attrLargeContext, t.attrLargeContextHint);
+    html += charLine(c.longSessions, t.attrLongSessions, t.attrLongSessionsHint);
+    html += charLine(c.subagentHeavy, t.attrSubagentHeavy, t.attrSubagentHeavyHint);
+    html += charLine(c.workflows, t.attrWorkflows, t.attrWorkflowsHint);
+    // Official parity: the top skill / plugin get their own characteristic
+    // line once they contribute a noticeable share.
+    if (attr.skills.length > 0 && attr.skills[0].share >= 0.1) {
+      html += charLine(attr.skills[0].share, t.attrSkillChar, t.attrSkillCharHint, attr.skills[0].key);
+    }
+    if (attr.plugins.length > 0 && attr.plugins[0].share >= 0.1) {
+      html += charLine(attr.plugins[0].share, t.attrPluginChar, t.attrPluginCharHint, attr.plugins[0].key);
+    }
+
+    const table = (
+      title: string,
+      entries: { key: string; share: number; count: number; estTokens?: number }[],
+      withTokens: boolean
+    ): string => {
+      if (entries.length === 0) {
+        return '';
+      }
+      let rows = '';
+      entries.slice(0, 8).forEach((e) => {
+        rows +=
+          '<tr><td>' + this.escapeHtml(e.key) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(e.count) + '</td>' +
+          (withTokens ? '<td class="number-cell">~' + I18n.formatNumber(e.estTokens || 0) + '</td>' : '') +
+          '<td class="number-cell">' + this.formatPercent(e.share) + '</td></tr>';
+      });
+      return (
+        '<div class="attr-table"><h4>' + this.escapeHtml(title) + '</h4>' +
+        '<table class="daily-table"><thead><tr>' +
+        '<th></th><th>' + t.count + '</th>' +
+        (withTokens ? '<th>' + t.estTokens + '</th>' : '') +
+        '<th>' + t.attrShare + '</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+      );
+    };
+    const tables =
+      table(t.attrSkills, attr.skills, true) +
+      table(t.attrSubagents, attr.subagents, false) +
+      table(t.attrPlugins, attr.plugins, false) +
+      (attr.models.length > 1 ? table(t.attrModels, attr.models, false) : '');
+    if (tables) {
+      html += '<div class="attr-tables">' + tables + '</div>';
+    }
+    return html;
+  }
+
+  /** Usage-attribution section for the Content tab: scope selector (Day /
+   * Week / Month / one session / one project) + the panel, default Week. */
+  private renderAttributionSection(): string {
+    const t = I18n.t.popup;
+    if (!this.allRecords || this.allRecords.length === 0) {
+      return '';
+    }
+    const weekAttr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'week' });
+
+    const sessionOptions = this.sessionBreakdown
+      .slice(0, 30)
+      .map((s) => {
+        const label = (s.title || s.sessionId).slice(0, 50);
+        return '<option value="' + this.escapeHtml(s.sessionId) + '">' + this.escapeHtml(label) + '</option>';
+      })
+      .join('');
+    const projectOptions = this.projectBreakdown
+      .map(
+        (g) =>
+          '<option value="' + this.escapeHtml(g.groupPath) + '">' + this.escapeHtml(g.groupName) + '</option>'
+      )
+      .join('');
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.attribution + '</h3>' +
+      '<div class="attr-controls">' +
+      '<select id="attrScope" onchange="attrScopeChanged()">' +
+      '<option value="day">' + t.scopeDay + '</option>' +
+      '<option value="week" selected>' + t.scopeWeek + '</option>' +
+      '<option value="month">' + t.scopeMonth + '</option>' +
+      '<option value="session">' + t.sessionTitle + '</option>' +
+      '<option value="project">' + t.project + '</option>' +
+      '</select>' +
+      '<select id="attrTargetSession" onchange="requestAttribution()" style="display:none">' + sessionOptions + '</select>' +
+      '<select id="attrTargetProject" onchange="requestAttribution()" style="display:none">' + projectOptions + '</select>' +
+      '</div>' +
+      '<div id="attrPanel">' + this.renderAttributionPanel(weekAttr) + '</div>' +
+      '</div>'
+    );
+  }
+
+  /** Compact attribution strip for the Today tab: only the characteristic
+   * lines at ≥5% today, no hint paragraphs; renders nothing on light days. */
+  private renderTodayAttributionStrip(): string {
+    if (!this.allRecords || this.allRecords.length === 0) {
+      return '';
+    }
+    const t = I18n.t.popup;
+    const attr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'day' });
+    if (attr.totalCost <= 0) {
+      return '';
+    }
+    const lines: string[] = [];
+    const add = (share: number, template: string, name?: string): void => {
+      if (share < 0.05) {
+        return;
+      }
+      let text = template.replace('{pct}', String(Math.round(share * 100)));
+      if (name !== undefined) {
+        text = text.replace('{name}', name);
+      }
+      lines.push(text);
+    };
+    const c = attr.characteristics;
+    add(c.largeContext, t.attrLargeContext);
+    add(c.longSessions, t.attrLongSessions);
+    add(c.subagentHeavy, t.attrSubagentHeavy);
+    add(c.workflows, t.attrWorkflows);
+    if (attr.skills.length > 0) {
+      add(attr.skills[0].share, t.attrSkillChar, attr.skills[0].key);
+    }
+    if (lines.length === 0) {
+      return '';
+    }
+    return (
+      '<div class="attr-strip">' +
+      lines.map((l) => '<p class="table-hint">' + this.escapeHtml(l) + '</p>').join('') +
+      '<p class="table-hint attr-pointer">→ ' + this.escapeHtml(t.attrTodayPointer) + '</p>' +
+      '</div>'
+    );
+  }
+
   /**
    * "Content" tab: an estimated breakdown of which conversation content consumes
    * tokens (your prompts vs. tool results vs. assistant output), to help spot
@@ -1483,7 +1671,8 @@ export class UsageWebviewProvider {
     const t = I18n.t.popup;
     const analysis = this.contentAnalysis;
     if (!analysis || analysis.categories.length === 0 || analysis.totalEstimatedTokens === 0) {
-      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+      return this.renderAttributionSection() ||
+        '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
     const total = analysis.totalEstimatedTokens;
@@ -1542,6 +1731,7 @@ export class UsageWebviewProvider {
     }
 
     return (
+      this.renderAttributionSection() +
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
       '<span class="section-header-right">' +
@@ -2563,6 +2753,50 @@ export class UsageWebviewProvider {
         padding: 0 2px;
       }
 
+      .attr-controls {
+        display: flex;
+        gap: 8px;
+        margin: 4px 0 10px 0;
+        flex-wrap: wrap;
+      }
+      .attr-controls select {
+        background: var(--vscode-dropdown-background);
+        color: var(--vscode-dropdown-foreground);
+        border: 1px solid var(--vscode-dropdown-border, transparent);
+        border-radius: 3px;
+        padding: 3px 6px;
+        font-size: 12px;
+        max-width: 320px;
+      }
+      .attr-char {
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .attr-hint {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin-top: 2px;
+      }
+      .attr-tables {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 24px;
+        margin-top: 10px;
+      }
+      .attr-table {
+        min-width: 220px;
+      }
+      .attr-table h4 {
+        margin: 8px 0 4px 0;
+        font-size: 12px;
+      }
+      .attr-strip {
+        margin: 6px 0;
+      }
+      .attr-pointer {
+        opacity: 0.8;
+      }
+
       th.sortable {
         cursor: pointer;
         user-select: none;
@@ -2856,6 +3090,32 @@ function getAdvice() {
 
 function dismissQuotaWarn() {
   vscode.postMessage({ command: 'dismissQuotaWarn' });
+}
+
+function attrScopeChanged() {
+  var scope = document.getElementById('attrScope').value;
+  var sessSel = document.getElementById('attrTargetSession');
+  var projSel = document.getElementById('attrTargetProject');
+  if (sessSel) { sessSel.style.display = scope === 'session' ? '' : 'none'; }
+  if (projSel) { projSel.style.display = scope === 'project' ? '' : 'none'; }
+  requestAttribution();
+}
+
+function requestAttribution() {
+  var scopeSel = document.getElementById('attrScope');
+  if (!scopeSel) { return; }
+  var kind = scopeSel.value;
+  var scope = { kind: kind };
+  if (kind === 'session') {
+    var sessSel = document.getElementById('attrTargetSession');
+    if (!sessSel || !sessSel.value) { return; }
+    scope.sessionId = sessSel.value;
+  } else if (kind === 'project') {
+    var projSel = document.getElementById('attrTargetProject');
+    if (!projSel || !projSel.value) { return; }
+    scope.projectPath = projSel.value;
+  }
+  vscode.postMessage({ command: 'getAttribution', scope: scope });
 }
 
 function toggleProjectGroup(groupId) {
@@ -3173,6 +3433,9 @@ window.refreshPricing = refreshPricing;
 window.getAdvice = getAdvice;
 window.toggleProjectGroup = toggleProjectGroup;
 window.sortTable = sortTable;
+window.dismissQuotaWarn = dismissQuotaWarn;
+window.attrScopeChanged = attrScopeChanged;
+window.requestAttribution = requestAttribution;
 window.showTab = showTab;
 window.toggleHourlyDetail = toggleHourlyDetail;
 window.toggleMonthlyDetail = toggleMonthlyDetail;
@@ -3205,6 +3468,13 @@ window.addEventListener('message', function(event) {
 
       // Re-bind chart tab events after rendering
       bindChartTabEvents(container);
+    }
+  }
+
+  if (message.command === 'attributionResponse') {
+    const attrPanel = document.getElementById('attrPanel');
+    if (attrPanel && typeof message.html === 'string') {
+      attrPanel.innerHTML = message.html;
     }
   }
 });

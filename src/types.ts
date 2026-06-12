@@ -131,6 +131,17 @@ export interface ThinkingShare {
   assistantTotal: number;
 }
 
+// One skill / slash-command invocation, detected in the logs (assistant
+// `Skill` tool_use blocks and <command-name> echo markers). estTokens is the
+// text-length estimate of the matching tool result / command output.
+export interface SkillUse {
+  name: string;
+  sessionId: string;
+  day: string; // local "YYYY-MM-DD"
+  ts: number; // epoch ms of the invocation (0 when unparsable)
+  estTokens: number;
+}
+
 // Estimated breakdown of which conversation content consumes tokens. Token
 // figures are estimated from character counts, so treat them as approximate —
 // the relative shares are the reliable signal.
@@ -145,6 +156,46 @@ export interface ContentAnalysis {
   // last 30 days (analysis window).
   thinkingBySession: Record<string, ThinkingShare>;
   thinkingByDay: Record<string, ThinkingShare>;
+  // Raw skill invocations (last 30 days); scoping/grouping happens in
+  // getUsageAttribution.
+  skillUses: SkillUse[];
+}
+
+// Scope of the usage-attribution panel. day = today, week = last 7 days,
+// month = last 30 days; session/project narrow to one session / one project.
+export interface AttributionScope {
+  kind: 'day' | 'week' | 'month' | 'session' | 'project';
+  sessionId?: string;
+  projectPath?: string;
+}
+
+// One row of an attribution table (a skill, agent type, plugin or model).
+// For skills/plugins, share = cost-weight of the session's usage at or after
+// the skill's invocation ("usage that came from this skill being active",
+// official /usage methodology) — entries overlap, they are not a breakdown.
+export interface AttributionEntry {
+  key: string;
+  share: number; // 0..1 of the scope's weight
+  count: number;
+  estTokens?: number; // skills/plugins only: injected-prompt size estimate
+}
+
+// The "what's contributing to your usage?" panel, modelled on the official
+// /usage screen but multi-provider and with more scopes. Characteristics are
+// independent signals (weighted by estimated cost), NOT a breakdown.
+export interface UsageAttribution {
+  totalCost: number;
+  totalTokens: number;
+  characteristics: {
+    largeContext: number;   // share of usage at >150k context
+    longSessions: number;   // share from sessions with ≥8 distinct active hours
+    subagentHeavy: number;  // share from sessions >50% sub-agent weight
+    workflows: number;      // share from workflow (wf_*) records
+  };
+  skills: AttributionEntry[];
+  subagents: AttributionEntry[];
+  plugins: AttributionEntry[];
+  models: AttributionEntry[];
 }
 
 export interface ExtensionConfig {

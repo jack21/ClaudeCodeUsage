@@ -81,6 +81,30 @@ export interface Translations {
     effortHint: string;
     quotaWarnBanner: string;
     dismiss: string;
+    attribution: string;
+    attrDisclaimer: string;
+    attrLargeContext: string;
+    attrLargeContextHint: string;
+    attrLongSessions: string;
+    attrLongSessionsHint: string;
+    attrSubagentHeavy: string;
+    attrSubagentHeavyHint: string;
+    attrWorkflows: string;
+    attrWorkflowsHint: string;
+    attrSkillChar: string;
+    attrSkillCharHint: string;
+    attrPluginChar: string;
+    attrPluginCharHint: string;
+    attrSkills: string;
+    attrSubagents: string;
+    attrPlugins: string;
+    attrModels: string;
+    attrShare: string;
+    count: string;
+    scopeDay: string;
+    scopeWeek: string;
+    scopeMonth: string;
+    attrTodayPointer: string;
     sessionTitle: string;
     getAdvice: string;
     adviceNeedsKey: string;
@@ -190,6 +214,35 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         'Only {remaining}% of your 5-hour window is left. A workflow run can consume a large share of it — consider waiting for the reset: interrupted runs lose their prompt cache and re-run ~40% more expensive.',
       dismiss: 'Dismiss',
+      attribution: "What's contributing to your usage?",
+      attrDisclaimer:
+        'Approximate, based on local sessions on this machine — does not include other devices or claude.ai. These are independent characteristics of your usage, not a breakdown.',
+      attrLargeContext: '{pct}% of your usage was at >150k context',
+      attrLargeContextHint:
+        'Longer sessions are more expensive even when cached. /compact mid-task, /clear when switching to new tasks.',
+      attrLongSessions: '{pct}% of your usage came from sessions active 8+ hours',
+      attrLongSessionsHint:
+        'These are often background/loop sessions. Continuous usage can add up quickly, so make sure it is intentional.',
+      attrSubagentHeavy: '{pct}% of your usage came from subagent-heavy sessions',
+      attrSubagentHeavyHint:
+        'Each subagent runs its own requests. Be deliberate about spawning them — and consider a cheaper model for simpler subagents.',
+      attrWorkflows: '{pct}% of your usage came from workflow runs',
+      attrWorkflowsHint: 'See the Workflows tab for per-run details and cache hit rates.',
+      attrSkillChar: '{pct}% of your usage came from {name}',
+      attrSkillCharHint: 'Heavy skills can be scoped down or run with a cheaper model via skill frontmatter.',
+      attrPluginChar: '{pct}% of your usage came from plugin "{name}"',
+      attrPluginCharHint:
+        'Review what this plugin contributes — its agents, skills and MCP tools all count toward your limit.',
+      attrSkills: 'Skills',
+      attrSubagents: 'Subagents',
+      attrPlugins: 'Plugins',
+      attrModels: 'Models',
+      attrShare: '% of usage',
+      count: 'Count',
+      scopeDay: 'Day',
+      scopeWeek: 'Week',
+      scopeMonth: 'Month',
+      attrTodayPointer: 'Details: Content tab',
       sessionTitle: 'Session',
       getAdvice: 'Get AI Advice',
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
@@ -308,6 +361,35 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         "Nur noch {remaining}% des 5-Stunden-Fensters übrig. Ein Workflow-Lauf kann einen großen Teil davon verbrauchen — besser auf den Reset warten: unterbrochene Läufe verlieren ihren Prompt-Cache und kosten beim Neustart ~40% mehr.",
       dismiss: "Ausblenden",
+      attribution: "Was trägt zu Ihrer Nutzung bei?",
+      attrDisclaimer:
+        "Ungefähr, basierend auf lokalen Sitzungen dieses Rechners — andere Geräte oder claude.ai sind nicht enthalten. Unabhängige Merkmale der Nutzung, keine Aufschlüsselung.",
+      attrLargeContext: "{pct}% der Nutzung lag bei >150k Kontext",
+      attrLargeContextHint:
+        "Längere Sitzungen sind auch mit Cache teurer. /compact während der Aufgabe, /clear beim Aufgabenwechsel.",
+      attrLongSessions: "{pct}% der Nutzung stammte aus Sitzungen mit 8+ aktiven Stunden",
+      attrLongSessionsHint:
+        "Oft Hintergrund-/Loop-Sitzungen. Dauernutzung summiert sich schnell — sicherstellen, dass sie beabsichtigt ist.",
+      attrSubagentHeavy: "{pct}% der Nutzung stammte aus Subagent-lastigen Sitzungen",
+      attrSubagentHeavyHint:
+        "Jeder Subagent stellt eigene Anfragen. Bewusst einsetzen — für einfache Subagenten ein günstigeres Modell erwägen.",
+      attrWorkflows: "{pct}% der Nutzung stammte aus Workflow-Läufen",
+      attrWorkflowsHint: "Details und Cache-Trefferraten pro Lauf im Workflows-Tab.",
+      attrSkillChar: "{pct}% der Nutzung stammte von {name}",
+      attrSkillCharHint: "Schwere Skills lassen sich eingrenzen oder per Skill-Frontmatter mit günstigerem Modell betreiben.",
+      attrPluginChar: "{pct}% der Nutzung stammte vom Plugin \"{name}\"",
+      attrPluginCharHint:
+        "Prüfen, was dieses Plugin beiträgt — seine Agenten, Skills und MCP-Tools zählen alle zum Limit.",
+      attrSkills: "Skills",
+      attrSubagents: "Subagenten",
+      attrPlugins: "Plugins",
+      attrModels: "Modelle",
+      attrShare: "% der Nutzung",
+      count: "Anzahl",
+      scopeDay: "Tag",
+      scopeWeek: "Woche",
+      scopeMonth: "Monat",
+      attrTodayPointer: "Details: Inhalt-Tab",
       sessionTitle: "Sitzung",
       getAdvice: "KI-Rat holen",
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
@@ -429,6 +511,31 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         '5 小時窗口僅剩 {remaining}%。一次工作流運行可能消耗其中很大一部分——建議等待重置後再啟動：中斷的運行會遺失提示快取，重跑成本約高 40%。',
       dismiss: '關閉',
+      attribution: '你的用量都花在哪了？',
+      attrDisclaimer:
+        '近似值，基於本機的本地會話——不含其他裝置或 claude.ai。以下為用量的獨立特徵，並非分解。',
+      attrLargeContext: '{pct}% 的用量處於 >150k 上下文',
+      attrLargeContextHint: '長上下文即使有快取也更貴。任務中用 /compact，切換任務時用 /clear。',
+      attrLongSessions: '{pct}% 的用量來自活躍 8 小時以上的會話',
+      attrLongSessionsHint: '通常是背景／循環會話。持續用量累積很快，請確認是有意為之。',
+      attrSubagentHeavy: '{pct}% 的用量來自子代理密集的會話',
+      attrSubagentHeavyHint: '每個子代理都有自己的請求。請審慎派生——簡單子代理可考慮更便宜的模型。',
+      attrWorkflows: '{pct}% 的用量來自工作流運行',
+      attrWorkflowsHint: '各運行的明細與快取命中率見「工作流」頁籤。',
+      attrSkillChar: '{pct}% 的用量來自 {name}',
+      attrSkillCharHint: '重型 skill 可縮小範圍，或透過 skill frontmatter 指定更便宜的模型。',
+      attrPluginChar: '{pct}% 的用量來自插件「{name}」',
+      attrPluginCharHint: '檢視該插件的貢獻——其代理、skill 與 MCP 工具都計入額度。',
+      attrSkills: 'Skills',
+      attrSubagents: '子代理',
+      attrPlugins: '插件',
+      attrModels: '模型',
+      attrShare: '用量佔比',
+      count: '次數',
+      scopeDay: '日',
+      scopeWeek: '週',
+      scopeMonth: '月',
+      attrTodayPointer: '詳情見「內容分析」頁籤',
       sessionTitle: '會話',
       getAdvice: '取得 AI 建議',
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
@@ -547,6 +654,31 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         '5 小时窗口仅剩 {remaining}%。一次工作流运行可能消耗其中很大一部分——建议等待重置后再启动：中断的运行会丢失提示缓存，重跑成本约高 40%。',
       dismiss: '关闭',
+      attribution: '你的用量都花在哪了？',
+      attrDisclaimer:
+        '近似值，基于本机的本地会话——不含其他设备或 claude.ai。以下为用量的独立特征，并非分解。',
+      attrLargeContext: '{pct}% 的用量处于 >150k 上下文',
+      attrLargeContextHint: '长上下文即使有缓存也更贵。任务中用 /compact，切换任务时用 /clear。',
+      attrLongSessions: '{pct}% 的用量来自活跃 8 小时以上的会话',
+      attrLongSessionsHint: '通常是后台／循环会话。持续用量累积很快，请确认是有意为之。',
+      attrSubagentHeavy: '{pct}% 的用量来自子代理密集的会话',
+      attrSubagentHeavyHint: '每个子代理都有自己的请求。请审慎派生——简单子代理可考虑更便宜的模型。',
+      attrWorkflows: '{pct}% 的用量来自工作流运行',
+      attrWorkflowsHint: '各运行的明细与缓存命中率见「工作流」页签。',
+      attrSkillChar: '{pct}% 的用量来自 {name}',
+      attrSkillCharHint: '重型 skill 可缩小范围，或通过 skill frontmatter 指定更便宜的模型。',
+      attrPluginChar: '{pct}% 的用量来自插件「{name}」',
+      attrPluginCharHint: '检视该插件的贡献——其代理、skill 与 MCP 工具都计入额度。',
+      attrSkills: 'Skills',
+      attrSubagents: '子代理',
+      attrPlugins: '插件',
+      attrModels: '模型',
+      attrShare: '用量占比',
+      count: '次数',
+      scopeDay: '日',
+      scopeWeek: '周',
+      scopeMonth: '月',
+      attrTodayPointer: '详情见「内容分析」页签',
       sessionTitle: '会话',
       getAdvice: '获取 AI 建议',
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
@@ -665,6 +797,35 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         '5 時間ウィンドウの残りは {remaining}% のみです。ワークフロー実行はその大部分を消費する可能性があります — リセットを待つことを検討してください。中断された実行はプロンプトキャッシュを失い、再実行は約 40% 高くなります。',
       dismiss: '閉じる',
+      attribution: '使用量の内訳は？',
+      attrDisclaimer:
+        'このマシンのローカルセッションに基づく概算 — 他のデバイスや claude.ai は含みません。これらは使用量の独立した特徴であり、内訳ではありません。',
+      attrLargeContext: '使用量の {pct}% が >150k コンテキストでした',
+      attrLargeContextHint:
+        '長いコンテキストはキャッシュがあっても高コストです。タスク中は /compact、タスク切替時は /clear を。',
+      attrLongSessions: '使用量の {pct}% が 8 時間以上アクティブなセッションからでした',
+      attrLongSessionsHint:
+        '多くはバックグラウンド／ループセッションです。継続的な使用はすぐ積み上がるため、意図的か確認してください。',
+      attrSubagentHeavy: '使用量の {pct}% がサブエージェント中心のセッションからでした',
+      attrSubagentHeavyHint:
+        '各サブエージェントは独自のリクエストを実行します。生成は慎重に — 単純なものには安価なモデルの利用も検討を。',
+      attrWorkflows: '使用量の {pct}% がワークフロー実行からでした',
+      attrWorkflowsHint: '実行ごとの詳細とキャッシュヒット率はワークフロータブへ。',
+      attrSkillChar: '使用量の {pct}% が {name} からでした',
+      attrSkillCharHint: '重いスキルは範囲を絞るか、skill frontmatter で安価なモデルを指定できます。',
+      attrPluginChar: '使用量の {pct}% がプラグイン「{name}」からでした',
+      attrPluginCharHint:
+        'このプラグインの寄与を確認してください — エージェント、スキル、MCP ツールはすべて制限にカウントされます。',
+      attrSkills: 'スキル',
+      attrSubagents: 'サブエージェント',
+      attrPlugins: 'プラグイン',
+      attrModels: 'モデル',
+      attrShare: '使用量比率',
+      count: '回数',
+      scopeDay: '日',
+      scopeWeek: '週',
+      scopeMonth: '月',
+      attrTodayPointer: '詳細はコンテンツタブへ',
       sessionTitle: 'セッション',
       getAdvice: 'AI アドバイスを取得',
       adviceNeedsKey: '設定で API キーを入力してください。',
@@ -784,6 +945,35 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWarnBanner:
         '5시간 윈도우가 {remaining}%만 남았습니다. 워크플로 실행은 그중 큰 부분을 소비할 수 있습니다 — 리셋을 기다리는 것을 고려하세요. 중단된 실행은 프롬프트 캐시를 잃어 재실행 비용이 약 40% 더 듭니다.',
       dismiss: '닫기',
+      attribution: '사용량은 어디에 쓰였나요?',
+      attrDisclaimer:
+        '이 기기의 로컬 세션 기반 근사치 — 다른 기기나 claude.ai는 포함되지 않습니다. 사용량의 독립적인 특성이며, 분해가 아닙니다.',
+      attrLargeContext: '사용량의 {pct}%가 >150k 컨텍스트에서 발생했습니다',
+      attrLargeContextHint:
+        '긴 컨텍스트는 캐시가 있어도 더 비쌉니다. 작업 중에는 /compact, 작업 전환 시에는 /clear를 사용하세요.',
+      attrLongSessions: '사용량의 {pct}%가 8시간 이상 활성 세션에서 발생했습니다',
+      attrLongSessionsHint:
+        '대개 백그라운드/루프 세션입니다. 지속적인 사용은 빠르게 누적되니 의도된 것인지 확인하세요.',
+      attrSubagentHeavy: '사용량의 {pct}%가 서브에이전트 중심 세션에서 발생했습니다',
+      attrSubagentHeavyHint:
+        '각 서브에이전트는 자체 요청을 실행합니다. 신중하게 생성하고, 단순한 작업에는 저렴한 모델을 고려하세요.',
+      attrWorkflows: '사용량의 {pct}%가 워크플로 실행에서 발생했습니다',
+      attrWorkflowsHint: '실행별 세부 정보와 캐시 적중률은 워크플로 탭에서 확인하세요.',
+      attrSkillChar: '사용량의 {pct}%가 {name}에서 발생했습니다',
+      attrSkillCharHint: '무거운 스킬은 범위를 줄이거나 skill frontmatter로 저렴한 모델을 지정할 수 있습니다.',
+      attrPluginChar: '사용량의 {pct}%가 플러그인 "{name}"에서 발생했습니다',
+      attrPluginCharHint:
+        '이 플러그인의 기여를 검토하세요 — 에이전트, 스킬, MCP 도구 모두 한도에 포함됩니다.',
+      attrSkills: '스킬',
+      attrSubagents: '서브에이전트',
+      attrPlugins: '플러그인',
+      attrModels: '모델',
+      attrShare: '사용량 비율',
+      count: '횟수',
+      scopeDay: '일',
+      scopeWeek: '주',
+      scopeMonth: '월',
+      attrTodayPointer: '자세한 내용은 콘텐츠 탭에서',
       sessionTitle: '세션',
       getAdvice: 'AI 조언 받기',
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',
