@@ -52,6 +52,8 @@ export interface Translations {
     quota5h: string;
     quotaWeekly: string;
     quotaHint: string;
+    contextWindow: string;
+    contextHint: string;
     contentAnalysis: string;
     estimatedNote: string;
     byTool: string;
@@ -146,6 +148,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: '5-hour',
       quotaWeekly: 'Weekly',
       quotaHint: 'Real data from Anthropic /usage.',
+      contextWindow: 'Context window',
+      contextHint: 'Estimated from the session log — updates with the next message; /clear or compaction may not show immediately.',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
       byTool: 'Tool Results by Tool',
@@ -249,6 +253,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: "5 Stunden",
       quotaWeekly: "Woche",
       quotaHint: "Echte Daten von Anthropic /usage.",
+      contextWindow: "Kontextfenster",
+      contextHint: "Aus dem Sitzungsprotokoll geschätzt — aktualisiert sich mit der nächsten Nachricht; /clear oder Komprimierung erscheint ggf. verzögert.",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
       byTool: "Tool-Ergebnisse nach Tool",
@@ -355,6 +361,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: '5 小時',
       quotaWeekly: '每週',
       quotaHint: '來自 Anthropic /usage 的真實資料。',
+      contextWindow: '上下文視窗',
+      contextHint: '依工作階段日誌估算，於下一則訊息更新；/clear 或壓縮後可能不會立即反映。',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
       byTool: '各工具結果用量',
@@ -458,6 +466,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: '5 小时',
       quotaWeekly: '每周',
       quotaHint: '来自 Anthropic /usage 的真实数据。',
+      contextWindow: '上下文窗口',
+      contextHint: '根据会话日志估算，将在下一条消息时更新；/clear 或压缩后可能不会立即反映。',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
       byTool: '各工具结果用量',
@@ -561,6 +571,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: '5時間',
       quotaWeekly: '週間',
       quotaHint: 'Anthropic /usage からの実データ。',
+      contextWindow: 'コンテキストウィンドウ',
+      contextHint: 'セッションログからの推定値で、次のメッセージで更新されます。/clear や圧縮は即時反映されない場合があります。',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
       byTool: 'ツール別の結果使用量',
@@ -665,6 +677,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quota5h: '5시간',
       quotaWeekly: '주간',
       quotaHint: 'Anthropic /usage의 실제 데이터입니다.',
+      contextWindow: '컨텍스트 윈도우',
+      contextHint: '세션 로그 기반 추정치이며 다음 메시지에서 갱신됩니다. /clear나 압축은 즉시 반영되지 않을 수 있습니다.',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',
       byTool: '도구별 결과 사용량',

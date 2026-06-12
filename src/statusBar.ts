@@ -1,11 +1,15 @@
 import * as vscode from 'vscode';
-import { ClaudeApiUsageResponse, ClaudeUsageLimit, UsageData } from './types';
+import { ClaudeApiUsageResponse, ClaudeUsageLimit, ContextWindowInfo, UsageData } from './types';
 import { I18n } from './i18n';
 
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
   private quotaItem: vscode.StatusBarItem;
+  private contextItem: vscode.StatusBarItem;
   private isLoading: boolean = false;
+  // Per-item visibility, driven by the showCost / showContext settings.
+  private showCost: boolean = true;
+  private showContext: boolean = true;
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -15,6 +19,10 @@ export class StatusBarManager {
     // A second, quieter item for the real usage-limit indicator.
     this.quotaItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
     this.quotaItem.command = 'claudeCodeUsage.showDetails';
+
+    // Context-window fill of the current session (like /context).
+    this.contextItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
+    this.contextItem.command = 'claudeCodeUsage.showDetails';
 
     // Visible from t=0: an empty-text status bar item renders as nothing, so
     // without this the extension appears "missing" until the first full
@@ -26,6 +34,31 @@ export class StatusBarManager {
   setLoading(loading: boolean): void {
     this.isLoading = loading;
     this.updateStatusBar();
+  }
+
+  /** Apply the showCost / showContext settings. Hiding takes effect
+   * immediately; re-showing happens on the next data update (the caller
+   * triggers a refresh right after a config change). */
+  setVisibility(showCost: boolean, showContext: boolean): void {
+    this.showCost = showCost;
+    this.showContext = showContext;
+    if (!showCost) {
+      this.statusBarItem.hide();
+    }
+    if (!showContext) {
+      this.contextItem.hide();
+    }
+  }
+
+  /** Show or hide the cost item per the showCost setting. Every method that
+   * sets its text calls this, so the item reappears as soon as the setting
+   * is turned back on. */
+  private applyCostVisibility(): void {
+    if (this.showCost) {
+      this.statusBarItem.show();
+    } else {
+      this.statusBarItem.hide();
+    }
   }
 
   updateUsageData(
@@ -61,6 +94,7 @@ export class StatusBarManager {
     if (this.isLoading) {
       this.statusBarItem.text = `$(sync~spin) ${I18n.t.statusBar.loading}`;
       this.statusBarItem.tooltip = I18n.t.statusBar.loading;
+      this.applyCostVisibility();
       return;
     }
   }
@@ -83,6 +117,42 @@ export class StatusBarManager {
 
     this.statusBarItem.tooltip = this.createTooltip(todayData, ws);
     this.statusBarItem.backgroundColor = undefined;
+    this.applyCostVisibility();
+  }
+
+  /**
+   * Update the context-window indicator with the current session's fill
+   * (estimated from the latest log record — see getCurrentContextInfo).
+   * Hidden when there is no current session or the setting is off.
+   */
+  updateContext(info: ContextWindowInfo | null): void {
+    if (!info || !this.showContext || info.windowTokens <= 0) {
+      this.contextItem.hide();
+      return;
+    }
+    const pct = Math.min(100, (info.contextTokens / info.windowTokens) * 100);
+    this.contextItem.text = `$(layers) ${Math.round(pct)}%`;
+
+    // Same thresholds as the quota item: amber at 80%, red at 95%.
+    if (pct >= 95) {
+      this.contextItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    } else if (pct >= 80) {
+      this.contextItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    } else {
+      this.contextItem.backgroundColor = undefined;
+    }
+
+    const t = I18n.t.popup;
+    const md = new vscode.MarkdownString();
+    md.supportThemeIcons = true;
+    md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
+    md.appendMarkdown(
+      `$(layers) ${I18n.formatNumber(info.contextTokens)} / ${I18n.formatNumber(info.windowTokens)} ` +
+        `(${pct.toFixed(1)}%)\n\n`
+    );
+    md.appendMarkdown(`*${t.contextHint}*`);
+    this.contextItem.tooltip = md;
+    this.contextItem.show();
   }
 
   /**
@@ -195,12 +265,14 @@ export class StatusBarManager {
     this.statusBarItem.text = `$(circle-slash) ${I18n.t.statusBar.noData}`;
     this.statusBarItem.tooltip = I18n.t.statusBar.notRunning;
     this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    this.applyCostVisibility();
   }
 
   private showError(error: string): void {
     this.statusBarItem.text = `$(error) ${I18n.t.statusBar.error}`;
     this.statusBarItem.tooltip = error;
     this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    this.applyCostVisibility();
   }
 
   /**
@@ -360,5 +432,6 @@ export class StatusBarManager {
   dispose(): void {
     this.statusBarItem.dispose();
     this.quotaItem.dispose();
+    this.contextItem.dispose();
   }
 }

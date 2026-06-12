@@ -143,6 +143,8 @@ reasonable.
 | `compactNumbers` | `false` | Show `1.2M` / `345K` instead of full numbers. |
 | `timezone` | `""` | IANA timezone for date display (e.g. `Asia/Hong_Kong`). |
 | `usageLimitTracking` | `true` | Show real 5h / weekly quota in the status bar. |
+| `showCost` | `true` | Show today's cost item in the status bar. |
+| `showContext` | `true` | Show the current session's context-window fill (like `/context`). |
 | `enableContentAnalysis` | `true` | Run the Content tab token analysis. |
 | `projectGroupingMode` | `"git"` | Projects tab grouping: `git` / `folder` / `flat`. |
 | `advice.apiKey` | `""` | API key for the AI advice feature (OpenAI-compatible). |
