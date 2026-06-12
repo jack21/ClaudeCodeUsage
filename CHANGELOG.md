@@ -7,11 +7,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ## [2.1.0] — Unreleased
 
 ### Added
-- **Workflows tab** — one row per dynamic-workflow run (ultracode dispatch):
-  start time, derived workflow name, project, **models used**, agent count,
-  cost, token split, **cache hit rate** and duration; expands to a per-agent
-  breakdown where each agent is labelled by **the task it was dispatched**
-  (first user message of its log), not just its hex id. The cache
+- **Workflows tab** — one row per multi-agent run: true dynamic-workflow
+  runs (wf_ dirs) **and ad-hoc sub-agent batches** (≥2 Task-tool agents in
+  one session, tagged "subagents" — what ultracode produces when the
+  dynamic-workflow feature isn't engaged, e.g. via proxy routing). Columns:
+  start time, name (script-derived or session title), project, **models
+  used**, agent count, cost, token split, **cache hit rate** and duration;
+  expands to a per-agent breakdown where each agent is labelled by **the
+  task it was dispatched** (shared boilerplate hoisted into one pinned row,
+  agent rows show only what differs; full text in tooltips). The cache
   hit rate is the headline diagnostic: native-Claude workflows reuse the
   prompt cache across agents (observed ~75%), a provider without cross-agent
   caching shows ~0% — i.e. the same workflow costs disproportionately more.

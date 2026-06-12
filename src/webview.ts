@@ -527,8 +527,7 @@ export class UsageWebviewProvider {
       return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
-    const todaySummary =
-      this.renderUsageData(this.todayData) + this.renderTodayThinkingLine() + this.renderTodayAttributionStrip();
+    const todaySummary = this.renderUsageData(this.todayData) + this.renderTodayInsights();
 
     let hourlyBreakdown = '';
     if (this.hourlyDataForToday.length > 0) {
@@ -1325,24 +1324,67 @@ export class UsageWebviewProvider {
     );
   }
 
-  /** One-line estimated thinking share for today (hidden when no data). */
-  private renderTodayThinkingLine(): string {
-    if (!this.contentAnalysis) {
+  /**
+   * "Usage tracking" card for the Today tab: today's notable usage
+   * characteristics (≥5% only) plus the estimated thinking share, in the
+   * same horizontal-bar style as the content analysis. Hidden on light days.
+   */
+  private renderTodayInsights(): string {
+    const t = I18n.t.popup;
+    const rows: string[] = [];
+    const barRow = (label: string, share: number, colorClass: string, tooltip: string, approx: boolean): string =>
+      '<div class="cbar-row" title="' + this.escapeHtml(tooltip) + '">' +
+      '<div class="cbar-label">' + this.escapeHtml(label) + '</div>' +
+      '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' +
+      (share * 100).toFixed(1) + '%;"></div></div>' +
+      '<div class="cbar-pct">' + (approx ? '~' : '') + this.formatPercent(share) + '</div>' +
+      '</div>';
+
+    // Estimated thinking share for today (content analysis required).
+    if (this.contentAnalysis) {
+      const now = new Date();
+      const pad = (n: number): string => String(n).padStart(2, '0');
+      const key = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+      const ts = this.contentAnalysis.thinkingByDay[key];
+      if (ts && ts.assistantTotal > 0) {
+        const share = ts.thinking / ts.assistantTotal;
+        const tooltip = t.estimatedNote + (share > 0.6 ? ' · ' + t.effortHint : '');
+        rows.push(barRow(t.thinkingShare + (share > 0.6 ? ' ⚠' : ''), share, 'cf-4', tooltip, true));
+      }
+    }
+
+    // Today's usage characteristics, ≥5% only (full sentence in the tooltip).
+    if (this.allRecords && this.allRecords.length > 0) {
+      const attr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'day' });
+      if (attr.totalCost > 0) {
+        const add = (share: number, short: string, sentence: string, hint: string, color: string): void => {
+          if (share < 0.05) {
+            return;
+          }
+          const tooltip = sentence.replace('{pct}', String(Math.round(share * 100))) + ' — ' + hint;
+          rows.push(barRow(short, share, color, tooltip, false));
+        };
+        const c = attr.characteristics;
+        add(c.largeContext, t.attrLargeContextShort, t.attrLargeContext, t.attrLargeContextHint, 'cf-1');
+        add(c.longSessions, t.attrLongSessionsShort, t.attrLongSessions, t.attrLongSessionsHint, 'cf-2');
+        add(c.subagentHeavy, t.attrSubagentHeavyShort, t.attrSubagentHeavy, t.attrSubagentHeavyHint, 'cf-3');
+        add(c.workflows, t.attrWorkflowsShort, t.attrWorkflows, t.attrWorkflowsHint, 'cf-5');
+        if (attr.skills.length > 0) {
+          add(attr.skills[0].share, attr.skills[0].key, t.attrSkillChar.replace('{name}', attr.skills[0].key), t.attrSkillCharHint, 'cf-1');
+        }
+      }
+    }
+
+    if (rows.length === 0) {
       return '';
     }
-    const now = new Date();
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    const key = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
-    const ts = this.contentAnalysis.thinkingByDay[key];
-    if (!ts || ts.assistantTotal <= 0) {
-      return '';
-    }
-    const share = ts.thinking / ts.assistantTotal;
-    const hint = share > 0.6 ? ' · ' + I18n.t.popup.effortHint : '';
     return (
-      '<p class="table-hint">' +
-      I18n.t.popup.thinkingShare + ': ~' + this.formatPercent(share) + hint +
-      '</p>'
+      '<div class="daily-breakdown">' +
+      '<div class="section-header"><h3>' + t.attribution + '</h3>' +
+      '<span class="section-header-right"><span class="cbar-total">→ ' +
+      this.escapeHtml(t.attrTodayPointer) + '</span></span></div>' +
+      '<div class="cbar-list">' + rows.join('') + '</div>' +
+      '</div>'
     );
   }
 
@@ -1409,6 +1451,9 @@ export class UsageWebviewProvider {
       const groupId = 'wf' + idx;
       const d = w.data;
       const models = this.modelList(d);
+      // Ad-hoc subagent batches (no wf_ dir) get a muted badge so they are
+      // distinguishable from true dynamic-workflow runs.
+      const badge = w.isAdHoc ? ' <span class="git-badge">' + t.adhocBadge + '</span>' : '';
       rows +=
         '<tr class="sort-row project-group-row" data-group="' + groupId + '"' +
         ' data-sort-time="' + w.startTime.getTime() + '"' +
@@ -1423,7 +1468,7 @@ export class UsageWebviewProvider {
         '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(w.startTime)) + '</td>' +
         '<td class="name-cell" title="' + this.escapeHtml(w.workflowId) + '">' +
         '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
-        this.escapeHtml(w.name) +
+        this.escapeHtml(w.name) + badge +
         '</td>' +
         '<td>' + this.escapeHtml(w.projectName) + '</td>' +
         '<td title="' + this.escapeHtml(models.full) + '">' + this.escapeHtml(models.short) + '</td>' +
@@ -1436,17 +1481,51 @@ export class UsageWebviewProvider {
         '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(d)) + '</td>' +
         '<td class="number-cell">' + this.escapeHtml(this.formatDuration(w.startTime, w.endTime)) + '</td>' +
         '</tr>';
+
+      // Workflow agents often share a long boilerplate preamble; hoist the
+      // common prefix into one pinned row so each agent row shows only what
+      // differs. Tooltips keep the full task text.
+      const tasks = w.agents.map((a) => a.task).filter((task): task is string => !!task);
+      let commonPrefix = '';
+      if (tasks.length >= 2) {
+        commonPrefix = tasks.reduce((prefix, task) => {
+          let i = 0;
+          const max = Math.min(prefix.length, task.length);
+          while (i < max && prefix[i] === task[i]) {
+            i++;
+          }
+          return prefix.slice(0, i);
+        });
+        // Cut back to a word boundary; only worth hoisting when substantial.
+        const boundary = commonPrefix.lastIndexOf(' ');
+        if (boundary > 0) {
+          commonPrefix = commonPrefix.slice(0, boundary);
+        }
+        if (commonPrefix.length < 30) {
+          commonPrefix = '';
+        }
+      }
+      if (commonPrefix) {
+        const display = commonPrefix.length > 160 ? commonPrefix.slice(0, 160) + '…' : commonPrefix;
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td colspan="12" class="wf-common-task" title="' + this.escapeHtml(commonPrefix) + '">' +
+          '📌 ' + this.escapeHtml(t.commonTaskPrefix) + ': ' + this.escapeHtml(display) +
+          '</td>' +
+          '</tr>';
+      }
+
       w.agents.forEach((agent) => {
         const ad = agent.data;
         const agentModels = this.modelList(ad);
         const shortId = agent.agentId.replace(/^agent-/, '').slice(0, 12);
-        // Label the agent by the task it was dispatched (first user message
-        // of its log); the opaque hex id moves to the second line + tooltip.
-        const taskLabel = agent.task
-          ? agent.task.length > 70
-            ? agent.task.slice(0, 70) + '…'
-            : agent.task
-          : shortId;
+        // Label the agent by the part of its task that differs from the
+        // hoisted common prefix; the opaque hex id moves to the second line.
+        let diff = agent.task || '';
+        if (commonPrefix && diff.startsWith(commonPrefix)) {
+          diff = diff.slice(commonPrefix.length).replace(/^[\s,.;:·—-]+/, '');
+        }
+        const taskLabel = diff ? (diff.length > 70 ? diff.slice(0, 70) + '…' : diff) : shortId;
         const nameCell = agent.task
           ? '<div class="project-name">' + this.escapeHtml(taskLabel) + '</div>' +
             '<div class="project-path">' + this.escapeHtml(shortId) + '</div>'
@@ -1543,39 +1622,39 @@ export class UsageWebviewProvider {
       html += charLine(attr.plugins[0].share, t.attrPluginChar, t.attrPluginCharHint, attr.plugins[0].key);
     }
 
-    const table = (
+    // Sub-tables in the same horizontal-bar style as the content analysis
+    // (bar width relative to the group's max; percentage is of scope usage).
+    const group = (
       title: string,
       entries: { key: string; share: number; count: number; estTokens?: number }[],
-      withTokens: boolean
+      colorClass: string
     ): string => {
       if (entries.length === 0) {
         return '';
       }
+      const top = entries.slice(0, 8);
+      const maxShare = Math.max(...top.map((e) => e.share), 0.0001);
       let rows = '';
-      entries.slice(0, 8).forEach((e) => {
+      top.forEach((e) => {
+        const tooltip =
+          e.key + ' · ' + t.count + ': ' + I18n.formatNumber(e.count) +
+          (e.estTokens !== undefined ? ' · ' + t.estTokens + ': ~' + I18n.formatNumber(e.estTokens) : '');
         rows +=
-          '<tr><td>' + this.escapeHtml(e.key) + '</td>' +
-          '<td class="number-cell">' + I18n.formatNumber(e.count) + '</td>' +
-          (withTokens ? '<td class="number-cell">~' + I18n.formatNumber(e.estTokens || 0) + '</td>' : '') +
-          '<td class="number-cell">' + this.formatPercent(e.share) + '</td></tr>';
+          '<div class="cbar-row" title="' + this.escapeHtml(tooltip) + '">' +
+          '<div class="cbar-label">' + this.escapeHtml(e.key) + '</div>' +
+          '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' +
+          ((e.share / maxShare) * 100).toFixed(1) + '%;"></div></div>' +
+          '<div class="cbar-val">×' + I18n.formatNumber(e.count) + '</div>' +
+          '<div class="cbar-pct">' + this.formatPercent(e.share) + '</div>' +
+          '</div>';
       });
-      return (
-        '<div class="attr-table"><h4>' + this.escapeHtml(title) + '</h4>' +
-        '<table class="daily-table"><thead><tr>' +
-        '<th></th><th>' + t.count + '</th>' +
-        (withTokens ? '<th>' + t.estTokens + '</th>' : '') +
-        '<th>' + t.attrShare + '</th>' +
-        '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-      );
+      return '<h4 class="cbar-subhead">' + this.escapeHtml(title) + '</h4><div class="cbar-list">' + rows + '</div>';
     };
-    const tables =
-      table(t.attrSkills, attr.skills, true) +
-      table(t.attrSubagents, attr.subagents, false) +
-      table(t.attrPlugins, attr.plugins, false) +
-      (attr.models.length > 1 ? table(t.attrModels, attr.models, false) : '');
-    if (tables) {
-      html += '<div class="attr-tables">' + tables + '</div>';
-    }
+    html +=
+      group(t.attrSkills, attr.skills, 'cf-1') +
+      group(t.attrSubagents, attr.subagents, 'cf-2') +
+      group(t.attrPlugins, attr.plugins, 'cf-3') +
+      (attr.models.length > 1 ? group(t.attrModels, attr.models, 'cf-5') : '');
     return html;
   }
 
@@ -1602,62 +1681,23 @@ export class UsageWebviewProvider {
       )
       .join('');
 
+    const tab = (kind: string, label: string, active: boolean): string =>
+      '<button class="attr-tab' + (active ? ' active' : '') + '" data-kind="' + kind +
+      '" onclick="attrSetScope(\'' + kind + '\')">' + label + '</button>';
+
     return (
       '<div class="daily-breakdown">' +
-      '<h3>' + t.attribution + '</h3>' +
-      '<div class="attr-controls">' +
-      '<select id="attrScope" onchange="attrScopeChanged()">' +
-      '<option value="day">' + t.scopeDay + '</option>' +
-      '<option value="week" selected>' + t.scopeWeek + '</option>' +
-      '<option value="month">' + t.scopeMonth + '</option>' +
-      '<option value="session">' + t.sessionTitle + '</option>' +
-      '<option value="project">' + t.project + '</option>' +
-      '</select>' +
+      '<div class="section-header"><h3>' + t.attribution + '</h3>' +
+      '<span class="section-header-right attr-controls">' +
       '<select id="attrTargetSession" onchange="requestAttribution()" style="display:none">' + sessionOptions + '</select>' +
       '<select id="attrTargetProject" onchange="requestAttribution()" style="display:none">' + projectOptions + '</select>' +
-      '</div>' +
+      tab('day', t.scopeDay, false) +
+      tab('week', t.scopeWeek, true) +
+      tab('month', t.scopeMonth, false) +
+      tab('session', t.sessionTitle, false) +
+      tab('project', t.project, false) +
+      '</span></div>' +
       '<div id="attrPanel">' + this.renderAttributionPanel(weekAttr) + '</div>' +
-      '</div>'
-    );
-  }
-
-  /** Compact attribution strip for the Today tab: only the characteristic
-   * lines at ≥5% today, no hint paragraphs; renders nothing on light days. */
-  private renderTodayAttributionStrip(): string {
-    if (!this.allRecords || this.allRecords.length === 0) {
-      return '';
-    }
-    const t = I18n.t.popup;
-    const attr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'day' });
-    if (attr.totalCost <= 0) {
-      return '';
-    }
-    const lines: string[] = [];
-    const add = (share: number, template: string, name?: string): void => {
-      if (share < 0.05) {
-        return;
-      }
-      let text = template.replace('{pct}', String(Math.round(share * 100)));
-      if (name !== undefined) {
-        text = text.replace('{name}', name);
-      }
-      lines.push(text);
-    };
-    const c = attr.characteristics;
-    add(c.largeContext, t.attrLargeContext);
-    add(c.longSessions, t.attrLongSessions);
-    add(c.subagentHeavy, t.attrSubagentHeavy);
-    add(c.workflows, t.attrWorkflows);
-    if (attr.skills.length > 0) {
-      add(attr.skills[0].share, t.attrSkillChar, attr.skills[0].key);
-    }
-    if (lines.length === 0) {
-      return '';
-    }
-    return (
-      '<div class="attr-strip">' +
-      lines.map((l) => '<p class="table-hint">' + this.escapeHtml(l) + '</p>').join('') +
-      '<p class="table-hint attr-pointer">→ ' + this.escapeHtml(t.attrTodayPointer) + '</p>' +
       '</div>'
     );
   }
@@ -2754,9 +2794,9 @@ export class UsageWebviewProvider {
       }
 
       .attr-controls {
-        display: flex;
-        gap: 8px;
-        margin: 4px 0 10px 0;
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
         flex-wrap: wrap;
       }
       .attr-controls select {
@@ -2764,9 +2804,24 @@ export class UsageWebviewProvider {
         color: var(--vscode-dropdown-foreground);
         border: 1px solid var(--vscode-dropdown-border, transparent);
         border-radius: 3px;
-        padding: 3px 6px;
-        font-size: 12px;
-        max-width: 320px;
+        padding: 2px 6px;
+        font-size: 11px;
+        max-width: 260px;
+      }
+      .attr-tab {
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 4px;
+        padding: 3px 9px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .attr-tab.active {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border-color: var(--vscode-focusBorder);
       }
       .attr-char {
         margin: 8px 0;
@@ -2777,24 +2832,12 @@ export class UsageWebviewProvider {
         color: var(--vscode-descriptionForeground);
         margin-top: 2px;
       }
-      .attr-tables {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 24px;
-        margin-top: 10px;
-      }
-      .attr-table {
-        min-width: 220px;
-      }
-      .attr-table h4 {
-        margin: 8px 0 4px 0;
-        font-size: 12px;
-      }
-      .attr-strip {
-        margin: 6px 0;
-      }
-      .attr-pointer {
-        opacity: 0.8;
+      .wf-common-task {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+        white-space: normal;
+        line-height: 1.5;
       }
 
       th.sortable {
@@ -3092,19 +3135,21 @@ function dismissQuotaWarn() {
   vscode.postMessage({ command: 'dismissQuotaWarn' });
 }
 
-function attrScopeChanged() {
-  var scope = document.getElementById('attrScope').value;
+function attrSetScope(kind) {
+  document.querySelectorAll('.attr-tab').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-kind') === kind);
+  });
   var sessSel = document.getElementById('attrTargetSession');
   var projSel = document.getElementById('attrTargetProject');
-  if (sessSel) { sessSel.style.display = scope === 'session' ? '' : 'none'; }
-  if (projSel) { projSel.style.display = scope === 'project' ? '' : 'none'; }
+  if (sessSel) { sessSel.style.display = kind === 'session' ? '' : 'none'; }
+  if (projSel) { projSel.style.display = kind === 'project' ? '' : 'none'; }
   requestAttribution();
 }
 
 function requestAttribution() {
-  var scopeSel = document.getElementById('attrScope');
-  if (!scopeSel) { return; }
-  var kind = scopeSel.value;
+  var active = document.querySelector('.attr-tab.active');
+  if (!active) { return; }
+  var kind = active.getAttribute('data-kind');
   var scope = { kind: kind };
   if (kind === 'session') {
     var sessSel = document.getElementById('attrTargetSession');
@@ -3434,7 +3479,7 @@ window.getAdvice = getAdvice;
 window.toggleProjectGroup = toggleProjectGroup;
 window.sortTable = sortTable;
 window.dismissQuotaWarn = dismissQuotaWarn;
-window.attrScopeChanged = attrScopeChanged;
+window.attrSetScope = attrSetScope;
 window.requestAttribution = requestAttribution;
 window.showTab = showTab;
 window.toggleHourlyDetail = toggleHourlyDetail;

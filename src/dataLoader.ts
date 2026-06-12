@@ -1234,22 +1234,43 @@ export class ClaudeDataLoader {
   }
 
   /**
-   * Group sub-agent records by workflow run (ultracode dispatch) and aggregate
-   * usage per run, with a per-agent breakdown for drill-down.
-   * Returns workflows sorted by most recent activity first.
+   * Group sub-agent records into multi-agent runs and aggregate usage per
+   * run, with a per-agent breakdown for drill-down. Covers both true
+   * dynamic-workflow runs (wf_<id>) and ad-hoc batches — ≥2 generic
+   * Task-tool agents in one session without a wf_ dir (what ultracode
+   * produces when the dynamic-workflow feature isn't engaged, e.g. with
+   * proxy/DeepSeek routing). Sorted by most recent activity first.
    * @param records All loaded usage records
-   * @param limit Maximum number of workflows to return (default 50)
+   * @param limit Maximum number of runs to return (default 50)
    */
   static getWorkflowBreakdown(records: ClaudeUsageRecord[], limit: number = 50): WorkflowUsage[] {
     const recordsByWorkflow: Record<string, ClaudeUsageRecord[]> = {};
+    const adHocAgentsBySession: Record<string, Set<string>> = {};
     for (const record of records) {
       if (!record._workflowId) {
+        // Generic sub-agent records become ad-hoc batches, one per session.
+        if (record._agentId) {
+          const sessionId = record._sessionId || 'unknown';
+          const batchId = 'adhoc:' + sessionId;
+          if (!recordsByWorkflow[batchId]) {
+            recordsByWorkflow[batchId] = [];
+            adHocAgentsBySession[batchId] = new Set<string>();
+          }
+          recordsByWorkflow[batchId].push(record);
+          adHocAgentsBySession[batchId].add(record._agentId);
+        }
         continue;
       }
       if (!recordsByWorkflow[record._workflowId]) {
         recordsByWorkflow[record._workflowId] = [];
       }
       recordsByWorkflow[record._workflowId].push(record);
+    }
+    // A single stray agent is not a batch — drop those pseudo-groups.
+    for (const [batchId, agentIds] of Object.entries(adHocAgentsBySession)) {
+      if (agentIds.size < 2) {
+        delete recordsByWorkflow[batchId];
+      }
     }
 
     const timeRange = (rs: ClaudeUsageRecord[]): { start: Date; end: Date } => {
@@ -1284,9 +1305,16 @@ export class ClaudeDataLoader {
 
       const first = wfRecords[0];
       const range = timeRange(wfRecords);
+      const isAdHoc = workflowId.startsWith('adhoc:');
+      // Ad-hoc batches have no script-derived name; the session title is the
+      // best available description of what the run was for.
+      const name = isAdHoc
+        ? first._sessionTitle || (first._sessionId || workflowId).slice(0, 8)
+        : first._workflowName || workflowId;
       return {
         workflowId,
-        name: first._workflowName || workflowId,
+        name,
+        isAdHoc: isAdHoc || undefined,
         sessionId: first._sessionId || 'unknown',
         projectPath: first._projectPath || '',
         projectName: first._projectName || 'unknown',

@@ -243,12 +243,16 @@ export interface ModelPricing {
 
 export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko';
 
-// One Claude Code dynamic-workflow run (trigger word "ultracode"): tens to
-// hundreds of sub-agents fanned out under a single wf_<id>, each with its own
-// usage log. Aggregated across all of the run's agent files.
+// One multi-agent run. Two kinds (verified on disk 2026-06-12):
+//  - a dynamic-workflow run (wf_<id> dir; trigger word "ultracode"), or
+//  - an ad-hoc sub-agent batch: ≥2 generic Task-tool agents in one session
+//    with no wf_ dir — what ultracode produces when the dynamic-workflow
+//    feature isn't engaged (observed with proxy/DeepSeek routing).
 export interface WorkflowUsage {
-  workflowId: string;          // "wf_fcfc35cc-5d5"
+  workflowId: string;          // "wf_fcfc35cc-5d5" or "adhoc:<sessionId>"
   name: string;                // derived human name, or the id when unknown
+  // True for ad-hoc batches (no wf_ dir; grouped per session).
+  isAdHoc?: boolean;
   sessionId: string;           // parent session
   projectPath: string;
   projectName: string;
