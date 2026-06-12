@@ -38,12 +38,38 @@ writes to your Claude data.
 
 ## Tests
 
-There isn't a full test suite yet (tracked in
-[#25](https://github.com/jack21/ClaudeCodeUsage/issues/25)). The pure-logic
-modules — pricing (`pricing.ts`), aggregation (`dataLoader.ts`), quota-window
-handling (`statusBar.ts`), i18n formatting (`i18n.ts`) — are the high-value
-targets for `node:test`. If you add logic to these, lightweight tests are very
-welcome.
+Tests use **Node's built-in runner** (`node:test` + `node:assert`) — no extra
+dependencies. They run against the *compiled* output:
+
+```bash
+npm test          # compiles, then runs node --test over out/test/*.test.js
+```
+
+CI runs the same command on every PR (`.github/workflows/test.yml`).
+
+**Where tests live.** Put test files in `src/test/` named `*.test.ts`. Because
+`tsc` is configured with `rootDir: src`, they compile to `out/test/` where the
+runner picks them up. They're excluded from the packaged `.vsix`.
+
+**What to test.** This harness is for **pure, dependency-free logic** — modules
+that don't import the `vscode` API:
+
+- pricing & cost calculation (`pricing.ts`)
+- aggregation: daily / weekly / monthly / all-time (`dataLoader.ts`)
+- quota-window handling (`statusBar.ts`)
+- i18n formatting (`i18n.ts`)
+
+If you add or change logic in these, please add a test. `src/test/pricing.test.ts`
+is a worked example to copy from. Prefer asserting on **observable behaviour**
+(a computed cost, a resolved pricing tier) over implementation details, and add
+a case for the tricky edge you just fixed so it can't regress.
+
+**What doesn't belong here.** Anything that touches the live `vscode` API
+(status-bar wiring, webview, commands) needs the heavier
+[`@vscode/test-electron`](https://github.com/microsoft/vscode-test) harness,
+which isn't set up yet. If you need it, raise it on
+[#25](https://github.com/jack21/ClaudeCodeUsage/issues/25) first so we keep the
+two harnesses cleanly separated.
 
 ## Releases
 
