@@ -123,6 +123,12 @@ function collectPrompt(acc: AnalysisAcc, cwd: string, text: string): void {
   if (trimmed.length < 4) {
     return;
   }
+  // Agent-framework scaffolding is not something the user typed: interrupt
+  // notices and kebab-case XML-ish wrappers (<command-name>, <system-reminder>,
+  // <local-command-stdout>, …). Plain HTML a user pastes (<div>, <p>) survives.
+  if (/^\[Request interrupted/i.test(trimmed) || /^<[a-z][a-z0-9]*(-[a-z0-9]+)+[\s>/]/i.test(trimmed)) {
+    return;
+  }
   acc.prompts.push({ cwd, text: trimmed.slice(0, 2500) });
   if (acc.prompts.length > 600) {
     acc.prompts.shift();
@@ -180,7 +186,10 @@ function addToBucket(map: Record<string, AnalysisBucket>, key: string, text: str
 }
 
 // Accumulate one raw log line into the content analysis.
-function analyzeLine(parsed: any, acc: AnalysisAcc): void {
+// isSubagentFile: lines from sub-agent / workflow logs still count toward the
+// token-consumption buckets, but their "user" lines are agent-framework task
+// dispatches — never harvest them as prompt samples for the AI-advice feature.
+function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false): void {
   if (!parsed || typeof parsed !== 'object') {
     return;
   }
@@ -228,9 +237,14 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
       addToBucket(acc.cat, 'assistantText', content);
     }
   } else if (role === 'user') {
+    // Prompt samples must be genuine top-level user messages: nothing from
+    // sub-agent logs, meta lines (command echoes) or sidechain dispatches.
+    const allowPromptSample = !isSubagentFile && !parsed.isMeta && !parsed.isSidechain;
     if (typeof content === 'string') {
       addToBucket(acc.cat, 'userPrompts', content);
-      collectPrompt(acc, cwd, content);
+      if (allowPromptSample) {
+        collectPrompt(acc, cwd, content);
+      }
     } else if (Array.isArray(content)) {
       for (const block of content) {
         if (!block || typeof block !== 'object') {
@@ -242,7 +256,9 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
           addToBucket(acc.tools, acc.toolIdToName[block.tool_use_id] || 'unknown', text);
         } else if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'userPrompts', block.text);
-          collectPrompt(acc, cwd, block.text);
+          if (allowPromptSample) {
+            collectPrompt(acc, cwd, block.text);
+          }
         }
       }
     }
@@ -395,7 +411,7 @@ export class ClaudeDataLoader {
 
               // Feed every line into the content analysis (not only usage records).
               if (analysis) {
-                analyzeLine(parsed, analysis);
+                analyzeLine(parsed, analysis, isSubagentFile);
               }
 
               // Conversation title lines. Keep the last seen of each kind —
@@ -1168,7 +1184,7 @@ export class ClaudeDataLoader {
     const byKey: Record<string, ClaudeUsageRecord[]> = {};
     for (const record of records) {
       const branch = record._gitBranch && record._gitBranch.trim() !== '' ? record._gitBranch : '-';
-      const key = (record._projectName || 'unknown') + ' ' + branch;
+      const key = (record._projectName || 'unknown') + '\u0000' + branch;
       if (!byKey[key]) {
         byKey[key] = [];
       }

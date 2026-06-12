@@ -2,6 +2,8 @@
 // sample of the developer's own prompts) to an OpenAI-compatible chat endpoint
 // (e.g. DeepSeek) and returns advice on how to use Claude Code more effectively.
 
+import { HttpResponse, requestViaCurl, requestViaFetch } from './httpClient';
+
 export interface AdviceOptions {
   apiKey: string;
   apiUrl: string;
@@ -13,7 +15,11 @@ export interface AdviceOptions {
   language: string;
   // '', 'high' or 'max' — passed as reasoning_effort for models that support it.
   reasoningEffort?: string;
+  // Abort the request after this long (reasoning models can take minutes).
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 function buildSystemPrompt(language: string): string {
   return (
@@ -51,10 +57,6 @@ function normalizeUrl(url: string): string {
  * @returns the advice text (markdown)
  */
 export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
-  if (typeof fetch === 'undefined') {
-    throw new Error('Network fetch is not available in this VS Code version.');
-  }
-
   const body: Record<string, unknown> = {
     model: options.model,
     stream: false,
@@ -70,27 +72,46 @@ export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
     body.thinking = { type: 'enabled' };
   }
 
-  const response = await fetch(normalizeUrl(options.apiUrl), {
+  const url = normalizeUrl(options.apiUrl);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const reqOpts = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${options.apiKey}`,
     },
     body: JSON.stringify(body),
-  });
+  };
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
+  // Transport failures ("terminated", connection resets, timeouts) are
+  // intermittent on some networks: retry fetch once, then fall back to the
+  // system curl — the same transport of last resort the quota client uses.
+  // HTTP error statuses are NOT retried (a 401 won't get better).
+  let response: HttpResponse;
+  try {
+    response = await requestViaFetch(url, { ...reqOpts, timeoutMs });
+  } catch {
+    try {
+      response = await requestViaFetch(url, { ...reqOpts, timeoutMs });
+    } catch {
+      response = await requestViaCurl(url, { ...reqOpts, timeoutSec: Math.ceil(timeoutMs / 1000) });
+    }
+  }
+
+  if (response.status < 200 || response.status >= 300) {
     const hint =
       response.status === 404
         ? ' (check adviceApiUrl — for DeepSeek it is https://api.deepseek.com/chat/completions)'
         : '';
-    throw new Error(`API ${response.status}${hint}: ${detail.slice(0, 300)}`);
+    throw new Error(`API ${response.status}${hint}: ${response.body.slice(0, 300)}`);
   }
 
-  const data = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
+  let data: { choices?: { message?: { content?: string } }[] };
+  try {
+    data = JSON.parse(response.body);
+  } catch {
+    throw new Error(`The API returned a non-JSON response: ${response.body.slice(0, 200)}`);
+  }
   const content = data.choices?.[0]?.message?.content;
   if (!content || content.trim() === '') {
     throw new Error('The model returned an empty response.');

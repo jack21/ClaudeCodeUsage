@@ -128,7 +128,9 @@ export class ClaudeCodeUsageExtension {
     const prompts = isOverall
       ? analysis.recentPrompts
       : analysis.recentPrompts.filter((p) => norm(p.cwd).startsWith(norm(scope)));
-    const promptSample = prompts.slice(-80);
+    // Cap the payload: oversized request bodies are one suspected cause of the
+    // intermittent "terminated" failures on flaky networks (v2.1.0 Phase 0).
+    const promptSample = prompts.slice(-40).map((p) => ({ ...p, text: p.text.slice(0, 1500) }));
 
     const lines: string[] = [];
     lines.push(`Scope: ${isOverall ? 'overall (all projects)' : scopeLabel}`);
@@ -148,7 +150,10 @@ export class ClaudeCodeUsageExtension {
       lines.push(`- ${c.key}: ~${c.estimatedTokens} tokens (${pct}%)`);
     }
     lines.push('');
-    if (promptSample.length === 0) {
+    // Safety valve on top of the per-prompt caps: skip the prompts section
+    // entirely if it would still exceed ~80 KB.
+    const promptBlockChars = promptSample.reduce((sum, p) => sum + p.text.length, 0);
+    if (promptSample.length === 0 || promptBlockChars > 80_000) {
       lines.push('=== No recent user prompts captured for this scope ===');
       lines.push(
         'No prompt samples are available. Base your advice on the aggregate usage above and ' +

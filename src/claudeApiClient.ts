@@ -1,8 +1,8 @@
-import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { HttpResponse, requestViaCurl, requestViaFetch } from './httpClient';
 import { ClaudeApiUsageResponse, ClaudeCredentials } from './types';
 
 // Fetches real 5-hour / weekly limit utilisation from Anthropic's OAuth usage
@@ -17,12 +17,8 @@ import { ClaudeApiUsageResponse, ClaudeCredentials } from './types';
 // (JA3/JA4) and currently rejects Node's openssl handshake while accepting
 // curl's. `curl.exe` ships with Windows 10+ (2018) and is universally
 // available on macOS / Linux. Every step is logged to the
-// "Claude Code Usage" output channel for diagnosis.
-
-interface HttpResponse {
-  status: number;
-  body: string;
-}
+// "Claude Code Usage" output channel for diagnosis. The transports
+// themselves live in httpClient.ts (shared with the advice feature).
 
 export class ClaudeApiClient {
   private readonly credentialsPath: string;
@@ -134,7 +130,7 @@ export class ClaudeApiClient {
   ): Promise<HttpResponse> {
     if (!this.preferCurl) {
       try {
-        const r = await this.requestViaFetch(url, opts);
+        const r = await requestViaFetch(url, opts);
         if (r.status === 403 && r.body.includes('Request not allowed')) {
           this.log(`fetch: 403 "Request not allowed" → falling back to curl (Anthropic TLS-fingerprint gate)`);
           this.preferCurl = true;
@@ -146,71 +142,9 @@ export class ClaudeApiClient {
         this.log(`fetch: error ${(e as Error).message} → trying curl`);
       }
     }
-    const r = await this.requestViaCurl(url, opts);
+    const r = await requestViaCurl(url, opts, (line) => this.log(line));
     this.log(`curl:  ${r.status} ${url}`);
     return r;
-  }
-
-  private async requestViaFetch(
-    url: string,
-    opts: { method?: string; headers?: Record<string, string>; body?: string }
-  ): Promise<HttpResponse> {
-    if (typeof fetch === 'undefined') {
-      throw new Error('fetch unavailable in this VS Code version');
-    }
-    const res = await fetch(url, {
-      method: opts.method || 'GET',
-      headers: opts.headers,
-      body: opts.body
-    });
-    return { status: res.status, body: await res.text() };
-  }
-
-  private requestViaCurl(
-    url: string,
-    opts: { method?: string; headers?: Record<string, string>; body?: string; timeoutSec?: number }
-  ): Promise<HttpResponse> {
-    return new Promise((resolve, reject) => {
-      const args: string[] = ['-sS', '-w', '\n__CCU_STATUS__%{http_code}', '--max-time', String(opts.timeoutSec ?? 15)];
-      if (opts.method && opts.method !== 'GET') {
-        args.push('-X', opts.method);
-      }
-      for (const [k, v] of Object.entries(opts.headers || {})) {
-        args.push('-H', `${k}: ${v}`);
-      }
-      if (opts.body !== undefined) {
-        args.push('--data-binary', '@-');
-      }
-      args.push(url);
-
-      // On Windows be explicit about the .exe extension so spawn doesn't
-      // depend on PATHEXT resolution; on POSIX 'curl' is correct.
-      const cmd = process.platform === 'win32' ? 'curl.exe' : 'curl';
-      const child = spawn(cmd, args, { shell: false, windowsHide: true });
-      let stdout = '';
-      let stderr = '';
-      child.stdout.on('data', (c: Buffer) => (stdout += c.toString('utf-8')));
-      child.stderr.on('data', (c: Buffer) => (stderr += c.toString('utf-8')));
-      child.on('error', (e) => {
-        this.log(`curl: spawn error ${(e as Error).message} (is curl on PATH?)`);
-        reject(e);
-      });
-      child.on('close', (code) => {
-        if (code !== 0) {
-          return reject(new Error(`curl exit ${code}: ${stderr.trim().slice(0, 200)}`));
-        }
-        const m = stdout.match(/^([\s\S]*)\n__CCU_STATUS__(\d{3})$/);
-        if (!m) {
-          return reject(new Error(`Could not parse curl output: ${stdout.slice(0, 200)}`));
-        }
-        resolve({ status: parseInt(m[2], 10), body: m[1] });
-      });
-      if (opts.body !== undefined) {
-        child.stdin.end(opts.body);
-      } else {
-        child.stdin.end();
-      }
-    });
   }
 
   private callUsageApi(accessToken: string): Promise<HttpResponse> {
