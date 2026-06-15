@@ -95,7 +95,7 @@
         "claudeCodeUsage.usageLimitTracking": {
           "type": "boolean",
           "default": true,
-          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
+          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json or macOS Keychain) — no configuration needed."
         },
         "claudeCodeUsage.advice.apiKey": {
           "type": "string",
@@ -185,7 +185,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test/*.test.js"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",

@@ -79,7 +79,8 @@ on the warning prompt to see a static example first.*
 ## What's new in 2.0
 
 - **Real 5-hour and weekly quota** in the status bar — reads Claude Code's
-  existing OAuth session at `~/.claude/.credentials.json`, zero config.
+  existing OAuth session from `~/.claude/.credentials.json` or the macOS
+  Keychain, zero config.
   Adapted from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)
   by [@Dobidop](https://github.com/Dobidop).
 - **Four new tabs**: Sessions, Projects, Content, Branches — all sortable.
@@ -205,9 +206,10 @@ authoritative.
   `~/.claude/projects` and `~/.config/claude/projects`.
 
 **Quota row shows `5h:--% wk:--%`**
-- The OAuth token at `~/.claude/.credentials.json` is missing or expired.
-  Log in to Claude Code once; the extension reads its credential file
-  read-only and refreshes the bearer if needed.
+- Claude Code's OAuth token is missing or expired. Log in to Claude Code
+  once; the extension reads `~/.claude/.credentials.json` where present, or
+  the macOS Keychain entry used by Claude Code, and refreshes the bearer if
+  needed.
 
 **`Get AI Usage Advice` returns 404**
 - DeepSeek's current endpoint does **not** use a `/v1` prefix. Use

@@ -3,6 +3,7 @@
 .claude/**
 .github/**
 src/**
+out/test/**
 CLAUDE.md
 CLAUDE.local.md
 CONTRIBUTING.md

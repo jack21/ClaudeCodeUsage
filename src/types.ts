@@ -188,7 +188,8 @@ export interface ContextWindowInfo {
   model: string;
 }
 
-// OAuth credentials written by Claude Code at ~/.claude/.credentials.json.
+// OAuth credentials stored by Claude Code at ~/.claude/.credentials.json or in
+// the macOS Keychain.
 export interface ClaudeCredentials {
   claudeAiOauth: {
     accessToken: string;
