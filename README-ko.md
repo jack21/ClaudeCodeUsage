@@ -54,6 +54,7 @@ Cursor / Windsurf용으로 [Open VSX Registry](https://open-vsx.org/extension/Gr
 - `timezone` — 날짜 표시용 IANA 시간대(예: `Asia/Seoul`).
 - `usageLimitTracking` — 실제 5시간 / 주간 쿼터 표시.
 - `showCost` / `showContext` — 상태 표시줄의 비용 항목과 컨텍스트 윈도우 사용률(`/context` 유사) 표시 전환.
+- 위 상태 표시줄 항목들은 개별적으로 끌 수 있습니다. `usageLimitTracking` / `showCost` / `showContext` 를 `false`로 설정하면 해당 항목만 숨겨집니다.
 - `advice.apiKey` — AI 조언 기능용 API 키(OpenAI 호환).
 - `pauseDashboardRefresh` — 대시보드 자동 새로고침 일시정지(대시보드 헤더에서도 토글 가능).
 

@@ -98,7 +98,7 @@ ext install GrowthJack.claude-code-usage
 | `timezone` | `""` | 日期显示用的 IANA 时区（如 `Asia/Hong_Kong`）。 |
 | `usageLimitTracking` | `true` | 在状态栏显示真实 5h / 每周配额。 |
 | `showCost` | `true` | 在状态栏显示今日成本。 |
-| `showContext` | `true` | 在状态栏显示当前会话的上下文窗口占用（类似 `/context`）。 |
+| `showContext` | `true` | 在状态栏显示当前会话的上下文窗口占用（类似 `/context`）。把它、`showCost` 或 `usageLimitTracking` 设为 `false` 即可隐藏对应的状态栏项。 |
 | `enableContentAnalysis` | `true` | 运行 Content 标签页的 token 分析。 |
 | `projectGroupingMode` | `"git"` | Projects 标签分组：`git` / `folder` / `flat`。 |
 | `pauseDashboardRefresh` | `false` | 暂停仪表板自动刷新（也可在仪表板标题栏切换）。 |

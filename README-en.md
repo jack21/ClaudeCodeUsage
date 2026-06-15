@@ -54,6 +54,7 @@ Open Settings (`Ctrl+,`) and search for **`Claude Code Usage`**. All settings ar
 - `timezone` — IANA timezone for date display (e.g. `Asia/Hong_Kong`).
 - `usageLimitTracking` — show the real 5h / weekly quota indicator.
 - `showCost` / `showContext` — toggle the cost item and the context-window fill indicator (like `/context`) in the status bar.
+- Each of these status-bar items is opt-out — set `usageLimitTracking`, `showCost`, or `showContext` to `false` to hide just that one.
 - `advice.apiKey` — API key for the AI advice feature (OpenAI-compatible).
 - `pauseDashboardRefresh` — pause dashboard auto-refresh (also toggleable in the dashboard header).
 

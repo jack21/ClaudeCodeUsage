@@ -54,6 +54,7 @@ Cursor / Windsurf 向けに [Open VSX Registry](https://open-vsx.org/extension/G
 - `timezone` — 日付表示用の IANA タイムゾーン（例 `Asia/Tokyo`）。
 - `usageLimitTracking` — 実際の 5 時間 / 週間クォータ表示。
 - `showCost` / `showContext` — ステータスバーのコスト表示と、コンテキストウィンドウ使用率（`/context` 風）の切り替え。
+- これらのステータスバー項目は個別に非表示にできます。`usageLimitTracking` / `showCost` / `showContext` を `false` にすると、その項目だけ消えます。
 - `advice.apiKey` — AI アドバイス機能の API キー（OpenAI 互換）。
 - `pauseDashboardRefresh` — ダッシュボードの自動更新を一時停止（ダッシュボードのヘッダーでも切り替え可能）。
 

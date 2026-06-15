@@ -150,7 +150,8 @@ export class StatusBarManager {
       `$(layers) ${I18n.formatNumber(info.contextTokens)} / ${I18n.formatNumber(info.windowTokens)} ` +
         `(${pct.toFixed(1)}%)\n\n`
     );
-    md.appendMarkdown(`*${t.contextHint}*`);
+    md.appendMarkdown(t.contextCostHint.split('\n').map((l) => `*${l}*`).join('  \n'));
+    md.appendMarkdown(`\n\n*${t.contextHint}*`);
     this.contextItem.tooltip = md;
     this.contextItem.show();
   }
