@@ -1,0 +1,42 @@
+# Run the test suite on every push and pull request.
+#
+# What this does:
+#   1. Checks out the commit.
+#   2. Installs dependencies (npm ci).
+#   3. Runs `npm test`, which compiles TypeScript and executes the
+#      node:test suite against the compiled output in out/test/.
+#
+# A red check here means a regression in the pure-logic modules (pricing /
+# aggregation / quota / i18n) — visible on the PR before merge. To make it
+# actually block merging, add "Test" as a required status check under the
+# repo's branch-protection rules (Settings → Branches).
+
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
