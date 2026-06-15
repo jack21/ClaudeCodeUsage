@@ -16,6 +16,11 @@
 name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 
+# Attribution-only merges (work that already shipped in an earlier release) carry
+# this label so they don't pollute the next release's notes.
+exclude-labels:
+  - 'skip-changelog'
+
 categories:
   - title: '✨ Features'
     labels: ['feature', 'enhancement']
