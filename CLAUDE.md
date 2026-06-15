@@ -69,9 +69,10 @@ npx @vscode/vsce package   # build a .vsix
 
 - **Commit hygiene:** one meaningful commit per logical change; avoid a stream
   of "fix the previous fix" commits. RC branches squash-merge to `main`.
-- **Tests:** pure-logic modules (pricing, aggregation, quota-window handling,
-  i18n) are the high-value test targets. A `node:test` suite is planned
-  (see issue #25).
+- **Tests:** a `node:test` suite runs against compiled output (`npm test`; see
+  `src/test/` and CONTRIBUTING). Pure-logic modules (pricing, aggregation,
+  quota-window handling, i18n) are the high-value targets; `pricing.ts` has the
+  first coverage, the rest are still open.
 - **Data is read-only:** the extension never writes to `~/.claude/`.
 
 ## Documentation Maintenance
