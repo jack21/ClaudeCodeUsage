@@ -9,6 +9,7 @@ import {
   BranchUsage,
   ClaudeUsageRecord,
   ContentAnalysis,
+  ContextWindowInfo,
   ContentSlice,
   ProjectGroup,
   ProjectUsage,
@@ -863,6 +864,53 @@ export class ClaudeDataLoader {
       sessionStart: new Date(Math.min(...times)),
       sessionEnd: new Date(Math.max(...times)),
     };
+  }
+
+  /**
+   * Context-window fill of the current conversation — the input-side token
+   * count of the session's most recent request vs the model's window size.
+   * Mirrors what Claude Code's /context shows, estimated from the logs: after
+   * /clear or a compaction the figure only corrects on the next message.
+   * Same workspace scoping and 5-hour recency rule as getCurrentSessionData.
+   */
+  static getCurrentContextInfo(records: ClaudeUsageRecord[], workspacePath?: string): ContextWindowInfo | null {
+    let pool = records;
+    if (workspacePath) {
+      const scoped = this.filterByWorkspace(records, workspacePath);
+      if (scoped.length > 0) {
+        pool = scoped;
+      }
+    }
+    // Only real assistant requests carry context information — synthetic
+    // user-prompt markers and API-error records have zero usage.
+    pool = pool.filter((r) => this.recordContextTokens(r) > 0);
+    if (pool.length === 0) {
+      return null;
+    }
+
+    let latest = pool[0];
+    for (const r of pool) {
+      if (new Date(r.timestamp).getTime() > new Date(latest.timestamp).getTime()) {
+        latest = r;
+      }
+    }
+    if (Date.now() - new Date(latest.timestamp).getTime() > 5 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    const model = latest.message.model || '';
+    return {
+      contextTokens: this.recordContextTokens(latest),
+      windowTokens: this.contextWindowFor(model),
+      model,
+    };
+  }
+
+  /** Model context-window size in tokens. A "[1m]" suffix marks the
+   * long-context variant (same marker pricing.ts strips); everything else
+   * Claude Code runs today has a 200K window. */
+  private static contextWindowFor(model: string): number {
+    return /\[1m\]/i.test(model) ? 1000000 : 200000;
   }
 
   static getTodayData(records: ClaudeUsageRecord[]): UsageData {

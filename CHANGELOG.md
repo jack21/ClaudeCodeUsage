@@ -4,6 +4,19 @@ All notable changes to this fork compared to upstream
 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [Unreleased]
+
+### Added
+- **Context-window indicator** in the status bar — shows the current
+  session's context fill as a percentage (like `/context`), estimated from
+  the latest log record (`input + cache read + cache write` tokens vs the
+  model's window; `[1m]` long-context variants use 1M). Amber at 80%, red at
+  95%; hidden after 5 h of inactivity. Toggle with
+  `claudeCodeUsage.showContext`.
+- **`claudeCodeUsage.showCost` setting** — hide the status-bar cost item for
+  those who only want the quota / context indicators (the dashboard still
+  shows all cost figures).
+
 ## [2.0.2] — 2026-06-09
 
 ### Added

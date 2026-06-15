@@ -277,6 +277,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
+    this.statusBar.setVisibility(config.showCost, config.showContext);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -295,6 +296,8 @@ export class ClaudeCodeUsageExtension {
       decimalPlaces: config.get('decimalPlaces', 2),
       compactNumbers: config.get('compactNumbers', false),
       timezone: config.get('timezone', ''),
+      showCost: config.get('showCost', true),
+      showContext: config.get('showContext', true),
       usageLimitTracking: config.get('usageLimitTracking', true),
       // apiKey is the gate for the advice feature: ONLY read the new dotted
       // key. We deliberately do NOT fall back to the pre-2.0 flat
@@ -323,6 +326,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
+    this.statusBar.setVisibility(config.showCost, config.showContext);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();
@@ -528,6 +532,7 @@ export class ClaudeCodeUsageExtension {
       if (!dataDirectory) {
         const error = 'Claude data directory not found. Please check your configuration.';
         this.statusBar.updateUsageData(null, null, error);
+        this.statusBar.updateContext(null);
         if (updateWebview) {
           this.webviewProvider.updateData(null, null, null, null, [], [], [], error, null);
         }
@@ -542,7 +547,15 @@ export class ClaudeCodeUsageExtension {
         dirChanged || this.cache.records.length === 0 || latestMtime > this.cache.lastUpdate.getTime();
 
       if (!needFullRefresh) {
-        // Idle: logs unchanged. Quota was already refreshed above.
+        // Idle: logs unchanged. Quota was already refreshed above. Still
+        // recompute the context indicator from cache so its 5-hour recency
+        // guard can hide it once the session goes stale.
+        this.statusBar.updateContext(
+          ClaudeDataLoader.getCurrentContextInfo(
+            this.cache.records,
+            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+          )
+        );
         return;
       }
 
@@ -574,6 +587,7 @@ export class ClaudeCodeUsageExtension {
       if (records.length === 0) {
         const error = 'No usage records found. Make sure Claude Code is running.';
         this.statusBar.updateUsageData(null, null, error);
+        this.statusBar.updateContext(null);
         if (updateWebview) {
           this.webviewProvider.updateData(null, null, null, null, [], [], [], error, dataDirectory);
         }
@@ -601,6 +615,7 @@ export class ClaudeCodeUsageExtension {
       // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
       // above; passing undefined leaves the quota item untouched here.
       this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
+      this.statusBar.updateContext(ClaudeDataLoader.getCurrentContextInfo(records, workspacePath));
       if (updateWebview) {
         this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
       }
@@ -610,6 +625,7 @@ export class ClaudeCodeUsageExtension {
       console.error('Error refreshing Claude Code usage data:', error);
 
       this.statusBar.updateUsageData(null, null, errorMessage);
+      this.statusBar.updateContext(null);
       if (manualTrigger || !this.getConfiguration().pauseDashboardRefresh) {
         this.webviewProvider.updateData(null, null, null, null, [], [], [], errorMessage, null);
       }

@@ -82,6 +82,16 @@
           "default": "",
           "description": "IANA timezone for date display (e.g. \"Asia/Hong_Kong\", \"UTC\"). Leave empty to use the system timezone. Useful inside sandboxes/devcontainers. Day-boundary calculations still follow the system timezone."
         },
+        "claudeCodeUsage.showCost": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show today's cost in the status bar. Disable to hide the cost item — the dashboard still shows all cost figures."
+        },
+        "claudeCodeUsage.showContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current session's context-window fill (like /context) in the status bar. Estimated from the latest log record, so it updates with each new message."
+        },
         "claudeCodeUsage.usageLimitTracking": {
           "type": "boolean",
           "default": true,

@@ -53,6 +53,8 @@ ext install GrowthJack.claude-code-usage
 - `language` — 介面語言（`auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`）。
 - `timezone` — 日期顯示用的 IANA 時區（如 `Asia/Hong_Kong`）。
 - `usageLimitTracking` — 顯示真實的 5 小時 / 每週配額指示器。
+- `showCost` / `showContext` — 切換狀態列的成本項目與上下文視窗佔用指示器（類似 `/context`）。
+- 上述狀態列項目皆可個別隱藏：將 `usageLimitTracking` / `showCost` / `showContext` 設為 `false` 即可只隱藏該項。
 - `advice.apiKey` — AI 建議功能的 API key（OpenAI 相容）。
 - `pauseDashboardRefresh` — 暫停儀表板自動刷新（也可在儀表板標題列切換）。
 
