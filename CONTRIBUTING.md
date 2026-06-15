@@ -47,8 +47,22 @@ welcome.
 
 ## Releases
 
-Releases are automated: pushing a `v*` tag triggers the publish workflow
-(Marketplace + Open VSX + GitHub Release). Maintainers handle tagging.
+Releases are automated and contributor-friendly — you never touch versions or
+tags:
+
+1. **Open a PR** (a `fix/…`, `feat/…` or `docs/…` branch name keeps the intent
+   clear). A maintainer applies the matching label when merging — that label sets
+   the version bump (`feature` → minor, `breaking` → major, otherwise patch;
+   unlabeled → patch).
+2. **A maintainer merges it.** [Release Drafter](https://github.com/release-drafter/release-drafter)
+   then adds your change to a continuously-updated **draft GitHub Release** and
+   recomputes the next version.
+3. **To ship, a maintainer reviews that draft and clicks Publish.** That creates
+   the tag and triggers `publish.yml`, which packages and pushes to the VS Code
+   Marketplace + Open VSX and attaches the `.vsix`.
+
+Because changes ship by **merging** your PR — not by re-applying it — your commit
+authorship and the PR's *merged* status are preserved.
 
 ## Code of conduct
 
