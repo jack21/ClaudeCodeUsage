@@ -144,6 +144,7 @@ reasonable.
 | `compactNumbers` | `false` | Show `1.2M` / `345K` instead of full numbers. |
 | `timezone` | `""` | IANA timezone for date display (e.g. `Asia/Hong_Kong`). |
 | `usageLimitTracking` | `true` | Show real 5h / weekly quota in the status bar. |
+| `showOpusWeekly` | `false` | Also show the weekly Opus limit (`opus:NN%`) in the status bar, after the 5h / weekly figures. |
 | `showCost` | `true` | Show today's cost item in the status bar. |
 | `showContext` | `true` | Show the current session's context-window fill (like `/context`). Set this, `showCost`, or `usageLimitTracking` to `false` to hide that status-bar item. |
 | `enableContentAnalysis` | `true` | Run the Content tab token analysis. |

@@ -137,6 +137,9 @@ export interface ExtensionConfig {
   showContext: boolean;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
+  // Append the weekly Opus limit (opus:NN%) to the status-bar quota item.
+  // Independent of the 5h/weekly figures; requires usageLimitTracking.
+  showOpusWeekly: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).
   adviceApiKey: string;
   adviceApiUrl: string;

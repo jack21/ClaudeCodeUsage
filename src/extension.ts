@@ -277,7 +277,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.showOpusWeekly);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -299,6 +299,7 @@ export class ClaudeCodeUsageExtension {
       showCost: config.get('showCost', true),
       showContext: config.get('showContext', true),
       usageLimitTracking: config.get('usageLimitTracking', true),
+      showOpusWeekly: config.get('showOpusWeekly', false),
       // apiKey is the gate for the advice feature: ONLY read the new dotted
       // key. We deliberately do NOT fall back to the pre-2.0 flat
       // `adviceApiKey` here — otherwise users who clear the new key in
@@ -326,7 +327,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.showOpusWeekly);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();

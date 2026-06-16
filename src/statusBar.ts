@@ -10,6 +10,8 @@ export class StatusBarManager {
   // Per-item visibility, driven by the showCost / showContext settings.
   private showCost: boolean = true;
   private showContext: boolean = true;
+  // When true, append the weekly Opus limit (opus:NN%) to the quota item.
+  private showOpusWeekly: boolean = false;
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -39,9 +41,10 @@ export class StatusBarManager {
   /** Apply the showCost / showContext settings. Hiding takes effect
    * immediately; re-showing happens on the next data update (the caller
    * triggers a refresh right after a config change). */
-  setVisibility(showCost: boolean, showContext: boolean): void {
+  setVisibility(showCost: boolean, showContext: boolean, showOpusWeekly: boolean = false): void {
     this.showCost = showCost;
     this.showContext = showContext;
+    this.showOpusWeekly = showOpusWeekly;
     if (!showCost) {
       this.statusBarItem.hide();
     }
@@ -172,7 +175,8 @@ export class StatusBarManager {
     const live = this.liveWindows(usageLimits);
     const fiveHour = live?.five_hour;
     const weekly = live?.seven_day;
-    if (!fiveHour && !weekly) {
+    const opus = live?.seven_day_opus;
+    if (!fiveHour && !weekly && !(this.showOpusWeekly && opus)) {
       this.quotaItem.hide();
       return;
     }
@@ -186,6 +190,10 @@ export class StatusBarManager {
     if (weekly) {
       worstPct = Math.max(worstPct, weekly.utilization);
       parts.push(`wk:${Math.round(weekly.utilization)}%`);
+    }
+    if (this.showOpusWeekly && opus) {
+      worstPct = Math.max(worstPct, opus.utilization);
+      parts.push(`opus:${Math.round(opus.utilization)}%`);
     }
 
     this.quotaItem.text = `$(dashboard) ${parts.join(' ')}`;
