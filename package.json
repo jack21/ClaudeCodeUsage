@@ -97,6 +97,11 @@
           "default": true,
           "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json or macOS Keychain) — no configuration needed."
         },
+        "claudeCodeUsage.showOpusWeekly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also show the weekly Opus limit (opus:NN%) in the status bar, after the 5-hour and weekly figures. Requires usage-limit tracking to be enabled."
+        },
         "claudeCodeUsage.advice.apiKey": {
           "type": "string",
           "default": "",

@@ -7,6 +7,10 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ## [Unreleased]
 
 ### Added
+- **`claudeCodeUsage.showOpusWeekly` setting** — opt-in (default off) that
+  appends the weekly Opus limit (`opus:NN%`) to the status-bar quota item,
+  after the 5-hour and weekly figures. Only shown when the account has a live
+  weekly-Opus window.
 - **Context-window indicator** in the status bar — shows the current
   session's context fill as a percentage (like `/context`), estimated from
   the latest log record (`input + cache read + cache write` tokens vs the
