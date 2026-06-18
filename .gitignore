@@ -13,3 +13,8 @@ secrets.json
 
 # Personal, per-maintainer Claude Code notes (the shared CLAUDE.md is committed).
 CLAUDE.local.md
+
+# Locally generated AI-advice reports — contain the maintainer's own prompt
+# samples. Curated excerpts may be hand-copied into the README, but the raw
+# reports must never be committed.
+docs/claude-advice-*.md
