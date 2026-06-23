@@ -316,6 +316,11 @@ export interface ContextWindowInfo {
   contextTokens: number;
   windowTokens: number;
   model: string;
+  // Input-side composition of the latest request — lets the tooltip show a
+  // /context-style breakdown instead of a single percentage.
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
 }
 
 // OAuth credentials stored by Claude Code at ~/.claude/.credentials.json or in

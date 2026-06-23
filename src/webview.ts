@@ -1333,34 +1333,24 @@ export class UsageWebviewProvider {
 
   /**
    * "Usage tracking" card for the Today tab: today's notable usage
-   * characteristics (≥5% only) plus the estimated thinking share, in the
-   * same horizontal-bar style as the content analysis. Hidden on light days.
+   * characteristics (≥5% only), in the same horizontal-bar style as the
+   * content analysis. Only exact, cost-weighted shares are shown — the
+   * text-length thinking estimate is deliberately excluded here (it lives on
+   * the Sessions tab, clearly marked as an estimate). Hidden on light days.
    */
   private renderTodayInsights(): string {
     const t = I18n.t.popup;
     const rows: string[] = [];
-    const barRow = (label: string, share: number, colorClass: string, tooltip: string, approx: boolean): string =>
+    const barRow = (label: string, share: number, colorClass: string, tooltip: string): string =>
       '<div class="cbar-row" title="' + this.escapeHtml(tooltip) + '">' +
       '<div class="cbar-label">' + this.escapeHtml(label) + '</div>' +
       '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' +
       (share * 100).toFixed(1) + '%;"></div></div>' +
-      '<div class="cbar-pct">' + (approx ? '~' : '') + this.formatPercent(share) + '</div>' +
+      '<div class="cbar-pct">' + this.formatPercent(share) + '</div>' +
       '</div>';
 
-    // Estimated thinking share for today (content analysis required).
-    if (this.contentAnalysis) {
-      const now = new Date();
-      const pad = (n: number): string => String(n).padStart(2, '0');
-      const key = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
-      const ts = this.contentAnalysis.thinkingByDay[key];
-      if (ts && ts.assistantTotal > 0) {
-        const share = ts.thinking / ts.assistantTotal;
-        const tooltip = t.estimatedNote + (share > 0.6 ? ' · ' + t.effortHint : '');
-        rows.push(barRow(t.thinkingShare + (share > 0.6 ? ' ⚠' : ''), share, 'cf-4', tooltip, true));
-      }
-    }
-
     // Today's usage characteristics, ≥5% only (full sentence in the tooltip).
+    // All cost-weighted from exact usage — no estimates in this card.
     if (this.allRecords && this.allRecords.length > 0) {
       const attr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'day' });
       if (attr.totalCost > 0) {
@@ -1369,7 +1359,7 @@ export class UsageWebviewProvider {
             return;
           }
           const tooltip = sentence.replace('{pct}', String(Math.round(share * 100))) + ' — ' + hint;
-          rows.push(barRow(short, share, color, tooltip, false));
+          rows.push(barRow(short, share, color, tooltip));
         };
         const c = attr.characteristics;
         add(c.largeContext, t.attrLargeContextShort, t.attrLargeContext, t.attrLargeContextHint, 'cf-1');
@@ -1617,6 +1607,7 @@ export class UsageWebviewProvider {
       '</table>' +
       '</div>' +
       '<p class="table-hint">' + t.workflowModeHint + '</p>' +
+      '<p class="table-hint">' + t.workflowNativeHint + '</p>' +
       '<p class="table-hint">' + t.workflowCacheHint + '</p>' +
       '</div>'
     );

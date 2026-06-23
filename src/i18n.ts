@@ -55,6 +55,7 @@ export interface Translations {
     contextWindow: string;
     contextHint: string;
     contextCostHint: string;
+    freeSpace: string;
     contentAnalysis: string;
     estimatedNote: string;
     calibratedNote: string;
@@ -86,6 +87,7 @@ export interface Translations {
     adhocBadge: string;
     workflowModeBadge: string;
     workflowModeHint: string;
+    workflowNativeHint: string;
     orchestration: string;
     commonTaskPrefix: string;
     thinkingShare: string;
@@ -199,8 +201,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: 'Weekly',
       quotaHint: 'Real data from Anthropic /usage.',
       contextWindow: 'Context window',
-      contextHint: 'Estimated from the session log — updates with the next message; /clear or compaction may not show immediately.',
-      contextCostHint: 'Longer sessions cost more even when cached.\n/compact mid-task, /clear when switching tasks.',
+      contextHint: 'Estimate; updates next message.\n/clear & compaction may lag a turn.',
+      contextCostHint: 'Longer sessions cost more even when cached.\n/compact mid-task · /clear between tasks.',
+      freeSpace: 'Free space',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
       calibratedNote: 'Calibrated: per-category shares from text length, scaled to the exact billed token totals (output side / input + cache-write side). Toggle with analysis.calibrate.',
@@ -234,6 +237,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: 'workflow',
       workflowModeHint:
         '"workflow" = a dynamic-workflow run dir on disk; "subagents (ad-hoc)" = a plain Task-tool fan-out. The effort level (ultracode/xhigh) is not recorded in the logs, so neither badge claims one.',
+      workflowNativeHint:
+        'Native-Claude ultracode often keeps its orchestration in the main session (no agent files), so it appears in Sessions / Usage tracking rather than as a row here. Runs that do write agent files show their Claude cost in the orchestration line. (Tracked for a future release.)',
       orchestration: 'main-session orchestration',
       commonTaskPrefix: 'Shared task text',
       thinkingShare: 'Thinking %',
@@ -362,8 +367,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: "Woche",
       quotaHint: "Echte Daten von Anthropic /usage.",
       contextWindow: "Kontextfenster",
-      contextHint: "Aus dem Sitzungsprotokoll geschätzt — aktualisiert sich mit der nächsten Nachricht; /clear oder Komprimierung erscheint ggf. verzögert.",
-      contextCostHint: "Längere Sitzungen kosten mehr, auch im Cache.\n/compact während der Aufgabe, /clear beim Themenwechsel.",
+      contextHint: "Schätzung; aktualisiert bei nächster Nachricht.\n/clear & Komprimierung ggf. verzögert.",
+      contextCostHint: "Längere Sitzungen kosten mehr, auch im Cache.\n/compact während der Aufgabe · /clear beim Themenwechsel.",
+      freeSpace: "Freier Platz",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
       calibratedNote: "Kalibriert: Anteile je Kategorie aus der Textlänge, skaliert auf die exakten abgerechneten Token-Summen (Ausgabeseite / Eingabe + Cache-Schreiben). Umschalten mit analysis.calibrate.",
@@ -397,6 +403,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: "Workflow",
       workflowModeHint:
         '"Workflow" = ein Dynamic-Workflow-Laufverzeichnis auf der Platte; "Subagenten (ad-hoc)" = ein einfacher Task-Tool-Fan-out. Das Effort-Level (ultracode/xhigh) wird nicht protokolliert, daher behauptet kein Badge eines.',
+      workflowNativeHint:
+        'Native-Claude-Ultracode behält die Orchestrierung oft in der Hauptsitzung (keine Agent-Dateien) und erscheint daher in Sitzungen / Nutzungs-Tracking statt als Zeile hier. Läufe, die Agent-Dateien schreiben, zeigen ihre Claude-Kosten in der Orchestrierungszeile. (Für ein künftiges Release vorgemerkt.)',
       orchestration: "Orchestrierung der Hauptsitzung",
       commonTaskPrefix: "Gemeinsamer Aufgabentext",
       thinkingShare: "Denkanteil",
@@ -528,8 +536,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每週',
       quotaHint: '來自 Anthropic /usage 的真實資料。',
       contextWindow: '上下文視窗',
-      contextHint: '依工作階段日誌估算，於下一則訊息更新；/clear 或壓縮後可能不會立即反映。',
-      contextCostHint: '工作階段長，成本高。\n任務中用 /compact，切換任務時用 /clear。',
+      contextHint: '估算值，下一則訊息更新。\n/clear 或壓縮可能延後一輪反映。',
+      contextCostHint: '工作階段長，成本高。\n任務中用 /compact · 切換任務時用 /clear。',
+      freeSpace: '剩餘空間',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
       calibratedNote: '已校準：各類別佔比由文字長度估算,再縮放到精確的帳單 token 總量（輸出側 / 輸入＋快取寫入側）。用 analysis.calibrate 切換。',
@@ -563,6 +572,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: '工作流',
       workflowModeHint:
         '「工作流」= 磁碟上有動態工作流運行目錄；「子代理（臨時）」= 普通 Task 工具扇出。effort 等級（ultracode/xhigh）不會記入日誌，所以兩種徽標都不對其作斷言。',
+      workflowNativeHint:
+        '原生 Claude 的 ultracode 常把編排留在主會話（不寫 agent 檔），因此會出現在「會話 / 用量追蹤」而非此處的列。會寫 agent 檔的運行，其 Claude 成本顯示在編排行。（已記入後續版本待辦。）',
       orchestration: '主會話編排',
       commonTaskPrefix: '共同任務文字',
       thinkingShare: '思考佔比',
@@ -687,8 +698,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每周',
       quotaHint: '来自 Anthropic /usage 的真实数据。',
       contextWindow: '上下文窗口',
-      contextHint: '根据会话日志估算，将在下一条消息时更新；/clear 或压缩后可能不会立即反映。',
-      contextCostHint: '会话长，成本高。\n任务中用 /compact，切换任务时用 /clear。',
+      contextHint: '估算值，下一条消息更新。\n/clear 或压缩可能延后一轮反映。',
+      contextCostHint: '会话长，成本高。\n任务中用 /compact · 切换任务时用 /clear。',
+      freeSpace: '剩余空间',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
       calibratedNote: '已校准：各类别占比由文本长度估算,再缩放到精确的账单 token 总量（输出侧 / 输入＋缓存写入侧）。用 analysis.calibrate 切换。',
@@ -722,6 +734,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: '工作流',
       workflowModeHint:
         '「工作流」= 磁盘上有动态工作流运行目录；「子代理（临时）」= 普通 Task 工具扇出。effort 等级（ultracode/xhigh）不会记入日志，所以两种徽标都不对其作断言。',
+      workflowNativeHint:
+        '原生 Claude 的 ultracode 常把编排留在主会话（不写 agent 文件），因此会出现在「会话 / 用量追踪」而非此处的行。会写 agent 文件的运行，其 Claude 成本显示在编排行。（已记入后续版本待办。）',
       orchestration: '主会话编排',
       commonTaskPrefix: '共同任务文字',
       thinkingShare: '思考占比',
@@ -846,8 +860,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '週間',
       quotaHint: 'Anthropic /usage からの実データ。',
       contextWindow: 'コンテキストウィンドウ',
-      contextHint: 'セッションログからの推定値で、次のメッセージで更新されます。/clear や圧縮は即時反映されない場合があります。',
-      contextCostHint: 'セッションが長いほど、キャッシュがあってもコストは増えます。\n作業中は /compact、タスク切り替え時は /clear を。',
+      contextHint: '推定値。次のメッセージで更新。\n/clear や圧縮は1ターン遅れる場合あり。',
+      contextCostHint: 'セッションが長いほどコスト増（キャッシュでも）。\n作業中は /compact · タスク切替時は /clear。',
+      freeSpace: '空き容量',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
       calibratedNote: 'キャリブレーション済み：カテゴリ別の割合はテキスト長から推定し、正確な請求トークン総量（出力側 / 入力＋キャッシュ書込側）にスケールしています。analysis.calibrate で切替。',
@@ -881,6 +896,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: 'ワークフロー',
       workflowModeHint:
         '「ワークフロー」= ディスク上に動的ワークフローの実行ディレクトリがある場合；「サブエージェント（アドホック）」= 単純な Task ツールのファンアウト。effort レベル（ultracode/xhigh）はログに記録されないため、どちらのバッジもそれを主張しません。',
+      workflowNativeHint:
+        'ネイティブ Claude の ultracode はオーケストレーションをメインセッションに保持する（エージェントファイルなし）ことが多く、ここではなく「セッション / 使用量トラッキング」に表示されます。エージェントファイルを書く実行は、その Claude コストをオーケストレーション行に表示します。（今後のリリースで対応予定。）',
       orchestration: 'メインセッションのオーケストレーション',
       commonTaskPrefix: '共通タスクテキスト',
       thinkingShare: '思考割合',
@@ -1010,8 +1027,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '주간',
       quotaHint: 'Anthropic /usage의 실제 데이터입니다.',
       contextWindow: '컨텍스트 윈도우',
-      contextHint: '세션 로그 기반 추정치이며 다음 메시지에서 갱신됩니다. /clear나 압축은 즉시 반영되지 않을 수 있습니다.',
-      contextCostHint: '세션이 길수록 캐시가 있어도 비용이 늘어납니다.\n작업 중에는 /compact, 작업 전환 시 /clear.',
+      contextHint: '추정치. 다음 메시지에서 갱신.\n/clear·압축은 한 턴 늦을 수 있음.',
+      contextCostHint: '세션이 길수록 비용 증가(캐시여도).\n작업 중 /compact · 전환 시 /clear.',
+      freeSpace: '여유 공간',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',
       calibratedNote: '보정됨: 카테고리별 비율은 텍스트 길이로 추정하고, 정확한 청구 토큰 총량(출력 측 / 입력＋캐시 쓰기 측)에 맞춰 스케일했습니다. analysis.calibrate로 전환.',
@@ -1045,6 +1063,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowModeBadge: '워크플로',
       workflowModeHint:
         '"워크플로" = 디스크에 동적 워크플로 실행 디렉터리가 있는 경우; "서브에이전트(애드혹)" = 일반 Task 도구 팬아웃. effort 수준(ultracode/xhigh)은 로그에 기록되지 않으므로 어느 배지도 이를 주장하지 않습니다.',
+      workflowNativeHint:
+        '네이티브 Claude의 ultracode는 오케스트레이션을 메인 세션에 두는 경우가 많아(에이전트 파일 없음) 여기 대신 "세션 / 사용량 추적"에 표시됩니다. 에이전트 파일을 쓰는 실행은 Claude 비용을 오케스트레이션 행에 표시합니다. (향후 릴리스에서 처리 예정.)',
       orchestration: '메인 세션 오케스트레이션',
       commonTaskPrefix: '공통 작업 텍스트',
       thinkingShare: '사고 비율',

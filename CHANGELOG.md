@@ -74,6 +74,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Clearer run badges** — "workflow" (a dynamic-workflow run dir) vs
   "subagents (ad-hoc)" (a plain Task-tool fan-out), with a hint that the effort
   level itself is not recorded in the logs.
+- **Per-model context-window sizes** in the status-bar context indicator
+  (Opus 4.6+/Sonnet 4.6+/Fable 5 = 1M, Haiku/older Claude = 200K, DeepSeek =
+  128K), and its tooltip is now a `/context`-style breakdown (fresh input /
+  cache read / cache write / free space) with a tightened note. The Today
+  "Usage tracking" card now shows only exact cost-weighted shares — the
+  text-length thinking estimate was dropped from it (it remains on the
+  Sessions tab, marked as an estimate). The Workflows tab gained a note
+  explaining that native-Claude ultracode whose orchestration stays in the
+  main session shows up in Sessions / Usage tracking rather than as a row.
 - **Calibrated content analysis** — the Content tab can now anchor its
   per-category token figures to the *exact* billed totals (`analysis.calibrate`,
   default on): relative shares still come from text length, but the absolute

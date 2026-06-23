@@ -1136,18 +1136,40 @@ export class ClaudeDataLoader {
     }
 
     const model = latest.message.model || '';
+    const usage = latest.message.usage;
     return {
       contextTokens: this.recordContextTokens(latest),
       windowTokens: this.contextWindowFor(model),
       model,
+      inputTokens: usage.input_tokens || 0,
+      cacheReadTokens: usage.cache_read_input_tokens || 0,
+      cacheCreationTokens: usage.cache_creation_input_tokens || 0,
     };
   }
 
-  /** Model context-window size in tokens. A "[1m]" suffix marks the
-   * long-context variant (same marker pricing.ts strips); everything else
-   * Claude Code runs today has a 200K window. */
+  /** Model context-window size in tokens. Current-generation Claude (Opus
+   * 4.6+, Sonnet 4.6+, Fable/Mythos 5) is 1M; Haiku and older Claude are 200K;
+   * a "[1m]" suffix forces 1M (the marker pricing.ts strips). Verified against
+   * the model catalog 2026-06-13. Unknown/proxy models default conservatively. */
   private static contextWindowFor(model: string): number {
-    return /\[1m\]/i.test(model) ? 1000000 : 200000;
+    const m = (model || '').toLowerCase();
+    if (/\[1m\]/.test(m)) {
+      return 1_000_000;
+    }
+    if (/fable|mythos/.test(m)) {
+      return 1_000_000;
+    }
+    // Opus 4.6+ and Sonnet 4.6+ are 1M; earlier 4.x and 3.x are 200K.
+    if (/opus-4-(?:[6-9]|\d\d)\b/.test(m) || /sonnet-4-(?:[6-9]|\d\d)\b/.test(m)) {
+      return 1_000_000;
+    }
+    if (/haiku/.test(m) || /opus|sonnet/.test(m)) {
+      return 200_000;
+    }
+    if (/deepseek/.test(m)) {
+      return 128_000;
+    }
+    return 200_000;
   }
 
   static getTodayData(records: ClaudeUsageRecord[]): UsageData {

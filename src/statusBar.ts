@@ -150,8 +150,19 @@ export class StatusBarManager {
       `$(layers) ${I18n.formatNumber(info.contextTokens)} / ${I18n.formatNumber(info.windowTokens)} ` +
         `(${pct.toFixed(1)}%)\n\n`
     );
-    md.appendMarkdown(t.contextCostHint.split('\n').map((l) => `*${l}*`).join('  \n'));
-    md.appendMarkdown(`\n\n*${t.contextHint}*`);
+    // A /context-style breakdown of the latest request's input side, so the
+    // tooltip earns its space instead of repeating the percentage.
+    const freeSpace = Math.max(0, info.windowTokens - info.contextTokens);
+    md.appendMarkdown('| | |\n|:--|--:|\n');
+    md.appendMarkdown(`| ${t.inputTokens} | ${I18n.formatNumber(info.inputTokens)} |\n`);
+    md.appendMarkdown(`| ${t.cacheRead} | ${I18n.formatNumber(info.cacheReadTokens)} |\n`);
+    md.appendMarkdown(`| ${t.cacheCreation} | ${I18n.formatNumber(info.cacheCreationTokens)} |\n`);
+    md.appendMarkdown(`| ${t.freeSpace} | ${I18n.formatNumber(freeSpace)} |\n\n`);
+    // Each \n-separated note line becomes its own italic line (keeps the
+    // /clear sentence on a line of its own).
+    const ital = (s: string): string => s.split('\n').map((l) => `*${l}*`).join('  \n');
+    md.appendMarkdown(ital(t.contextCostHint) + '  \n');
+    md.appendMarkdown(ital(t.contextHint));
     this.contextItem.tooltip = md;
     this.contextItem.show();
   }
