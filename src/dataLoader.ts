@@ -679,6 +679,13 @@ export class ClaudeDataLoader {
               }
               const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
               record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
+              // Authoritative skill/plugin attribution: Claude Code ≥2.1 stamps
+              // these on the assistant usage line itself (far better than the
+              // <command-name> heuristic). See ARCHITECTURE "Log-format facts".
+              const attrSkill = (parsed as { attributionSkill?: unknown }).attributionSkill;
+              const attrPlugin = (parsed as { attributionPlugin?: unknown }).attributionPlugin;
+              record._skill = typeof attrSkill === 'string' && attrSkill.trim() !== '' ? attrSkill : undefined;
+              record._plugin = typeof attrPlugin === 'string' && attrPlugin.trim() !== '' ? attrPlugin : undefined;
               if (agentInfo) {
                 record._agentId = agentInfo.agentId;
                 record._agentType = agentInfo.agentType;
@@ -1375,6 +1382,59 @@ export class ClaudeDataLoader {
       };
     });
 
+    // Phase 7c — main-session orchestration cost. For each run, find the
+    // session's *main-thread* records (not under subagents/) that fall inside
+    // the run's time window. This surfaces the expensive native-Claude
+    // orchestration that lives in the main session, not the agent files.
+    // To avoid double-counting when two runs of the same session overlap, a
+    // record is attributed only if exactly one run's window contains it.
+    const mainBySession: Record<string, ClaudeUsageRecord[]> = {};
+    for (const r of records) {
+      if (r._agentId || r._workflowId || r._isUserPrompt) {
+        continue;
+      }
+      const sid = r._sessionId || 'unknown';
+      (mainBySession[sid] ||= []).push(r);
+    }
+    const windowsBySession: Record<string, { start: number; end: number }[]> = {};
+    for (const wf of workflows) {
+      (windowsBySession[wf.sessionId] ||= []).push({
+        start: wf.startTime.getTime(),
+        end: wf.endTime.getTime(),
+      });
+    }
+    // Real runs are a focused burst (minutes to ~1 h). An ad-hoc "batch" that
+    // groups a session's agents across days would otherwise claim *all* the
+    // session's main-thread work as orchestration — meaningless. Cap the window.
+    const MAX_ORCH_WINDOW_MS = 3 * 60 * 60 * 1000;
+    for (const wf of workflows) {
+      const mains = mainBySession[wf.sessionId];
+      if (!mains || mains.length === 0) {
+        continue;
+      }
+      const windows = windowsBySession[wf.sessionId];
+      const start = wf.startTime.getTime();
+      const end = wf.endTime.getTime();
+      if (end - start > MAX_ORCH_WINDOW_MS) {
+        continue;
+      }
+      const orchestrationRecords = mains.filter((r) => {
+        const t = new Date(r.timestamp).getTime();
+        if (isNaN(t) || t < start || t > end) {
+          return false;
+        }
+        // Drop if another run of this session also contains t (ambiguous).
+        const containing = windows.filter((w) => t >= w.start && t <= w.end).length;
+        return containing === 1;
+      });
+      if (orchestrationRecords.length > 0) {
+        const orch = this.calculateUsageData(orchestrationRecords);
+        if (orch.totalCost > 0) {
+          wf.orchestration = orch;
+        }
+      }
+    }
+
     return workflows.sort((a, b) => b.endTime.getTime() - a.endTime.getTime()).slice(0, limit);
   }
 
@@ -1505,6 +1565,11 @@ export class ClaudeDataLoader {
     const bySession: Record<string, { weight: number; subagentWeight: number; hours: Set<number> }> = {};
     const byAgentType: Record<string, { weight: number; count: number }> = {};
     const byModel: Record<string, { weight: number; count: number }> = {};
+    // Authoritative skill/plugin attribution from the log fields (Phase 7a):
+    // exact cost-weight + token-sum of the lines Claude Code stamped. Preferred
+    // over the <command-name> heuristic whenever any record carries the fields.
+    const skillExactW: Record<string, { weight: number; count: number; tokens: number }> = {};
+    const pluginExactW: Record<string, { weight: number; count: number; tokens: number }> = {};
     for (const r of scoped) {
       const w = this.recordCost(r);
       if (w <= 0) {
@@ -1512,6 +1577,22 @@ export class ClaudeDataLoader {
       }
       totalCost += w;
       totalTokens += this.tokenSum(r);
+      if (r._skill) {
+        if (!skillExactW[r._skill]) {
+          skillExactW[r._skill] = { weight: 0, count: 0, tokens: 0 };
+        }
+        skillExactW[r._skill].weight += w;
+        skillExactW[r._skill].count += 1;
+        skillExactW[r._skill].tokens += this.tokenSum(r);
+      }
+      if (r._plugin) {
+        if (!pluginExactW[r._plugin]) {
+          pluginExactW[r._plugin] = { weight: 0, count: 0, tokens: 0 };
+        }
+        pluginExactW[r._plugin].weight += w;
+        pluginExactW[r._plugin].count += 1;
+        pluginExactW[r._plugin].tokens += this.tokenSum(r);
+      }
       if (this.recordContextTokens(r) > 150_000) {
         largeContextW += w;
       }
@@ -1572,22 +1653,27 @@ export class ClaudeDataLoader {
         .map(([key, v]) => ({ key, share: shareOfCost(v.weight), count: v.count }))
         .sort((a, b) => b.share - a.share);
 
-    // Skills / plugins: cost-weighted activation shares + the invocation
-    // counts / injected-prompt estimates gathered above.
-    const toSkillEntries = (
+    // Skills / plugins: prefer the authoritative log-field attribution (exact
+    // cost-weight of the stamped lines); fall back to the <command-name> +
+    // at/after-invocation heuristic only when no record carried the fields
+    // (older Claude Code logs). Picking one source per scope avoids double count.
+    const exactEntries = (
+      map: Record<string, { weight: number; count: number; tokens: number }>
+    ): AttributionEntry[] =>
+      Object.entries(map)
+        .map(([key, m]) => ({ key, share: shareOfCost(m.weight), count: m.count, estTokens: m.tokens }))
+        .sort((a, b) => b.share - a.share || b.count - a.count);
+    const heuristicEntries = (
       weights: Record<string, number>,
       meta: Record<string, { count: number; estTokens: number }>
     ): AttributionEntry[] =>
       Object.entries(meta)
-        .map(([key, m]) => ({
-          key,
-          share: shareOfCost(weights[key] || 0),
-          count: m.count,
-          estTokens: m.estTokens,
-        }))
+        .map(([key, m]) => ({ key, share: shareOfCost(weights[key] || 0), count: m.count, estTokens: m.estTokens }))
         .sort((a, b) => b.share - a.share || b.count - a.count);
-    const skills = toSkillEntries(skillW, skillMeta);
-    const plugins = toSkillEntries(pluginW, pluginMeta);
+    const skills =
+      Object.keys(skillExactW).length > 0 ? exactEntries(skillExactW) : heuristicEntries(skillW, skillMeta);
+    const plugins =
+      Object.keys(pluginExactW).length > 0 ? exactEntries(pluginExactW) : heuristicEntries(pluginW, pluginMeta);
 
     return {
       totalCost,

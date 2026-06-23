@@ -62,6 +62,18 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **`claudeCodeUsage.showCost` setting** — hide the status-bar cost item for
   those who only want the quota / context indicators (the dashboard still
   shows all cost figures). (PR #31, @ScherbakovAl.)
+- **Authoritative skill / plugin attribution** — the Usage tracking panel now
+  weights skills and plugins by the exact usage Claude Code stamps on each line
+  (`attributionSkill` / `attributionPlugin`, ≥ CC 2.1) instead of the
+  `<command-name>` heuristic, which it keeps only as a fallback for older logs.
+- **Workflow main-session orchestration** — each run's drill-down now shows the
+  main-thread spend that bracketed it (same session, within the run's window),
+  so a native-Claude run whose expensive Opus/Fable orchestration lived in the
+  main thread finally shows its true cost and models, not just the cheap
+  sub-agent files. Heuristic (timestamp-bracketing, capped to focused windows).
+- **Clearer run badges** — "workflow" (a dynamic-workflow run dir) vs
+  "subagents (ad-hoc)" (a plain Task-tool fan-out), with a hint that the effort
+  level itself is not recorded in the logs.
 
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the

@@ -1436,7 +1436,10 @@ export class UsageWebviewProvider {
     const thisMonth = this.workflowBreakdown.filter(
       (w) => w.endTime.getFullYear() === now.getFullYear() && w.endTime.getMonth() === now.getMonth()
     );
-    const monthWorkflowCost = thisMonth.reduce((sum, w) => sum + w.data.totalCost, 0);
+    const monthWorkflowCost = thisMonth.reduce(
+      (sum, w) => sum + w.data.totalCost + (w.orchestration ? w.orchestration.totalCost : 0),
+      0
+    );
     const monthTotalCost = this.monthData ? this.monthData.totalCost : 0;
     const monthShare = monthTotalCost > 0 ? monthWorkflowCost / monthTotalCost : null;
     const summaryStrip =
@@ -1449,11 +1452,16 @@ export class UsageWebviewProvider {
     let rows = '';
     this.workflowBreakdown.forEach((w, idx) => {
       const groupId = 'wf' + idx;
-      const d = w.data;
+      // Headline row = sub-agents + main-session orchestration (Phase 7c), so a
+      // native-Claude run whose Opus/Fable work lived in the main thread shows
+      // its true cost and models; the drill-down splits the two back out.
+      const d = this.mergeUsage(w.data, w.orchestration);
       const models = this.modelList(d);
-      // Ad-hoc subagent batches (no wf_ dir) get a muted badge so they are
-      // distinguishable from true dynamic-workflow runs.
-      const badge = w.isAdHoc ? ' <span class="git-badge">' + t.adhocBadge + '</span>' : '';
+      // Badge: "workflow" (a wf_ run dir) vs "subagents (ad-hoc)" (a plain
+      // Task-tool fan-out). Effort level isn't in the logs — see the hint line.
+      const badge = w.isAdHoc
+        ? ' <span class="git-badge">' + t.adhocBadge + '</span>'
+        : ' <span class="git-badge">' + t.workflowModeBadge + '</span>';
       rows +=
         '<tr class="sort-row project-group-row" data-group="' + groupId + '"' +
         ' data-sort-time="' + w.startTime.getTime() + '"' +
@@ -1481,6 +1489,29 @@ export class UsageWebviewProvider {
         '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(d)) + '</td>' +
         '<td class="number-cell">' + this.escapeHtml(this.formatDuration(w.startTime, w.endTime)) + '</td>' +
         '</tr>';
+
+      // Orchestration drill-down row (Phase 7c): the main-session spend that
+      // bracketed this run — usually where the expensive native-Claude models
+      // are. Rendered as a pinned child row that splits out of the headline.
+      if (w.orchestration) {
+        const o = w.orchestration;
+        const oModels = this.modelList(o);
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td class="date-cell"></td>' +
+          '<td class="name-cell project-child-cell">⚙ ' + this.escapeHtml(t.orchestration) + '</td>' +
+          '<td></td>' +
+          '<td title="' + this.escapeHtml(oModels.full) + '">' + this.escapeHtml(oModels.short) + '</td>' +
+          '<td></td>' +
+          '<td class="cost-cell">' + I18n.formatCurrency(o.totalCost) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalInputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalOutputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalCacheCreationTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalCacheReadTokens) + '</td>' +
+          '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(o)) + '</td>' +
+          '<td class="number-cell"></td>' +
+          '</tr>';
+      }
 
       // Workflow agents often share a long boilerplate preamble; hoist the
       // common prefix into one pinned row so each agent row shows only what
@@ -1578,9 +1609,48 @@ export class UsageWebviewProvider {
       '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
+      '<p class="table-hint">' + t.workflowModeHint + '</p>' +
       '<p class="table-hint">' + t.workflowCacheHint + '</p>' +
       '</div>'
     );
+  }
+
+  /** Sum two UsageData (run sub-agents + main-session orchestration), merging
+   * the per-model breakdowns. Used for the Workflows headline row (Phase 7c). */
+  private mergeUsage(a: UsageData, b?: UsageData): UsageData {
+    if (!b) {
+      return a;
+    }
+    const merged: UsageData = {
+      totalInputTokens: a.totalInputTokens + b.totalInputTokens,
+      totalOutputTokens: a.totalOutputTokens + b.totalOutputTokens,
+      totalCacheCreationTokens: a.totalCacheCreationTokens + b.totalCacheCreationTokens,
+      totalCacheReadTokens: a.totalCacheReadTokens + b.totalCacheReadTokens,
+      totalCost: a.totalCost + b.totalCost,
+      costBreakdown: {
+        input: a.costBreakdown.input + b.costBreakdown.input,
+        output: a.costBreakdown.output + b.costBreakdown.output,
+        cacheWrite: a.costBreakdown.cacheWrite + b.costBreakdown.cacheWrite,
+        cacheRead: a.costBreakdown.cacheRead + b.costBreakdown.cacheRead,
+      },
+      messageCount: a.messageCount + b.messageCount,
+      modelBreakdown: {},
+    };
+    for (const src of [a.modelBreakdown, b.modelBreakdown]) {
+      for (const [m, md] of Object.entries(src)) {
+        const e = merged.modelBreakdown[m] || {
+          inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cost: 0, count: 0,
+        };
+        e.inputTokens += md.inputTokens;
+        e.outputTokens += md.outputTokens;
+        e.cacheCreationTokens += md.cacheCreationTokens;
+        e.cacheReadTokens += md.cacheReadTokens;
+        e.cost += md.cost;
+        e.count += md.count;
+        merged.modelBreakdown[m] = e;
+      }
+    }
+    return merged;
   }
 
   /** Inner panel of the usage-attribution section: disclaimer, the

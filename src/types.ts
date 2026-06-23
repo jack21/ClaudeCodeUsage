@@ -45,6 +45,12 @@ export interface ClaudeUsageRecord {
   // First user message of a sub-agent log = the task dispatched to that
   // agent (truncated). Gives the per-agent drill-down a readable label.
   _agentTask?: string;
+  // Authoritative skill / plugin attribution stamped on the usage line by
+  // Claude Code ≥2.1 (`attributionSkill` / `attributionPlugin`). When present,
+  // the attribution panel weights skills/plugins by the exact usage of these
+  // lines instead of the <command-name>/Skill-tool heuristic.
+  _skill?: string;
+  _plugin?: string;
 }
 
 export interface UsageData {
@@ -267,6 +273,13 @@ export interface WorkflowUsage {
   endTime: Date;               // max record timestamp
   agentCount: number;
   data: UsageData;             // aggregated across all agent files
+  // Main-session orchestration spend that bracketed this run: same session,
+  // non-sub-agent records within [startTime, endTime]. For native-Claude runs
+  // the expensive Opus/Fable orchestration lives HERE (the main thread), not in
+  // the cheap-model agent files — so without this a run's true cost/models are
+  // invisible. Heuristic (timestamp-bracketing); undefined when none, zero, or
+  // ambiguous (the window overlaps another run in the same session).
+  orchestration?: UsageData;
   agents: {
     agentId: string;
     // Task text dispatched to the agent (first user message, truncated).

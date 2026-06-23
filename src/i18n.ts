@@ -81,6 +81,9 @@ export interface Translations {
     workflowCostShare: string;
     workflowCacheHint: string;
     adhocBadge: string;
+    workflowModeBadge: string;
+    workflowModeHint: string;
+    orchestration: string;
     commonTaskPrefix: string;
     thinkingShare: string;
     effortHint: string;
@@ -221,7 +224,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: "share of this month's cost",
       workflowCacheHint:
         'Cache hit rate = cache reads ÷ all input-side tokens. Native Claude workflows reuse the prompt cache across agents (high rate); a provider without cross-agent caching shows ~0% — the same workflow costs disproportionately more there.',
-      adhocBadge: 'subagents',
+      adhocBadge: 'subagents (ad-hoc)',
+      workflowModeBadge: 'workflow',
+      workflowModeHint:
+        '"workflow" = a dynamic-workflow run dir on disk; "subagents (ad-hoc)" = a plain Task-tool fan-out. The effort level (ultracode/xhigh) is not recorded in the logs, so neither badge claims one.',
+      orchestration: 'main-session orchestration',
       commonTaskPrefix: 'Shared task text',
       thinkingShare: 'Thinking %',
       effortHint: 'High thinking share — consider /effort high instead of xhigh for tasks like this.',
@@ -377,7 +384,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: "Anteil an den Monatskosten",
       workflowCacheHint:
         "Cache-Trefferrate = Cache-Lesevorgänge ÷ alle eingabeseitigen Tokens. Native Claude-Workflows nutzen den Prompt-Cache agentenübergreifend (hohe Rate); ein Anbieter ohne agentenübergreifenden Cache zeigt ~0 % — derselbe Workflow kostet dort unverhältnismäßig mehr.",
-      adhocBadge: "Subagenten",
+      adhocBadge: "Subagenten (ad-hoc)",
+      workflowModeBadge: "Workflow",
+      workflowModeHint:
+        '"Workflow" = ein Dynamic-Workflow-Laufverzeichnis auf der Platte; "Subagenten (ad-hoc)" = ein einfacher Task-Tool-Fan-out. Das Effort-Level (ultracode/xhigh) wird nicht protokolliert, daher behauptet kein Badge eines.',
+      orchestration: "Orchestrierung der Hauptsitzung",
       commonTaskPrefix: "Gemeinsamer Aufgabentext",
       thinkingShare: "Denkanteil",
       effortHint: "Hoher Denkanteil — für solche Aufgaben /effort high statt xhigh erwägen.",
@@ -536,7 +547,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '佔本月成本',
       workflowCacheHint:
         '快取命中率 = 快取讀取 ÷ 全部輸入側 token。原生 Claude 工作流可在代理間重用提示快取（命中率高）；不支援跨代理快取的供應商約為 0%——同樣的工作流在那裡的成本會高出許多。',
-      adhocBadge: '子代理',
+      adhocBadge: '子代理（臨時）',
+      workflowModeBadge: '工作流',
+      workflowModeHint:
+        '「工作流」= 磁碟上有動態工作流運行目錄；「子代理（臨時）」= 普通 Task 工具扇出。effort 等級（ultracode/xhigh）不會記入日誌，所以兩種徽標都不對其作斷言。',
+      orchestration: '主會話編排',
       commonTaskPrefix: '共同任務文字',
       thinkingShare: '思考佔比',
       effortHint: '思考佔比偏高——此類任務可考慮用 /effort high 取代 xhigh。',
@@ -688,7 +703,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '占本月成本',
       workflowCacheHint:
         '缓存命中率 = 缓存读取 ÷ 全部输入侧 token。原生 Claude 工作流可在代理间复用提示缓存（命中率高）；不支持跨代理缓存的供应商约为 0%——同样的工作流在那里的成本会高出许多。',
-      adhocBadge: '子代理',
+      adhocBadge: '子代理（临时）',
+      workflowModeBadge: '工作流',
+      workflowModeHint:
+        '「工作流」= 磁盘上有动态工作流运行目录；「子代理（临时）」= 普通 Task 工具扇出。effort 等级（ultracode/xhigh）不会记入日志，所以两种徽标都不对其作断言。',
+      orchestration: '主会话编排',
       commonTaskPrefix: '共同任务文字',
       thinkingShare: '思考占比',
       effortHint: '思考占比偏高——此类任务可考虑用 /effort high 取代 xhigh。',
@@ -840,7 +859,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '今月のコストに占める割合',
       workflowCacheHint:
         'キャッシュヒット率 = キャッシュ読取 ÷ 入力側トークン全体。ネイティブ Claude のワークフローはエージェント間でプロンプトキャッシュを再利用します（高い率）。エージェント間キャッシュのないプロバイダーでは約 0% となり、同じワークフローのコストが大幅に高くなります。',
-      adhocBadge: 'サブエージェント',
+      adhocBadge: 'サブエージェント（アドホック）',
+      workflowModeBadge: 'ワークフロー',
+      workflowModeHint:
+        '「ワークフロー」= ディスク上に動的ワークフローの実行ディレクトリがある場合；「サブエージェント（アドホック）」= 単純な Task ツールのファンアウト。effort レベル（ultracode/xhigh）はログに記録されないため、どちらのバッジもそれを主張しません。',
+      orchestration: 'メインセッションのオーケストレーション',
       commonTaskPrefix: '共通タスクテキスト',
       thinkingShare: '思考割合',
       effortHint: '思考割合が高め — このようなタスクでは xhigh ではなく /effort high の利用を検討してください。',
@@ -997,7 +1020,11 @@ const translations: Record<SupportedLanguage, Translations> = {
       workflowCostShare: '이번 달 비용 중 비율',
       workflowCacheHint:
         '캐시 적중률 = 캐시 읽기 ÷ 전체 입력측 토큰. 네이티브 Claude 워크플로는 에이전트 간 프롬프트 캐시를 재사용합니다(높은 적중률). 에이전트 간 캐시가 없는 공급자는 약 0%로, 같은 워크플로 비용이 훨씬 더 많이 듭니다.',
-      adhocBadge: '서브에이전트',
+      adhocBadge: '서브에이전트(애드혹)',
+      workflowModeBadge: '워크플로',
+      workflowModeHint:
+        '"워크플로" = 디스크에 동적 워크플로 실행 디렉터리가 있는 경우; "서브에이전트(애드혹)" = 일반 Task 도구 팬아웃. effort 수준(ultracode/xhigh)은 로그에 기록되지 않으므로 어느 배지도 이를 주장하지 않습니다.',
+      orchestration: '메인 세션 오케스트레이션',
       commonTaskPrefix: '공통 작업 텍스트',
       thinkingShare: '사고 비율',
       effortHint: '사고 비율이 높습니다 — 이런 작업에는 xhigh 대신 /effort high를 고려하세요.',
