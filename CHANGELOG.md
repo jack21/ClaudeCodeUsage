@@ -53,6 +53,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   `claudeCodeUsage.advice.userContext`: free-text background about you/the
   project; when set, the advice ends with a "Personalised for this project"
   section calibrated against it.
+- **Context-window indicator** in the status bar — shows the current
+  session's context fill as a percentage (like `/context`), estimated from
+  the latest log record (`input + cache read + cache write` tokens vs the
+  model's window; `[1m]` long-context variants use 1M). Amber at 80%, red at
+  95%; hidden after 5 h of inactivity. Toggle with `claudeCodeUsage.showContext`.
+  (Merged from [PR #31](https://github.com/jack21/ClaudeCodeUsage/pull/31), @ScherbakovAl.)
+- **`claudeCodeUsage.showCost` setting** — hide the status-bar cost item for
+  those who only want the quota / context indicators (the dashboard still
+  shows all cost figures). (PR #31, @ScherbakovAl.)
 
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the

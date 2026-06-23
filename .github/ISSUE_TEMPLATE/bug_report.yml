@@ -1,33 +1,55 @@
-name: Bug report
-description: Something isn't working as expected
+name: 🐞 Bug report
+description: Report something that isn't working as expected — wrong numbers, a crash, or a UI glitch.
+title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report! A few details make bugs much faster to fix.
-        Tip: the `Claude Code Usage: Show Diagnostic Logs` command prints
-        per-refresh stats (files scanned, records kept/rejected, models seen)
-        that are very helpful for usage/pricing issues.
+        Thanks for taking the time to file a bug. Token and cost numbers depend on details that vary a lot between setups (proxy, model vendor, OS), so the more of the fields below you can fill in, the faster this gets fixed.
+
+        💡 **Run this first:** the `Claude Code Usage: Show Diagnostic Logs` command (open the Command Palette and type "diagnostic") prints per-refresh stats — files scanned, records kept vs. rejected and why, and every model name it saw. That output resolves most usage and pricing reports on its own, so please paste it into the "Diagnostic logs" field below.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      description: A few quick checks that catch most already-known issues.
+      options:
+        - label: I searched [existing issues](../../issues?q=is%3Aissue) and didn't find a duplicate.
+          required: true
+        - label: I'm on the latest version of the extension, or I've written my version below.
+          required: true
+        - label: I read the README's Troubleshooting section (proxies, history retention, the AI advice feature).
+          required: false
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: What did you see, and what did you expect instead?
+      description: Describe the behaviour you actually saw. For wrong numbers, say what the extension showed and where (status bar, or which dashboard tab).
+      placeholder: The status bar showed $0.00 all day even though I ran several sessions.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+      description: What should have happened?
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
       label: Steps to reproduce
+      description: The exact steps to trigger it. "I can't reliably reproduce it" is a valid answer — if so, describe when it tends to happen.
       placeholder: |
-        1. Open the dashboard …
-        2. Click …
+        1. Open the dashboard (Claude Code Usage: Open Dashboard)
+        2. Switch to the Sessions tab
         3. …
   - type: input
     id: ext-version
     attributes:
       label: Extension version
+      description: Marketplace page, or the Extensions sidebar entry for "Claude Code Usage".
       placeholder: e.g. 2.0.2
     validations:
       required: true
@@ -35,24 +57,39 @@ body:
     id: cc-version
     attributes:
       label: Claude Code version
+      description: Output of `claude --version`, if you use Claude Code.
       placeholder: e.g. 2.1.160
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      description: Help → About (Code → About on macOS).
+      placeholder: e.g. 1.96.0
   - type: dropdown
     id: os
     attributes:
-      label: OS
+      label: Operating system
       options:
         - Windows
         - macOS
         - Linux
-        - Other / Remote (SSH, devcontainer, WSL)
+        - Remote / containerised (SSH, devcontainer, WSL, Codespaces)
+    validations:
+      required: true
   - type: input
     id: proxy
     attributes:
-      label: Proxy / model setup (if relevant)
-      description: e.g. CC Switch + DeepSeek, native Anthropic, LiteLLM proxy…
+      label: Model / proxy setup
+      description: How Claude Code reaches a model. This strongly affects token and pricing data, so please be specific.
+      placeholder: e.g. native Anthropic · CC Switch + DeepSeek · LiteLLM proxy · Amazon Bedrock
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnostic logs (optional)
-      description: Output of `Claude Code Usage: Show Diagnostic Logs`, if applicable.
+      label: Diagnostic logs
+      description: Paste the output of the diagnostic-logs command described above. This is the single most useful thing for usage and pricing bugs.
       render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Screenshots, your theme name (for rendering bugs), or any other context.

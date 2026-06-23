@@ -82,10 +82,20 @@
           "default": "",
           "description": "IANA timezone for date display (e.g. \"Asia/Hong_Kong\", \"UTC\"). Leave empty to use the system timezone. Useful inside sandboxes/devcontainers. Day-boundary calculations still follow the system timezone."
         },
+        "claudeCodeUsage.showCost": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show today's cost in the status bar. Disable to hide the cost item — the dashboard still shows all cost figures."
+        },
+        "claudeCodeUsage.showContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current session's context-window fill (like /context) in the status bar. Estimated from the latest log record, so it updates with each new message."
+        },
         "claudeCodeUsage.usageLimitTracking": {
           "type": "boolean",
           "default": true,
-          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json) — no configuration needed."
+          "description": "Show real 5-hour and weekly limit utilisation in the status bar. Uses Claude Code's existing sign-in (~/.claude/.credentials.json or macOS Keychain) — no configuration needed."
         },
         "claudeCodeUsage.workflowQuotaWarnPercent": {
           "type": "number",
@@ -187,7 +197,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test/*.test.js"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",

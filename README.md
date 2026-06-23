@@ -100,7 +100,8 @@ on the warning prompt to see a static example first.*
 ## What's new in 2.0
 
 - **Real 5-hour and weekly quota** in the status bar — reads Claude Code's
-  existing OAuth session at `~/.claude/.credentials.json`, zero config.
+  existing OAuth session from `~/.claude/.credentials.json` or the macOS
+  Keychain, zero config.
   Adapted from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)
   by [@Dobidop](https://github.com/Dobidop).
 - **Four new tabs**: Sessions, Projects, Content, Branches — all sortable.
@@ -164,6 +165,8 @@ reasonable.
 | `compactNumbers` | `false` | Show `1.2M` / `345K` instead of full numbers. |
 | `timezone` | `""` | IANA timezone for date display (e.g. `Asia/Hong_Kong`). |
 | `usageLimitTracking` | `true` | Show real 5h / weekly quota in the status bar. |
+| `showCost` | `true` | Show today's cost item in the status bar. |
+| `showContext` | `true` | Show the current session's context-window fill (like `/context`). Set this, `showCost`, or `usageLimitTracking` to `false` to hide that status-bar item. |
 | `enableContentAnalysis` | `true` | Run the Content tab token analysis. |
 | `projectGroupingMode` | `"git"` | Projects tab grouping: `git` / `folder` / `flat`. |
 | `advice.apiKey` | `""` | API key for the AI advice feature (OpenAI-compatible). |
@@ -224,9 +227,10 @@ authoritative.
   `~/.claude/projects` and `~/.config/claude/projects`.
 
 **Quota row shows `5h:--% wk:--%`**
-- The OAuth token at `~/.claude/.credentials.json` is missing or expired.
-  Log in to Claude Code once; the extension reads its credential file
-  read-only and refreshes the bearer if needed.
+- Claude Code's OAuth token is missing or expired. Log in to Claude Code
+  once; the extension reads `~/.claude/.credentials.json` where present, or
+  the macOS Keychain entry used by Claude Code, and refreshes the bearer if
+  needed.
 
 **`Get AI Usage Advice` returns 404**
 - DeepSeek's current endpoint does **not** use a `/v1` prefix. Use

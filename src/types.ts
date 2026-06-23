@@ -208,6 +208,10 @@ export interface ExtensionConfig {
   // to use the system timezone. Useful for users in devcontainers or
   // sandboxes whose system zone doesn't match their actual zone.
   timezone: string;
+  // Show today's cost item in the status bar.
+  showCost: boolean;
+  // Show the current session's context-window fill in the status bar.
+  showContext: boolean;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).
@@ -283,7 +287,16 @@ export interface BranchUsage {
   data: UsageData;
 }
 
-// OAuth credentials written by Claude Code at ~/.claude/.credentials.json.
+// Context-window fill of the current conversation, estimated from the
+// session's most recent log record (mirrors what /context shows).
+export interface ContextWindowInfo {
+  contextTokens: number;
+  windowTokens: number;
+  model: string;
+}
+
+// OAuth credentials stored by Claude Code at ~/.claude/.credentials.json or in
+// the macOS Keychain.
 export interface ClaudeCredentials {
   claudeAiOauth: {
     accessToken: string;

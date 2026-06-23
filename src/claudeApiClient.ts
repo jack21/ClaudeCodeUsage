@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -23,6 +24,7 @@ import { ClaudeApiUsageResponse, ClaudeCredentials } from './types';
 export class ClaudeApiClient {
   private readonly credentialsPath: string;
   private credentials: ClaudeCredentials | null = null;
+  private credentialsSource: 'file' | 'keychain' | null = null;
   private rateLimitedUntil: number = 0;
   private out: vscode.OutputChannel | null;
   // Once curl has succeeded after fetch failed, remember so we don't keep
@@ -45,7 +47,7 @@ export class ClaudeApiClient {
     try {
       if (!fs.existsSync(this.credentialsPath)) {
         this.log(`credentials: missing at ${this.credentialsPath}`);
-        return null;
+        return this.loadCredentialsFromKeychain();
       }
       const content = await fs.promises.readFile(this.credentialsPath, 'utf-8');
       const parsed = JSON.parse(content) as ClaudeCredentials;
@@ -54,6 +56,7 @@ export class ClaudeApiClient {
         return null;
       }
       this.credentials = parsed;
+      this.credentialsSource = 'file';
       return parsed;
     } catch (e) {
       this.log(`credentials: read failed: ${(e as Error).message}`);
@@ -61,9 +64,55 @@ export class ClaudeApiClient {
     }
   }
 
+  private loadCredentialsFromKeychain(): ClaudeCredentials | null {
+    if (process.platform !== 'darwin') {
+      return null;
+    }
+    try {
+      const content = execFileSync('/usr/bin/security', [
+        'find-generic-password',
+        '-s',
+        'Claude Code-credentials',
+        '-w'
+      ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+      const parsed = JSON.parse(content) as ClaudeCredentials;
+      if (!parsed || !parsed.claudeAiOauth || !parsed.claudeAiOauth.accessToken) {
+        this.log('credentials: keychain item present but no claudeAiOauth.accessToken');
+        return null;
+      }
+      this.log('credentials: loaded from macOS Keychain');
+      this.credentials = parsed;
+      this.credentialsSource = 'keychain';
+      return parsed;
+    } catch (e) {
+      this.log(`credentials: keychain read failed: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
   private async saveCredentials(credentials: ClaudeCredentials): Promise<void> {
+    if (this.credentialsSource === 'keychain' && process.platform === 'darwin') {
+      try {
+        execFileSync('/usr/bin/security', [
+          'add-generic-password',
+          '-a',
+          os.userInfo().username,
+          '-s',
+          'Claude Code-credentials',
+          '-w',
+          JSON.stringify(credentials),
+          '-U'
+        ], { stdio: ['ignore', 'ignore', 'pipe'] });
+        this.credentials = credentials;
+        this.log('credentials: refreshed in macOS Keychain');
+        return;
+      } catch (e) {
+        this.log(`credentials: keychain write failed: ${(e as Error).message}`);
+      }
+    }
     await fs.promises.writeFile(this.credentialsPath, JSON.stringify(credentials), 'utf-8');
     this.credentials = credentials;
+    this.credentialsSource = 'file';
   }
 
   private isTokenExpired(credentials: ClaudeCredentials): boolean {
