@@ -7,7 +7,12 @@ import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
 import { ClaudeApiClient } from './claudeApiClient';
-import { callModel, getUsageAdvice } from './advisor';
+import {
+  buildOptimizerSystemPrompt,
+  callModel,
+  getUsageAdvice,
+  parseOptimizerOutput
+} from './advisor';
 import { buildAdviceSummary } from './adviceSummary';
 import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
@@ -269,40 +274,8 @@ export class ClaudeCodeUsageExtension {
       return { error: I18n.t.popup.adviceNeedsKey };
     }
 
-    const lenses: string[] = [];
-    if (options.resolve) {
-      lenses.push(
-        'Flag every ambiguous reference (e.g. "this", "the file", "that bug", "as before") ' +
-          'and either ask the user to pin it down or state a clearly-marked assumption.'
-      );
-    }
-    if (options.distil) {
-      lenses.push(
-        'If the draft pastes long material (logs, stack traces, code, docs), condense it to ' +
-          'only the part Claude needs and reference the rest rather than repeating it verbatim.'
-      );
-    }
-    if (options.aesthetic) {
-      lenses.push(
-        'Where the task is UI / visual / writing, propose one concrete style or aesthetic ' +
-          'direction so the result is not generic.'
-      );
-    }
-
     const language = I18n.getLanguageName();
-    const systemPrompt =
-      'You are a prompt engineer for the Claude Code CLI coding agent. The user pastes a ' +
-      'rough request they intend to hand to Claude Code. Rewrite it into ONE tight, ' +
-      'paste-ready prompt Claude Code can act on directly: clear goal, concrete scope, ' +
-      'explicit constraints and acceptance criteria, no filler. Preserve the user’s intent ' +
-      'and every specific detail; never invent requirements. ' +
-      lenses.join(' ') +
-      ' Then recommend run settings for THIS task as a few short bullet lines: reasoning ' +
-      'effort (low / medium / high / max), extended thinking (on / off), and model (a cheaper ' +
-      'model for mechanical edits, the strongest for ambiguous or design-heavy work). Justify ' +
-      'each in a few words. Output EXACTLY this shape and nothing else:\n' +
-      '===PROMPT===\n<the rewritten prompt>\n===SETTINGS===\n<the settings bullets>\n' +
-      `Write everything in ${language}.`;
+    const systemPrompt = buildOptimizerSystemPrompt(language, options);
 
     try {
       const raw = await callModel(systemPrompt, text, {
@@ -318,26 +291,11 @@ export class ClaudeCodeUsageExtension {
         summary: '',
         timeoutMs: 90_000
       });
-      return this.parseOptimizerOutput(raw);
+      return parseOptimizerOutput(raw);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { error: `${I18n.t.popup.adviceFailed}: ${message}` };
     }
-  }
-
-  /** Split the model reply on the ===PROMPT=== / ===SETTINGS=== markers. */
-  private parseOptimizerOutput(raw: string): { prompt: string; settings: string } {
-    const text = (raw || '').trim();
-    const promptIdx = text.indexOf('===PROMPT===');
-    const settingsIdx = text.indexOf('===SETTINGS===');
-    if (promptIdx === -1 || settingsIdx === -1 || settingsIdx < promptIdx) {
-      // Marker-free or malformed: surface the whole thing as the prompt so the
-      // user still gets a usable result.
-      return { prompt: text, settings: '' };
-    }
-    const prompt = text.slice(promptIdx + '===PROMPT==='.length, settingsIdx).trim();
-    const settings = text.slice(settingsIdx + '===SETTINGS==='.length).trim();
-    return { prompt, settings };
   }
 
   private loadConfiguration(): void {

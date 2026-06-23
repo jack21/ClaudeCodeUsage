@@ -63,16 +63,23 @@ plus per-model and per-day tables below.*
 
 *Estimated breakdown of which content consumes tokens — your prompts vs.
 tool results (by tool) vs. assistant output / thinking. This is the lever
-for optimising your usage. Scoped to the last 30 days.*
+for optimising your usage. Scoped to the last 30 days
+(`advice.promptWindowDays`).*
 
-### AI advice (opt-in)
+### AI advice + Usage Optimizer
 
 ![AI advice](images/v2-advice-en.png)
 
-*Optional AI advisor sends your aggregates + a sample of your prompts
-to an OpenAI-compatible API (DeepSeek V4 Pro by default) and suggests
-concrete rewrites. **Bring your own key** — or click `Preview demo`
-on the warning prompt to see a static example first.*
+*Two action cards lead the Content tab. **AI advice** sends your aggregates +
+a sample of your prompts to a model and suggests concrete rewrites — and now
+**works with no API key**: it reuses your existing Claude Code sign-in (a cheap
+model, a little of your quota) by default, or you can bring your own Anthropic /
+OpenAI-compatible key.*
+
+*The opt-in **Usage Optimizer** (off by default) takes a rough request you paste
+and returns one tightened, paste-ready prompt plus a recommended reasoning
+effort / thinking / model for that task. **Only the text you paste is sent** —
+never your files or the terminal — behind a one-time consent prompt.*
 
 ---
 
@@ -92,10 +99,21 @@ on the warning prompt to see a static example first.*
 - **Workflow quota guard** — a dismissible banner before you start a run
   the remaining 5-hour window can't finish
   (`claudeCodeUsage.workflowQuotaWarnPercent`).
-- **AI advice 2.0** — fed with the new signals (runs, cache hit rates,
+- **AI advice 2.0** — now **works with no API key**: `advice.backend`
+  (default `subscription`) reuses your Claude Code sign-in and a cheap model,
+  so advice works out of the box and barely touches your quota; or set it to
+  `api` for your own Anthropic (`/v1/messages`, the default shape) or
+  OpenAI-compatible key. Fed with the new signals (runs, cache hit rates,
   attribution, thinking share); optional `advice.userContext` adds a
-  "Personalised for this project" section. Transport hardened: timeout,
-  retry, curl fallback — no more silent hangs.
+  "Personalised for this project" section; `advice.promptWindowDays` (default
+  30) sets the sampling window. Transport hardened: timeout, retry, curl
+  fallback — no more silent hangs.
+- **Usage Optimizer** (opt-in, `advice.optimizer.enabled`, default off) — a
+  Content-tab card where you paste a rough request and get back one tightened,
+  paste-ready prompt plus a recommended effort / thinking / model. Three
+  optional lenses (flag ambiguous references · condense long pastes · suggest a
+  style direction). Runs through the same backend as AI advice; **only the text
+  you paste is sent**, behind a one-time consent prompt.
 
 ## What's new in 2.0
 
@@ -169,10 +187,16 @@ reasonable.
 | `showContext` | `true` | Show the current session's context-window fill (like `/context`). Set this, `showCost`, or `usageLimitTracking` to `false` to hide that status-bar item. |
 | `enableContentAnalysis` | `true` | Run the Content tab token analysis. |
 | `projectGroupingMode` | `"git"` | Projects tab grouping: `git` / `folder` / `flat`. |
-| `advice.apiKey` | `""` | API key for the AI advice feature (OpenAI-compatible). |
-| `advice.apiUrl` | `https://api.deepseek.com/chat/completions` | Chat-completions endpoint. |
-| `advice.model` | `"deepseek-v4-pro"` | Model name. |
-| `advice.reasoningEffort` | `"max"` | Reasoning effort (DeepSeek V4: `high` / `max`). |
+| `advice.backend` | `"subscription"` | Where AI advice + Optimizer send requests. `subscription` reuses your Claude Code sign-in (no key, a little quota); `api` uses the key below. |
+| `advice.apiFormat` | `"anthropic"` | `api`-backend request shape: `anthropic` (`/v1/messages`) or `openai` (chat-completions, e.g. DeepSeek). |
+| `advice.subscriptionModel` | `"claude-haiku-4-5"` | Model for the `subscription` backend (a cheap model keeps quota use tiny). |
+| `advice.apiKey` | `""` | API key for the `api` backend. |
+| `advice.apiUrl` | `https://api.deepseek.com/chat/completions` | Endpoint for the `api` backend (Anthropic or chat-completions). |
+| `advice.model` | `"deepseek-v4-pro"` | Model name for the `api` backend. |
+| `advice.reasoningEffort` | `"max"` | Reasoning effort for the `openai` format. |
+| `advice.userContext` | `""` | Optional background about you/the project; adds a "Personalised for this project" section. |
+| `advice.promptWindowDays` | `30` | Days of prompts/content the analysis samples (1–365). |
+| `advice.optimizer.enabled` | `false` | Show the opt-in Usage Optimizer on the Content tab. |
 
 ---
 
@@ -210,12 +234,16 @@ authoritative.
   `~/.claude/projects/**/*.jsonl` files.
 - The quota indicator calls **`api.anthropic.com/api/oauth/usage`** using
   Claude Code's existing OAuth token. No additional credentials are sent.
-- The **AI advice command** is the only feature that calls an external
-  service — and only when *you* trigger it. It sends an aggregate summary
-  of your usage plus a sample of your recent user prompts to whatever
-  endpoint you configured in `advice.apiUrl`. **Bring your own key**;
-  nothing is shipped with the extension. If no key is configured, the
-  command opens a hand-written demo instead of calling any API.
+- **AI advice** and the **Usage Optimizer** are the only features that call a
+  model — and only when *you* trigger them. AI advice sends an aggregate
+  summary of your usage plus a sample of your recent prompts; the Optimizer
+  sends **only the text you paste into it** (never your files or the terminal),
+  behind a one-time consent prompt. Both honour `advice.backend`:
+  - `subscription` (default) sends to **`api.anthropic.com/v1/messages`** via
+    your existing Claude Code OAuth session — the same account, a cheap model,
+    a little of your quota. No extra key.
+  - `api` sends to the endpoint in `advice.apiUrl` with your own key. **Bring
+    your own key**; nothing is shipped with the extension.
 
 ---
 
@@ -238,9 +266,11 @@ authoritative.
   `/v1` if present.
 
 **`Get AI Usage Advice` shows demo instead of real advice**
-- That means no API key is configured under `claudeCodeUsage.advice.apiKey`.
-  The demo file is filename-marked `…-DEMO-…` with a prominent banner.
-  Add a key in Settings and re-run the command.
+- Only the `api` backend needs a key. If `advice.backend` is `api` and no key
+  is set under `claudeCodeUsage.advice.apiKey`, the command opens a demo
+  (filename-marked `…-DEMO-…`, with a prominent banner). Either add a key, or
+  switch `advice.backend` back to `subscription` (the default) to use your
+  Claude Code sign-in with no key.
 
 **Sluggish refresh on large histories**
 - 2.0 yields to the event loop every 25 files; idle ticks skip recompute.

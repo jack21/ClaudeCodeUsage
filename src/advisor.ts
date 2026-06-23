@@ -235,3 +235,68 @@ export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
   const systemPrompt = buildSystemPrompt(options.language || 'English', options.userContext);
   return callModel(systemPrompt, options.summary, options);
 }
+
+// === Usage Optimizer (Phase 9c) ===
+// The optimizer turns a rough pasted request into one tight, paste-ready prompt
+// plus a settings recommendation. The system prompt and the reply parser are
+// pure functions here (no VS Code dependency) so they can be unit-tested; the
+// VS Code glue (consent modal, config, webview round-trip) lives in extension.ts.
+
+export interface OptimizerLenses {
+  resolve: boolean; // flag ambiguous references
+  distil: boolean; // condense long pasted material
+  aesthetic: boolean; // suggest a style direction
+}
+
+/** Build the optimizer system prompt for the given language + enabled lenses. */
+export function buildOptimizerSystemPrompt(language: string, lenses: OptimizerLenses): string {
+  const extra: string[] = [];
+  if (lenses.resolve) {
+    extra.push(
+      'Flag every ambiguous reference (e.g. "this", "the file", "that bug", "as before") ' +
+        'and either ask the user to pin it down or state a clearly-marked assumption.'
+    );
+  }
+  if (lenses.distil) {
+    extra.push(
+      'If the draft pastes long material (logs, stack traces, code, docs), condense it to ' +
+        'only the part Claude needs and reference the rest rather than repeating it verbatim.'
+    );
+  }
+  if (lenses.aesthetic) {
+    extra.push(
+      'Where the task is UI / visual / writing, propose one concrete style or aesthetic ' +
+        'direction so the result is not generic.'
+    );
+  }
+  return (
+    'You are a prompt engineer for the Claude Code CLI coding agent. The user pastes a ' +
+    'rough request they intend to hand to Claude Code. Rewrite it into ONE tight, ' +
+    'paste-ready prompt Claude Code can act on directly: clear goal, concrete scope, ' +
+    'explicit constraints and acceptance criteria, no filler. Preserve the user’s intent ' +
+    'and every specific detail; never invent requirements. ' +
+    extra.join(' ') +
+    (extra.length > 0 ? ' ' : '') +
+    'Then recommend run settings for THIS task as a few short bullet lines: reasoning ' +
+    'effort (low / medium / high / max), extended thinking (on / off), and model (a cheaper ' +
+    'model for mechanical edits, the strongest for ambiguous or design-heavy work). Justify ' +
+    'each in a few words. Output EXACTLY this shape and nothing else:\n' +
+    '===PROMPT===\n<the rewritten prompt>\n===SETTINGS===\n<the settings bullets>\n' +
+    `Write everything in ${language}.`
+  );
+}
+
+/** Split the optimizer reply on the ===PROMPT=== / ===SETTINGS=== markers. */
+export function parseOptimizerOutput(raw: string): { prompt: string; settings: string } {
+  const text = (raw || '').trim();
+  const promptIdx = text.indexOf('===PROMPT===');
+  const settingsIdx = text.indexOf('===SETTINGS===');
+  if (promptIdx === -1 || settingsIdx === -1 || settingsIdx < promptIdx) {
+    // Marker-free or malformed: surface the whole thing as the prompt so the
+    // user still gets a usable result.
+    return { prompt: text, settings: '' };
+  }
+  const prompt = text.slice(promptIdx + '===PROMPT==='.length, settingsIdx).trim();
+  const settings = text.slice(settingsIdx + '===SETTINGS==='.length).trim();
+  return { prompt, settings };
+}
