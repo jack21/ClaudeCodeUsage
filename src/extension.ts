@@ -7,7 +7,7 @@ import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
 import { ClaudeApiClient } from './claudeApiClient';
-import { getUsageAdvice } from './advisor';
+import { callModel, getUsageAdvice } from './advisor';
 import { buildAdviceSummary } from './adviceSummary';
 import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
@@ -65,6 +65,10 @@ export class ClaudeCodeUsageExtension {
     this.statusBar = new StatusBarManager();
     this.webviewProvider = new UsageWebviewProvider(context);
     this.apiClient = new ClaudeApiClient(this.outputChannel);
+    // Usage Optimizer (Phase 9c): the webview posts a draft prompt; we run it
+    // through the same model backend as the advice feature and post back a
+    // tightened prompt + a settings recommendation. Consent gate lives here.
+    this.webviewProvider.onOptimize = (draft, options) => this.runOptimizer(draft, options);
 
     this.setupCommands();
     this.loadConfiguration();
@@ -151,7 +155,13 @@ export class ClaudeCodeUsageExtension {
       return;
     }
 
-    const summary = buildAdviceSummary(records, analysis, picked.scope, picked.label);
+    const summary = buildAdviceSummary(
+      records,
+      analysis,
+      picked.scope,
+      picked.label,
+      config.advicePromptWindowDays
+    );
 
     await this.runAdviceRequest(config, picked.scope, picked.label, summary);
   }
@@ -220,6 +230,116 @@ export class ClaudeCodeUsageExtension {
     );
   }
 
+  /**
+   * Usage Optimizer round-trip (Phase 9c). Takes the user's rough draft and the
+   * three optional lenses, asks the configured model to return a tightened
+   * paste-ready prompt plus a settings recommendation, and parses the two
+   * sections out. ONLY the pasted draft is sent — no filesystem access. First
+   * use shows a one-time consent modal (the text is going to a model, not to
+   * Claude Code's terminal).
+   */
+  private async runOptimizer(
+    draft: string,
+    options: { resolve: boolean; distil: boolean; aesthetic: boolean }
+  ): Promise<{ prompt?: string; settings?: string; error?: string }> {
+    const text = (draft || '').trim();
+    if (text === '') {
+      return { error: I18n.t.popup.noDataMessage };
+    }
+
+    // One-time consent: the draft leaves the machine for whichever model the
+    // advice backend points at. Remember the choice in globalState.
+    const consentKey = 'claudeCodeUsage.optimizerConsented';
+    if (!this.context.globalState.get<boolean>(consentKey, false)) {
+      const proceed = await vscode.window.showWarningMessage(
+        I18n.t.popup.optimizerConsent,
+        { modal: true },
+        I18n.t.popup.optimizerRun
+      );
+      if (proceed !== I18n.t.popup.optimizerRun) {
+        return { error: '' };
+      }
+      await this.context.globalState.update(consentKey, true);
+    }
+
+    const config = this.getConfiguration();
+    const needsKey =
+      config.adviceBackend === 'api' && (!config.adviceApiKey || config.adviceApiKey.trim() === '');
+    if (needsKey) {
+      return { error: I18n.t.popup.adviceNeedsKey };
+    }
+
+    const lenses: string[] = [];
+    if (options.resolve) {
+      lenses.push(
+        'Flag every ambiguous reference (e.g. "this", "the file", "that bug", "as before") ' +
+          'and either ask the user to pin it down or state a clearly-marked assumption.'
+      );
+    }
+    if (options.distil) {
+      lenses.push(
+        'If the draft pastes long material (logs, stack traces, code, docs), condense it to ' +
+          'only the part Claude needs and reference the rest rather than repeating it verbatim.'
+      );
+    }
+    if (options.aesthetic) {
+      lenses.push(
+        'Where the task is UI / visual / writing, propose one concrete style or aesthetic ' +
+          'direction so the result is not generic.'
+      );
+    }
+
+    const language = I18n.getLanguageName();
+    const systemPrompt =
+      'You are a prompt engineer for the Claude Code CLI coding agent. The user pastes a ' +
+      'rough request they intend to hand to Claude Code. Rewrite it into ONE tight, ' +
+      'paste-ready prompt Claude Code can act on directly: clear goal, concrete scope, ' +
+      'explicit constraints and acceptance criteria, no filler. Preserve the user’s intent ' +
+      'and every specific detail; never invent requirements. ' +
+      lenses.join(' ') +
+      ' Then recommend run settings for THIS task as a few short bullet lines: reasoning ' +
+      'effort (low / medium / high / max), extended thinking (on / off), and model (a cheaper ' +
+      'model for mechanical edits, the strongest for ambiguous or design-heavy work). Justify ' +
+      'each in a few words. Output EXACTLY this shape and nothing else:\n' +
+      '===PROMPT===\n<the rewritten prompt>\n===SETTINGS===\n<the settings bullets>\n' +
+      `Write everything in ${language}.`;
+
+    try {
+      const raw = await callModel(systemPrompt, text, {
+        backend: config.adviceBackend,
+        apiFormat: config.adviceApiFormat,
+        subscriptionModel: config.adviceSubscriptionModel,
+        getSubscriptionToken: () => this.apiClient.getAccessToken(),
+        apiKey: config.adviceApiKey,
+        apiUrl: config.adviceApiUrl,
+        model: config.adviceModel,
+        reasoningEffort: config.adviceReasoningEffort,
+        language,
+        summary: '',
+        timeoutMs: 90_000
+      });
+      return this.parseOptimizerOutput(raw);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: `${I18n.t.popup.adviceFailed}: ${message}` };
+    }
+  }
+
+  /** Split the model reply on the ===PROMPT=== / ===SETTINGS=== markers. */
+  private parseOptimizerOutput(raw: string): { prompt: string; settings: string } {
+    const text = (raw || '').trim();
+    const promptIdx = text.indexOf('===PROMPT===');
+    const settingsIdx = text.indexOf('===SETTINGS===');
+    if (promptIdx === -1 || settingsIdx === -1 || settingsIdx < promptIdx) {
+      // Marker-free or malformed: surface the whole thing as the prompt so the
+      // user still gets a usable result.
+      return { prompt: text, settings: '' };
+    }
+    const prompt = text.slice(promptIdx + '===PROMPT==='.length, settingsIdx).trim();
+    const settings = text.slice(settingsIdx + '===SETTINGS==='.length).trim();
+    return { prompt, settings };
+  }
+
   private loadConfiguration(): void {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
@@ -266,6 +386,7 @@ export class ClaudeCodeUsageExtension {
       adviceBackend: config.get<'subscription' | 'api'>('advice.backend', 'subscription'),
       adviceApiFormat: config.get<'anthropic' | 'openai'>('advice.apiFormat', 'anthropic'),
       adviceSubscriptionModel: config.get<string>('advice.subscriptionModel', 'claude-haiku-4-5'),
+      advicePromptWindowDays: config.get<number>('advice.promptWindowDays', 30),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
       projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
       fileWatching: config.get('fileWatching', true),
@@ -527,6 +648,7 @@ export class ClaudeCodeUsageExtension {
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
         analyzeContent: config.enableContentAnalysis,
+        windowDays: config.advicePromptWindowDays,
         log: (line) =>
           this.outputChannel.appendLine(
             `[${new Date().toLocaleTimeString(undefined, { hour12: false })}] ${line}`

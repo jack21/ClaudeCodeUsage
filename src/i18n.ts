@@ -124,6 +124,22 @@ export interface Translations {
     attrTodayPointer: string;
     sessionTitle: string;
     getAdvice: string;
+    adviceCardTitle: string;
+    adviceCardDesc: string;
+    optimizerTitle: string;
+    optimizerDesc: string;
+    optimizerConsent: string;
+    optimizerEnableBtn: string;
+    optimizerPlaceholder: string;
+    optimizerRun: string;
+    optimizerRunning: string;
+    optimizerCopy: string;
+    optimizerCopied: string;
+    optimizerResolve: string;
+    optimizerDistil: string;
+    optimizerAesthetic: string;
+    optimizerPromptHeading: string;
+    optimizerSettingsHeading: string;
     adviceNeedsKey: string;
     adviceGenerating: string;
     adviceFailed: string;
@@ -281,6 +297,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: 'Details: Content tab',
       sessionTitle: 'Session',
       getAdvice: 'Get AI Advice',
+      adviceCardTitle: 'AI advice',
+      adviceCardDesc:
+        'Send your usage digest + a sample of your own prompts to your model and get concrete tips on writing clearer instructions and cutting waste.',
+      optimizerTitle: 'Usage optimizer',
+      optimizerDesc:
+        'Paste a rough request; get back a tightened, ready-to-paste prompt plus a suggested effort / thinking / model. Off by default; only your pasted text is sent.',
+      optimizerConsent:
+        'The Usage Optimizer sends the text you paste to your configured model (advice.backend). Nothing is sent to Claude Code and nothing is typed into a terminal. Continue?',
+      optimizerEnableBtn: 'Enable in settings',
+      optimizerPlaceholder: 'Paste a rough prompt to optimise…',
+      optimizerRun: 'Optimise',
+      optimizerRunning: 'Optimising…',
+      optimizerCopy: 'Copy prompt',
+      optimizerCopied: 'Copied',
+      optimizerResolve: 'Flag vague references',
+      optimizerDistil: 'Distil long pasted material',
+      optimizerAesthetic: 'Offer style directions',
+      optimizerPromptHeading: 'Optimised prompt',
+      optimizerSettingsHeading: 'Recommended run settings',
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
       adviceGenerating: 'Generating usage advice…',
       adviceFailed: 'Failed to get advice',
@@ -447,6 +482,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: "Details: Inhalt-Tab",
       sessionTitle: "Sitzung",
       getAdvice: "KI-Rat holen",
+      adviceCardTitle: "KI-Rat",
+      adviceCardDesc:
+        "Sende deine Nutzungsübersicht + eine Auswahl deiner eigenen Prompts an dein Modell und erhalte konkrete Tipps für klarere Anweisungen und weniger Verschwendung.",
+      optimizerTitle: "Nutzungs-Optimierer",
+      optimizerDesc:
+        "Füge eine grobe Anfrage ein; erhalte einen verdichteten, einfügefertigen Prompt plus empfohlenes Effort / Thinking / Modell. Standardmäßig aus; nur dein eingefügter Text wird gesendet.",
+      optimizerConsent:
+        "Der Nutzungs-Optimierer sendet den eingefügten Text an dein konfiguriertes Modell (advice.backend). Nichts geht an Claude Code, nichts wird ins Terminal getippt. Fortfahren?",
+      optimizerEnableBtn: "In Einstellungen aktivieren",
+      optimizerPlaceholder: "Groben Prompt zum Optimieren einfügen…",
+      optimizerRun: "Optimieren",
+      optimizerRunning: "Optimiere…",
+      optimizerCopy: "Prompt kopieren",
+      optimizerCopied: "Kopiert",
+      optimizerResolve: "Vage Referenzen markieren",
+      optimizerDistil: "Lange Inhalte verdichten",
+      optimizerAesthetic: "Stilrichtungen anbieten",
+      optimizerPromptHeading: "Optimierter Prompt",
+      optimizerSettingsHeading: "Empfohlene Lauf-Einstellungen",
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
       adviceGenerating: "Nutzungsrat wird erstellt…",
       adviceFailed: "Rat konnte nicht abgerufen werden",
@@ -612,6 +666,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: '詳情見「內容分析」頁籤',
       sessionTitle: '會話',
       getAdvice: '取得 AI 建議',
+      adviceCardTitle: 'AI 建議',
+      adviceCardDesc:
+        '將你的用量摘要 + 你自己的 prompt 樣本送給模型，取得寫出更清楚指令、減少浪費的具體建議。',
+      optimizerTitle: '用量優化器',
+      optimizerDesc:
+        '貼上粗略的需求，得到精煉、可直接貼上的 prompt，以及建議的 effort / thinking / 模型。預設關閉；只會送出你貼上的文字。',
+      optimizerConsent:
+        '用量優化器會把你貼上的文字送給你配置的模型（advice.backend）。不會送給 Claude Code，也不會注入終端。要繼續嗎？',
+      optimizerEnableBtn: '在設定中啟用',
+      optimizerPlaceholder: '貼上要優化的粗略 prompt…',
+      optimizerRun: '優化',
+      optimizerRunning: '優化中…',
+      optimizerCopy: '複製 prompt',
+      optimizerCopied: '已複製',
+      optimizerResolve: '標記模糊引用',
+      optimizerDistil: '提煉長貼上材料',
+      optimizerAesthetic: '提供風格方向',
+      optimizerPromptHeading: '優化後 prompt',
+      optimizerSettingsHeading: '建議運行設定',
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
       adviceGenerating: '正在產生使用建議…',
       adviceFailed: '取得建議失敗',
@@ -774,6 +847,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: '详情见「内容分析」页签',
       sessionTitle: '会话',
       getAdvice: '获取 AI 建议',
+      adviceCardTitle: 'AI 建议',
+      adviceCardDesc:
+        '将你的用量摘要 + 你自己的 prompt 样本送给模型，获得写出更清晰指令、减少浪费的具体建议。',
+      optimizerTitle: '用量优化器',
+      optimizerDesc:
+        '粘贴粗略的需求，得到精炼、可直接粘贴的 prompt，以及建议的 effort / thinking / 模型。默认关闭；只会发送你粘贴的文字。',
+      optimizerConsent:
+        '用量优化器会把你粘贴的文字发送给你配置的模型（advice.backend）。不会发送给 Claude Code，也不会注入终端。要继续吗？',
+      optimizerEnableBtn: '在设置中启用',
+      optimizerPlaceholder: '粘贴要优化的粗略 prompt…',
+      optimizerRun: '优化',
+      optimizerRunning: '优化中…',
+      optimizerCopy: '复制 prompt',
+      optimizerCopied: '已复制',
+      optimizerResolve: '标记模糊引用',
+      optimizerDistil: '提炼长粘贴材料',
+      optimizerAesthetic: '提供风格方向',
+      optimizerPromptHeading: '优化后 prompt',
+      optimizerSettingsHeading: '建议运行设置',
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
       adviceGenerating: '正在生成使用建议…',
       adviceFailed: '获取建议失败',
@@ -940,6 +1032,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: '詳細はコンテンツタブへ',
       sessionTitle: 'セッション',
       getAdvice: 'AI アドバイスを取得',
+      adviceCardTitle: 'AI アドバイス',
+      adviceCardDesc:
+        '使用量サマリー + あなた自身のプロンプトのサンプルをモデルに送り、より明確な指示と無駄削減の具体的なヒントを得ます。',
+      optimizerTitle: '使用量オプティマイザー',
+      optimizerDesc:
+        '雑な依頼を貼り付けると、引き締まった貼り付け可能なプロンプトと、推奨 effort / thinking / モデルが返ります。既定でオフ。送信されるのは貼り付けたテキストのみ。',
+      optimizerConsent:
+        '使用量オプティマイザーは貼り付けたテキストを設定したモデル（advice.backend）に送信します。Claude Code には送られず、ターミナルにも入力されません。続行しますか？',
+      optimizerEnableBtn: '設定で有効化',
+      optimizerPlaceholder: '最適化する雑なプロンプトを貼り付け…',
+      optimizerRun: '最適化',
+      optimizerRunning: '最適化中…',
+      optimizerCopy: 'プロンプトをコピー',
+      optimizerCopied: 'コピー済み',
+      optimizerResolve: '曖昧な参照を指摘',
+      optimizerDistil: '長い貼付材料を要約',
+      optimizerAesthetic: 'スタイル方向を提案',
+      optimizerPromptHeading: '最適化されたプロンプト',
+      optimizerSettingsHeading: '推奨実行設定',
       adviceNeedsKey: '設定で API キーを入力してください。',
       adviceGenerating: '使用アドバイスを生成中…',
       adviceFailed: 'アドバイスの取得に失敗しました',
@@ -1107,6 +1218,25 @@ const translations: Record<SupportedLanguage, Translations> = {
       attrTodayPointer: '자세한 내용은 콘텐츠 탭에서',
       sessionTitle: '세션',
       getAdvice: 'AI 조언 받기',
+      adviceCardTitle: 'AI 조언',
+      adviceCardDesc:
+        '사용량 요약 + 본인 프롬프트 샘플을 모델에 보내 더 명확한 지시와 낭비 줄이기에 대한 구체적 팁을 받습니다.',
+      optimizerTitle: '사용량 옵티마이저',
+      optimizerDesc:
+        '대략적인 요청을 붙여넣으면 다듬어진 붙여넣기용 프롬프트와 추천 effort / thinking / 모델을 돌려줍니다. 기본 꺼짐; 붙여넣은 텍스트만 전송됩니다.',
+      optimizerConsent:
+        '사용량 옵티마이저는 붙여넣은 텍스트를 설정한 모델(advice.backend)로 보냅니다. Claude Code로는 전송되지 않고 터미널에도 입력되지 않습니다. 계속할까요?',
+      optimizerEnableBtn: '설정에서 사용',
+      optimizerPlaceholder: '최적화할 대략적인 프롬프트 붙여넣기…',
+      optimizerRun: '최적화',
+      optimizerRunning: '최적화 중…',
+      optimizerCopy: '프롬프트 복사',
+      optimizerCopied: '복사됨',
+      optimizerResolve: '모호한 참조 표시',
+      optimizerDistil: '긴 붙여넣기 자료 요약',
+      optimizerAesthetic: '스타일 방향 제안',
+      optimizerPromptHeading: '최적화된 프롬프트',
+      optimizerSettingsHeading: '추천 실행 설정',
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',
       adviceGenerating: '사용 조언 생성 중…',
       adviceFailed: '조언을 가져오지 못했습니다',

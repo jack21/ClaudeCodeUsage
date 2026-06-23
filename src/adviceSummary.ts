@@ -20,8 +20,13 @@ export function buildAdviceSummary(
   records: ClaudeUsageRecord[],
   analysis: ContentAnalysis,
   scope: string,
-  scopeLabel: string
+  scopeLabel: string,
+  windowDays: number = 30
 ): string {
+  // The content analysis (and its prompt sample) was computed over this window
+  // upstream in the loader; we only echo the number in the prose so the model
+  // knows the horizon. Keep the two in sync via advice.promptWindowDays.
+  const windowLabel = `last ${Math.max(1, Math.round(windowDays))} days`;
   const isOverall = scope === 'overall';
   const scopedRecords = isOverall
     ? records
@@ -43,7 +48,7 @@ export function buildAdviceSummary(
   );
   lines.push(`Models used: ${Object.keys(usage.modelBreakdown).join(', ') || 'n/a'}`);
   lines.push('');
-  lines.push('Content token breakdown, all projects, last 30 days (estimated):');
+  lines.push(`Content token breakdown, all projects, ${windowLabel} (estimated):`);
   for (const c of analysis.categories) {
     const pct =
       analysis.totalEstimatedTokens > 0
@@ -81,7 +86,7 @@ export function buildAdviceSummary(
   if (thinkingTotals.total > 0) {
     lines.push('');
     lines.push(
-      `Estimated thinking share of assistant output (last 30 days): ` +
+      `Estimated thinking share of assistant output (${windowLabel}): ` +
         `${((thinkingTotals.thinking / thinkingTotals.total) * 100).toFixed(0)}%` +
         ' (above ~60% suggests /effort high instead of xhigh for such tasks)'
     );

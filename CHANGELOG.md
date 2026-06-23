@@ -60,7 +60,18 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   give targeted advice instead of generic tips. New optional setting
   `claudeCodeUsage.advice.userContext`: free-text background about you/the
   project; when set, the advice ends with a "Personalised for this project"
-  section calibrated against it.
+  section calibrated against it. New `advice.promptWindowDays` (default 30)
+  sets how many days of your own prompts and content the analysis samples.
+- **AI advice card** at the top of the Content tab — the "Get AI advice"
+  button now lives in a labelled card that says, in one line, what gets sent,
+  instead of being tucked into the analysis header.
+- **Usage Optimizer** (opt-in, `advice.optimizer.enabled`, default off) — a
+  card on the Content tab where you paste a rough request and get back ONE
+  tightened, paste-ready prompt plus a recommended reasoning effort / thinking
+  / model for that task. Three optional lenses: flag ambiguous references,
+  condense long pasted material, suggest a style direction. Runs through the
+  same backend as AI advice; **only the text you paste is sent** (never your
+  files or Claude Code's terminal), behind a one-time consent prompt.
 - **Context-window indicator** in the status bar — shows the current
   session's context fill as a percentage (like `/context`), estimated from
   the latest log record (`input + cache read + cache write` tokens vs the

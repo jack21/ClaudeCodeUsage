@@ -147,6 +147,18 @@
           "default": "claude-haiku-4-5",
           "description": "Model used by the 'subscription' backend. A cheap model (Haiku) is recommended so advice barely touches your quota."
         },
+        "claudeCodeUsage.advice.optimizer.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the Usage Optimizer on the Content tab. Off by default. When on, you can paste a rough request and get back a tightened, paste-ready prompt plus a recommended effort / thinking / model. Only the text you paste is sent to the configured advice backend — never to Claude Code's terminal. A one-time consent prompt appears on first use."
+        },
+        "claudeCodeUsage.advice.promptWindowDays": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "How many days of your own prompts the AI advice feature samples when summarising your usage. Smaller = more recent habits; larger = a broader sample."
+        },
         "claudeCodeUsage.advice.reasoningEffort": {
           "type": "string",
           "enum": [

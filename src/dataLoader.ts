@@ -469,9 +469,13 @@ export class ClaudeDataLoader {
 
   static async loadUsageRecords(
     dataDirectory?: string,
-    options?: { analyzeContent?: boolean; log?: (line: string) => void }
+    options?: { analyzeContent?: boolean; windowDays?: number; log?: (line: string) => void }
   ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis | null }> {
     const analyzeContent = options?.analyzeContent !== false; // default true
+    // How many days back the content analysis (and its prompt sample) looks.
+    // Configurable via advice.promptWindowDays; defaults to 30.
+    const windowDays = Math.min(365, Math.max(1, Math.round(options?.windowDays ?? 30)));
+    const windowMs = windowDays * 24 * 60 * 60 * 1000;
     const log = options?.log;
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
@@ -498,9 +502,9 @@ export class ClaudeDataLoader {
       // wrote `summary`. A custom title always wins over an AI one.
       const aiTitleBySession: Record<string, string> = {};
       const customTitleBySession: Record<string, string> = {};
-      // Content analysis (last 30 days) is optional — skipped when the user
-      // disables it via claudeCodeUsage.enableContentAnalysis.
-      const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
+      // Content analysis (last `windowDays` days, default 30) is optional —
+      // skipped when the user disables it via claudeCodeUsage.enableContentAnalysis.
+      const analysis = analyzeContent ? newAnalysisAcc(Date.now() - windowMs) : null;
       // Per-refresh caches for sub-agent attribution lookups: agent type from
       // agent-*.meta.json (keyed by meta path) and workflow display name from
       // the session's workflows/scripts dir (keyed by workflow id).
@@ -778,9 +782,9 @@ export class ClaudeDataLoader {
       const contentAnalysis = analysis ? finalizeAnalysis(analysis) : null;
       if (contentAnalysis) {
         // Calibration anchors (Phase 8): exact billed token totals over the
-        // analysis window (same 30-day cutoff the analyzer used), so the
-        // text-length category estimates can be scaled to billing reality.
-        const calibrationCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        // analysis window (same cutoff the analyzer used), so the text-length
+        // category estimates can be scaled to billing reality.
+        const calibrationCutoff = Date.now() - windowMs;
         let realOutputTokens = 0;
         let realInputSideTokens = 0;
         for (const r of records) {

@@ -245,6 +245,8 @@ export interface ExtensionConfig {
   adviceBackend: 'subscription' | 'api';
   adviceApiFormat: 'anthropic' | 'openai';
   adviceSubscriptionModel: string;
+  // How many days of prompts/content the advice analysis samples (default 30).
+  advicePromptWindowDays: number;
   // Run the (CPU-heavy) content/prompt-token analysis. When false the Content
   // tab is hidden and the analysis is skipped during refresh.
   enableContentAnalysis: boolean;

@@ -40,6 +40,13 @@ export class UsageWebviewProvider {
   // guard banner; dismissal lasts for the lifetime of this window.
   private usageLimits: ClaudeApiUsageResponse | null = null;
   private quotaWarnDismissed: boolean = false;
+  // Set by extension.ts: runs the Usage Optimizer round-trip (model lives there
+  // with the config + OAuth client). Returns the optimised prompt + settings
+  // recommendation, or an error string.
+  public onOptimize?: (
+    draft: string,
+    options: { resolve: boolean; distil: boolean; aesthetic: boolean }
+  ) => Promise<{ prompt?: string; settings?: string; error?: string }>;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -90,6 +97,23 @@ export class UsageWebviewProvider {
           this.quotaWarnDismissed = true;
           this.updateWebview();
           break;
+        case 'optimizePrompt': {
+          if (!this.panel) {
+            break;
+          }
+          let result: { prompt?: string; settings?: string; error?: string };
+          if (this.onOptimize) {
+            result = await this.onOptimize(String(message.draft || ''), {
+              resolve: !!message.resolve,
+              distil: !!message.distil,
+              aesthetic: !!message.aesthetic,
+            });
+          } else {
+            result = { error: 'Optimizer is not available.' };
+          }
+          this.panel.webview.postMessage({ command: 'optimizeResult', ...result });
+          break;
+        }
         case 'getAttribution': {
           // Recompute the attribution panel for a new scope (Day / Week /
           // Month / one session / one project) and push the rendered HTML.
@@ -1771,16 +1795,94 @@ export class UsageWebviewProvider {
   }
 
   /**
+   * Prominent "AI advice" card at the top of the Content tab (Phase 9a). The
+   * advice button used to live in the content-analysis header; this gives it a
+   * proper home with a one-line explanation of what gets sent.
+   */
+  private renderAdviceCard(): string {
+    const t = I18n.t.popup;
+    return (
+      '<div class="daily-breakdown advice-card">' +
+      '<div class="section-header"><h3>✨ ' + t.adviceCardTitle + '</h3>' +
+      '<span class="section-header-right">' +
+      '<button class="btn-primary" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
+      '</span></div>' +
+      '<p class="table-hint">' + t.adviceCardDesc + '</p>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Usage Optimizer card (Phase 9c). Default OFF — until the user opts in via
+   * settings it shows only a description + an "enable" button. When enabled it
+   * exposes a textarea + toggles; the round-trip runs in extension.ts via the
+   * onOptimize hook (consent modal lives there). The result skeleton is baked
+   * in (hidden) so the webview JS only fills text — no labels passed to JS.
+   */
+  private renderOptimizerCard(): string {
+    const t = I18n.t.popup;
+    const enabled = vscode.workspace
+      .getConfiguration('claudeCodeUsage')
+      .get<boolean>('advice.optimizer.enabled', false);
+    const header =
+      '<div class="section-header"><h3>🛠 ' + t.optimizerTitle + '</h3>';
+    if (!enabled) {
+      return (
+        '<div class="daily-breakdown advice-card">' +
+        header +
+        '<span class="section-header-right">' +
+        '<button class="btn-secondary btn-small" onclick="openSettings()">' +
+        t.optimizerEnableBtn +
+        '</button></span></div>' +
+        '<p class="table-hint">' + t.optimizerDesc + '</p>' +
+        '</div>'
+      );
+    }
+    return (
+      '<div class="daily-breakdown advice-card">' +
+      header + '</div>' +
+      '<p class="table-hint">' + t.optimizerDesc + '</p>' +
+      '<textarea id="optDraft" class="opt-input" rows="4" placeholder="' +
+      this.escapeHtml(t.optimizerPlaceholder) + '"></textarea>' +
+      '<div class="opt-controls">' +
+      '<label><input type="checkbox" id="optResolve"> ' +
+      this.escapeHtml(t.optimizerResolve) + '</label>' +
+      '<label><input type="checkbox" id="optDistil"> ' +
+      this.escapeHtml(t.optimizerDistil) + '</label>' +
+      '<label><input type="checkbox" id="optAesthetic"> ' +
+      this.escapeHtml(t.optimizerAesthetic) + '</label>' +
+      '<button class="btn-primary" id="optRunBtn" data-run="' +
+      this.escapeHtml(t.optimizerRun) + '" data-running="' +
+      this.escapeHtml(t.optimizerRunning) + '" onclick="runOptimizer()">' +
+      t.optimizerRun + '</button>' +
+      '</div>' +
+      '<div id="optError" class="opt-error" style="display:none"></div>' +
+      '<div id="optResult" class="opt-result" style="display:none">' +
+      '<h4 class="opt-subhead">' + t.optimizerPromptHeading + '</h4>' +
+      '<div class="opt-output"><pre id="optPrompt"></pre>' +
+      '<button class="btn-secondary btn-small" data-copy="' +
+      this.escapeHtml(t.optimizerCopy) + '" data-copied="' +
+      this.escapeHtml(t.optimizerCopied) + '" onclick="copyOptPrompt(this)">' +
+      t.optimizerCopy + '</button></div>' +
+      '<h4 class="opt-subhead">' + t.optimizerSettingsHeading + '</h4>' +
+      '<pre id="optSettings" class="opt-settings"></pre>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
    * "Content" tab: an estimated breakdown of which conversation content consumes
    * tokens (your prompts vs. tool results vs. assistant output), to help spot
    * habits worth optimising. Token figures are estimated from text length.
    */
   private renderContentData(): string {
     const t = I18n.t.popup;
+    const topCards = this.renderAdviceCard() + this.renderOptimizerCard();
     const analysis = this.contentAnalysis;
     if (!analysis || analysis.categories.length === 0 || analysis.totalEstimatedTokens === 0) {
-      return this.renderAttributionSection() ||
-        '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+      return topCards + (this.renderAttributionSection() ||
+        '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>');
     }
 
     // Calibration (Phase 8): scale the text-length category estimates to the
@@ -1882,12 +1984,12 @@ export class UsageWebviewProvider {
     const noteLine = cal ? t.calibratedNote : t.estimatedNote;
 
     return (
+      topCards +
       this.renderAttributionSection() +
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
       '<span class="section-header-right">' +
       '<span class="cbar-total">' + totalLabel + ': ' + totalPrefix + I18n.formatNumber(total) + '</span>' +
-      '<button class="btn-secondary btn-small" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
       '</span></div>' +
       '<p class="table-hint">' + t.last30days + ' · ' + noteLine + '</p>' +
       '<div class="cbar-list">' + catRows + '</div>' +
@@ -2230,6 +2332,84 @@ export class UsageWebviewProvider {
 
       .btn-secondary:hover {
         background: var(--vscode-button-secondaryHoverBackground);
+      }
+
+      .btn-primary {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      /* AI advice + Usage Optimizer cards sit at the top of the Content tab. A
+         soft left accent + tint marks them as the actionable hero blocks. */
+      .advice-card {
+        border-left: 3px solid var(--vscode-focusBorder, var(--vscode-button-background));
+        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+      }
+      .opt-input {
+        width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 12px;
+        padding: 6px 8px;
+        margin: 4px 0 8px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+      }
+      .opt-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .opt-controls label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        cursor: pointer;
+      }
+      .opt-controls #optRunBtn {
+        margin-left: auto;
+      }
+      .opt-error {
+        color: var(--vscode-errorForeground);
+        font-size: 12px;
+        margin: 4px 0;
+      }
+      .opt-subhead {
+        margin: 10px 0 4px;
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .opt-output {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .opt-output pre,
+      .opt-settings {
+        flex: 1;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 12px;
+        padding: 8px;
+        margin: 0;
+        background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+        border-radius: 4px;
       }
 
       /* Refresh-Now button is only relevant when auto-refresh is OFF — hide
@@ -3242,6 +3422,64 @@ function getAdvice() {
   vscode.postMessage({ command: 'getAdvice' });
 }
 
+function runOptimizer() {
+  var ta = document.getElementById('optDraft');
+  var btn = document.getElementById('optRunBtn');
+  if (!ta || !ta.value.trim()) { return; }
+  var err = document.getElementById('optError');
+  var res = document.getElementById('optResult');
+  if (err) { err.style.display = 'none'; }
+  if (res) { res.style.display = 'none'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = btn.getAttribute('data-running') || '…';
+  }
+  vscode.postMessage({
+    command: 'optimizePrompt',
+    draft: ta.value,
+    resolve: !!(document.getElementById('optResolve') || {}).checked,
+    distil: !!(document.getElementById('optDistil') || {}).checked,
+    aesthetic: !!(document.getElementById('optAesthetic') || {}).checked,
+  });
+}
+
+function showOptimizeResult(msg) {
+  var btn = document.getElementById('optRunBtn');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = btn.getAttribute('data-run') || 'Optimize';
+  }
+  var err = document.getElementById('optError');
+  var res = document.getElementById('optResult');
+  if (msg.error) {
+    if (err) { err.textContent = msg.error; err.style.display = ''; }
+    return;
+  }
+  var promptEl = document.getElementById('optPrompt');
+  var settingsEl = document.getElementById('optSettings');
+  if (promptEl) { promptEl.textContent = msg.prompt || ''; }
+  if (settingsEl) { settingsEl.textContent = msg.settings || ''; }
+  if (res) { res.style.display = ''; }
+}
+
+function copyOptPrompt(btn) {
+  var promptEl = document.getElementById('optPrompt');
+  if (!promptEl) { return; }
+  var text = promptEl.textContent || '';
+  var done = function() {
+    if (!btn) { return; }
+    var label = btn.getAttribute('data-copy') || 'Copy';
+    btn.textContent = btn.getAttribute('data-copied') || 'Copied';
+    setTimeout(function() { btn.textContent = label; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, done);
+  } else {
+    promptEl.focus();
+    done();
+  }
+}
+
 function dismissQuotaWarn() {
   vscode.postMessage({ command: 'dismissQuotaWarn' });
 }
@@ -3632,6 +3870,10 @@ window.addEventListener('message', function(event) {
     if (attrPanel && typeof message.html === 'string') {
       attrPanel.innerHTML = message.html;
     }
+  }
+
+  if (message.command === 'optimizeResult') {
+    showOptimizeResult(message);
   }
 });
 
