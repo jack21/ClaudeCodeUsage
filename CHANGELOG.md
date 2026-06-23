@@ -74,6 +74,14 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Clearer run badges** — "workflow" (a dynamic-workflow run dir) vs
   "subagents (ad-hoc)" (a plain Task-tool fan-out), with a hint that the effort
   level itself is not recorded in the logs.
+- **Calibrated content analysis** — the Content tab can now anchor its
+  per-category token figures to the *exact* billed totals (`analysis.calibrate`,
+  default on): relative shares still come from text length, but the absolute
+  numbers are scaled so assistant categories sum to real output tokens and
+  user/tool-result categories to real input + cache-write tokens. This corrects
+  a large undercount the text-length estimate had on the input side (cache
+  creation is invisible to character counts). Sessions' Thinking column gains a
+  calibrated "real thinking tokens" figure in its tooltip.
 
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the

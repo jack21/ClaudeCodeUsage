@@ -139,6 +139,11 @@
           "default": true,
           "description": "Run the content/token analysis on conversation logs and show the Content tab. Disable to skip the CPU-heavy text scan during refresh."
         },
+        "claudeCodeUsage.analysis.calibrate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Calibrate the Content tab's per-category token figures: keep the text-length estimate for relative shares, then scale them to the exact billed token totals (assistant categories to real output tokens; user/tool-result categories to real input + cache-write tokens). Improves absolute accuracy without changing within-side shares. Disable to show the raw text-length estimates."
+        },
         "claudeCodeUsage.projectGroupingMode": {
           "type": "string",
           "enum": [

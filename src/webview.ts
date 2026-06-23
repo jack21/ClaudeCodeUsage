@@ -1032,8 +1032,15 @@ export class UsageWebviewProvider {
       const displayName = fullName.length > 40 ? fullName.slice(0, 40) + '…' : fullName;
       const ts = thinkingMap ? thinkingMap[s.sessionId] : undefined;
       const thinkingShare = ts && ts.assistantTotal > 0 ? ts.thinking / ts.assistantTotal : null;
-      // Effort hint for thinking-heavy sessions — tooltip only, no popups.
-      const thinkingTitle = thinkingShare !== null && thinkingShare > 0.6 ? t.effortHint : '';
+      // Calibrated absolute (Phase 8): thinking share × the session's EXACT
+      // output tokens = a billing-anchored "real thinking tokens" figure.
+      const realThinkingTokens =
+        thinkingShare !== null ? Math.round(thinkingShare * d.totalOutputTokens) : null;
+      // Tooltip: calibrated token figure + (for heavy sessions) the effort hint.
+      const thinkingTitle = [
+        realThinkingTokens !== null ? '~' + I18n.formatNumber(realThinkingTokens) + ' ' + t.thinkingTokensCalibrated : '',
+        thinkingShare !== null && thinkingShare > 0.6 ? t.effortHint : '',
+      ].filter((x) => x).join(' · ');
       rows +=
         '<tr class="sort-row"' +
         ' data-sort-time="' + s.startTime.getTime() + '"' +
@@ -1785,7 +1792,42 @@ export class UsageWebviewProvider {
         '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
-    const total = analysis.totalEstimatedTokens;
+    // Calibration (Phase 8): scale the text-length category estimates to the
+    // EXACT billed totals — assistant-side categories to real output tokens,
+    // input-side to real (input + cache-creation). Within-side relative shares
+    // stay as estimated; the cross-side ratio (e.g. tool-results vs assistant
+    // output) is corrected to billing reality. Toggle: analysis.calibrate.
+    const calibrateOn = vscode.workspace
+      .getConfiguration('claudeCodeUsage')
+      .get<boolean>('analysis.calibrate', true);
+    const cal = calibrateOn && analysis.calibration ? analysis.calibration : null;
+    const ASSISTANT_CATS = new Set(['assistantText', 'assistantThinking', 'toolCalls']);
+    const INPUT_CATS = new Set(['userPrompts', 'toolResults']);
+    let estAssistant = 0;
+    let estInput = 0;
+    analysis.categories.forEach((c) => {
+      if (ASSISTANT_CATS.has(c.key)) {
+        estAssistant += c.estimatedTokens;
+      } else if (INPUT_CATS.has(c.key)) {
+        estInput += c.estimatedTokens;
+      }
+    });
+    const factorFor = (key: string): number => {
+      if (!cal) {
+        return 1;
+      }
+      if (ASSISTANT_CATS.has(key)) {
+        return estAssistant > 0 ? cal.realOutputTokens / estAssistant : 1;
+      }
+      if (INPUT_CATS.has(key)) {
+        return estInput > 0 ? cal.realInputSideTokens / estInput : 1;
+      }
+      return 1;
+    };
+    const tokensFor = (key: string, estTokens: number): number => Math.round(estTokens * factorFor(key));
+    const total = cal
+      ? analysis.categories.reduce((sum, c) => sum + tokensFor(c.key, c.estimatedTokens), 0)
+      : analysis.totalEstimatedTokens;
 
     const catLabel = (key: string): string => {
       switch (key) {
@@ -1824,31 +1866,39 @@ export class UsageWebviewProvider {
       );
     };
 
-    const maxCat = Math.max(...analysis.categories.map((c) => c.estimatedTokens), 1);
+    const catTokens = analysis.categories.map((c) => tokensFor(c.key, c.estimatedTokens));
+    const maxCat = Math.max(...catTokens, 1);
     let catRows = '';
-    analysis.categories.forEach((c) => {
-      catRows += barRow(catLabel(c.key), c.estimatedTokens, maxCat, catColor[c.key] || 'cf-1');
+    analysis.categories.forEach((c, i) => {
+      catRows += barRow(catLabel(c.key), catTokens[i], maxCat, catColor[c.key] || 'cf-1');
     });
 
     let toolSection = '';
     if (analysis.toolResultBreakdown.length > 0) {
-      const maxTool = Math.max(...analysis.toolResultBreakdown.map((s) => s.estimatedTokens), 1);
+      // Tool results are input-side; scale by the same factor as toolResults.
+      const toolTokens = analysis.toolResultBreakdown.map((s) => tokensFor('toolResults', s.estimatedTokens));
+      const maxTool = Math.max(...toolTokens, 1);
       let toolRows = '';
-      analysis.toolResultBreakdown.forEach((s) => {
-        toolRows += barRow(s.key, s.estimatedTokens, maxTool, 'cf-4');
+      analysis.toolResultBreakdown.forEach((s, i) => {
+        toolRows += barRow(s.key, toolTokens[i], maxTool, 'cf-4');
       });
       toolSection = '<h4 class="cbar-subhead">' + t.byTool + '</h4><div class="cbar-list">' + toolRows + '</div>';
     }
+
+    // Calibrated figures are exact-anchored; estimates are text-length only.
+    const totalLabel = cal ? t.calibratedTokens : t.estTokens;
+    const totalPrefix = cal ? '' : '~';
+    const noteLine = cal ? t.calibratedNote : t.estimatedNote;
 
     return (
       this.renderAttributionSection() +
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
       '<span class="section-header-right">' +
-      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span>' +
+      '<span class="cbar-total">' + totalLabel + ': ' + totalPrefix + I18n.formatNumber(total) + '</span>' +
       '<button class="btn-secondary btn-small" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
       '</span></div>' +
-      '<p class="table-hint">' + t.last30days + ' · ' + t.estimatedNote + '</p>' +
+      '<p class="table-hint">' + t.last30days + ' · ' + noteLine + '</p>' +
       '<div class="cbar-list">' + catRows + '</div>' +
       toolSection +
       '</div>'

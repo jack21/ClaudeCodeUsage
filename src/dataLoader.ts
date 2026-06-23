@@ -775,7 +775,31 @@ export class ClaudeDataLoader {
         );
         log(`loader: models seen: ${modelsSummary}`);
       }
-      return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
+      const contentAnalysis = analysis ? finalizeAnalysis(analysis) : null;
+      if (contentAnalysis) {
+        // Calibration anchors (Phase 8): exact billed token totals over the
+        // analysis window (same 30-day cutoff the analyzer used), so the
+        // text-length category estimates can be scaled to billing reality.
+        const calibrationCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        let realOutputTokens = 0;
+        let realInputSideTokens = 0;
+        for (const r of records) {
+          if (r._isUserPrompt) {
+            continue;
+          }
+          const t = Date.parse(r.timestamp);
+          if (isNaN(t) || t < calibrationCutoff) {
+            continue;
+          }
+          const u = r.message.usage;
+          realOutputTokens += u.output_tokens || 0;
+          realInputSideTokens += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+        }
+        if (realOutputTokens > 0 || realInputSideTokens > 0) {
+          contentAnalysis.calibration = { realOutputTokens, realInputSideTokens };
+        }
+      }
+      return { records, contentAnalysis };
     } catch (error) {
       console.error('Error loading usage records:', error);
       return { records: [], contentAnalysis: null };

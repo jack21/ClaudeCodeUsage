@@ -57,6 +57,9 @@ export interface Translations {
     contextCostHint: string;
     contentAnalysis: string;
     estimatedNote: string;
+    calibratedNote: string;
+    calibratedTokens: string;
+    thinkingTokensCalibrated: string;
     byTool: string;
     catUserPrompts: string;
     catAssistantText: string;
@@ -200,6 +203,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: 'Longer sessions cost more even when cached.\n/compact mid-task, /clear when switching tasks.',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
+      calibratedNote: 'Calibrated: per-category shares from text length, scaled to the exact billed token totals (output side / input + cache-write side). Toggle with analysis.calibrate.',
+      calibratedTokens: 'Calibrated tokens',
+      thinkingTokensCalibrated: 'real thinking tokens (calibrated)',
       byTool: 'Tool Results by Tool',
       catUserPrompts: 'Your prompts',
       catAssistantText: 'Assistant responses',
@@ -360,6 +366,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: "Längere Sitzungen kosten mehr, auch im Cache.\n/compact während der Aufgabe, /clear beim Themenwechsel.",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
+      calibratedNote: "Kalibriert: Anteile je Kategorie aus der Textlänge, skaliert auf die exakten abgerechneten Token-Summen (Ausgabeseite / Eingabe + Cache-Schreiben). Umschalten mit analysis.calibrate.",
+      calibratedTokens: "Kalibrierte Tokens",
+      thinkingTokensCalibrated: "echte Denk-Tokens (kalibriert)",
       byTool: "Tool-Ergebnisse nach Tool",
       catUserPrompts: "Deine Eingaben",
       catAssistantText: "Assistent-Antworten",
@@ -523,6 +532,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: '工作階段長，成本高。\n任務中用 /compact，切換任務時用 /clear。',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
+      calibratedNote: '已校準：各類別佔比由文字長度估算,再縮放到精確的帳單 token 總量（輸出側 / 輸入＋快取寫入側）。用 analysis.calibrate 切換。',
+      calibratedTokens: '已校準 token',
+      thinkingTokensCalibrated: '真實思考 token（已校準）',
       byTool: '各工具結果用量',
       catUserPrompts: '你的提問',
       catAssistantText: '助手回覆',
@@ -679,6 +691,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: '会话长，成本高。\n任务中用 /compact，切换任务时用 /clear。',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
+      calibratedNote: '已校准：各类别占比由文本长度估算,再缩放到精确的账单 token 总量（输出侧 / 输入＋缓存写入侧）。用 analysis.calibrate 切换。',
+      calibratedTokens: '已校准 token',
+      thinkingTokensCalibrated: '真实思考 token（已校准）',
       byTool: '各工具结果用量',
       catUserPrompts: '你的提问',
       catAssistantText: '助手回复',
@@ -835,6 +850,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: 'セッションが長いほど、キャッシュがあってもコストは増えます。\n作業中は /compact、タスク切り替え時は /clear を。',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
+      calibratedNote: 'キャリブレーション済み：カテゴリ別の割合はテキスト長から推定し、正確な請求トークン総量（出力側 / 入力＋キャッシュ書込側）にスケールしています。analysis.calibrate で切替。',
+      calibratedTokens: 'キャリブレーション済みトークン',
+      thinkingTokensCalibrated: '実際の思考トークン（キャリブレーション済み）',
       byTool: 'ツール別の結果使用量',
       catUserPrompts: 'あなたの入力',
       catAssistantText: 'アシスタント応答',
@@ -996,6 +1014,9 @@ const translations: Record<SupportedLanguage, Translations> = {
       contextCostHint: '세션이 길수록 캐시가 있어도 비용이 늘어납니다.\n작업 중에는 /compact, 작업 전환 시 /clear.',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',
+      calibratedNote: '보정됨: 카테고리별 비율은 텍스트 길이로 추정하고, 정확한 청구 토큰 총량(출력 측 / 입력＋캐시 쓰기 측)에 맞춰 스케일했습니다. analysis.calibrate로 전환.',
+      calibratedTokens: '보정된 토큰',
+      thinkingTokensCalibrated: '실제 사고 토큰(보정됨)',
       byTool: '도구별 결과 사용량',
       catUserPrompts: '내 입력',
       catAssistantText: '어시스턴트 응답',

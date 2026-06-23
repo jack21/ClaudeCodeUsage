@@ -165,6 +165,16 @@ export interface ContentAnalysis {
   // Raw skill invocations (last 30 days); scoping/grouping happens in
   // getUsageAttribution.
   skillUses: SkillUse[];
+  // Calibration anchors (Phase 8): the EXACT billed token totals over the same
+  // analysis window, from each record's message.usage. The category estimates
+  // (text-length-derived) are scaled to these so absolute figures match
+  // billing while within-side shares stay as estimated. Output side anchors the
+  // assistant categories; input side (input + cache-creation) anchors the
+  // user/tool-result categories. Undefined if calibration couldn't run.
+  calibration?: {
+    realOutputTokens: number;
+    realInputSideTokens: number;
+  };
 }
 
 // Scope of the usage-attribution panel. day = today, week = last 7 days,
