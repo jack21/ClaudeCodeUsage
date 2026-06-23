@@ -1,28 +1,51 @@
 // Optional "usage advice" feature: sends a usage summary (and, optionally, a
-// sample of the developer's own prompts) to an OpenAI-compatible chat endpoint
-// (e.g. DeepSeek) and returns advice on how to use Claude Code more effectively.
+// sample of the developer's own prompts) to a model and returns advice on how
+// to use Claude Code more effectively.
+//
+// Transport (v2.1 Phase 9): three backends behind one entry point —
+//   1. 'subscription' — reuse Claude Code's own OAuth session (the same token
+//      the quota indicator reads) to call Anthropic's Messages API with a cheap
+//      model (haiku) — zero API key, works out of the box. Verified 2026-06-13:
+//      Bearer <oauth> + `anthropic-beta: oauth-2025-04-20` → 200.
+//   2. 'api' + apiFormat 'anthropic' (the default for a configured key) —
+//      x-api-key against /v1/messages.
+//   3. 'api' + apiFormat 'openai' — the OpenAI chat-completions shape
+//      (DeepSeek etc.), kept for compatibility.
+// Anthropic is the default shape across the extension; OpenAI is opt-in.
 
 import { HttpResponse, requestViaCurl, requestViaFetch } from './httpClient';
 
+export type AdviceBackend = 'subscription' | 'api';
+export type AdviceFormat = 'anthropic' | 'openai';
+
 export interface AdviceOptions {
+  // Transport selection. Defaults (when omitted) keep the pre-2.1 behaviour:
+  // backend 'api' + format 'openai'.
+  backend?: AdviceBackend;
+  apiFormat?: AdviceFormat;
+  // backend 'api':
   apiKey: string;
   apiUrl: string;
   model: string;
+  // backend 'subscription': the cheap model to spend a little quota on, plus a
+  // provider for a valid OAuth access token (ClaudeApiClient.getAccessToken).
+  subscriptionModel?: string;
+  getSubscriptionToken?: () => Promise<string | null>;
+  // The usage digest sent as the user turn (built by adviceSummary.ts).
   summary: string;
   // Localised name of the user's UI language, e.g. "简体中文 (Simplified Chinese)".
-  // Used to force the model to reply in the user's language regardless of the
-  // language mix found inside their prompts.
   language: string;
-  // '', 'high' or 'max' — passed as reasoning_effort for models that support it.
+  // '', 'high' or 'max' — passed as reasoning_effort for OpenAI-format models.
   reasoningEffort?: string;
-  // Free-text background about the user/project; when set, the reply ends
-  // with a "Personalised for this project" section calibrated against it.
+  // Free-text background about the user/project; when set, the reply ends with
+  // a "Personalised for this project" section calibrated against it.
   userContext?: string;
   // Abort the request after this long (reasoning models can take minutes).
   timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+const ADVICE_MAX_TOKENS = 16_000;
 
 function buildSystemPrompt(language: string, userContext?: string): string {
   let prompt =
@@ -48,13 +71,12 @@ function buildSystemPrompt(language: string, userContext?: string): string {
   return prompt;
 }
 
-/** Normalise an OpenAI-compatible endpoint URL, fixing common mistakes. */
-function normalizeUrl(url: string): string {
+/** Normalise an OpenAI-compatible chat endpoint URL. */
+function normalizeOpenAiUrl(url: string): string {
   let u = (url || '').trim().replace(/\/+$/, '');
   if (u === '') {
     return 'https://api.deepseek.com/chat/completions';
   }
-  // DeepSeek's current API endpoint does not use a /v1 prefix.
   if (/api\.deepseek\.com\/v1(\/chat\/completions)?$/.test(u)) {
     u = u.replace('/v1', '');
   }
@@ -64,60 +86,135 @@ function normalizeUrl(url: string): string {
   return u;
 }
 
+/** Normalise an Anthropic Messages endpoint URL. */
+function normalizeAnthropicUrl(url: string): string {
+  const u = (url || '').trim().replace(/\/+$/, '');
+  if (u === '' || /api\.anthropic\.com$/.test(u) || /chat\/completions$/.test(u)) {
+    return 'https://api.anthropic.com/v1/messages';
+  }
+  return u.endsWith('/v1/messages') ? u : `${u}/v1/messages`;
+}
+
+/** Send a request with the Phase-0 timeout / retry / curl-fallback policy. */
+async function send(
+  url: string,
+  headers: Record<string, string>,
+  body: string,
+  timeoutMs: number
+): Promise<HttpResponse> {
+  const reqOpts = { method: 'POST', headers, body };
+  const curl = (): Promise<HttpResponse> =>
+    requestViaCurl(url, { ...reqOpts, timeoutSec: Math.ceil(timeoutMs / 1000) });
+  try {
+    const r = await requestViaFetch(url, { ...reqOpts, timeoutMs });
+    // Anthropic's edge fingerprints Node's TLS ClientHello and answers 403
+    // "Request not allowed"; curl gets through (same gate the quota client hits).
+    if (r.status === 403 && r.body.includes('Request not allowed')) {
+      return curl();
+    }
+    return r;
+  } catch {
+    try {
+      return await requestViaFetch(url, { ...reqOpts, timeoutMs });
+    } catch {
+      return curl();
+    }
+  }
+}
+
 /**
- * Request usage advice from an OpenAI-compatible chat API.
- * @returns the advice text (markdown)
+ * Send one system+user turn to whichever backend is configured and return the
+ * assistant text. Shared by the advice feature and the Usage Optimizer.
  */
-export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
+export async function callModel(
+  systemPrompt: string,
+  userContent: string,
+  options: AdviceOptions
+): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const backend: AdviceBackend = options.backend ?? 'api';
+  const format: AdviceFormat = options.apiFormat ?? 'openai';
+
+  // --- Anthropic Messages shape (subscription, or api+anthropic) ---
+  if (backend === 'subscription' || format === 'anthropic') {
+    let headers: Record<string, string>;
+    let model: string;
+    let url = normalizeAnthropicUrl(options.apiUrl);
+    if (backend === 'subscription') {
+      const token = options.getSubscriptionToken ? await options.getSubscriptionToken() : null;
+      if (!token) {
+        throw new Error(
+          'No Claude subscription session found — sign in to Claude Code, or configure an API key.'
+        );
+      }
+      url = 'https://api.anthropic.com/v1/messages';
+      model = options.subscriptionModel || 'claude-haiku-4-5';
+      headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'oauth-2025-04-20',
+      };
+    } else {
+      model = options.model;
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': options.apiKey,
+        'anthropic-version': '2023-06-01',
+      };
+    }
+    const body = JSON.stringify({
+      model,
+      max_tokens: ADVICE_MAX_TOKENS,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    });
+    const response = await send(url, headers, body, timeoutMs);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`API ${response.status}: ${response.body.slice(0, 300)}`);
+    }
+    let data: { content?: { type?: string; text?: string }[] };
+    try {
+      data = JSON.parse(response.body);
+    } catch {
+      throw new Error(`The API returned a non-JSON response: ${response.body.slice(0, 200)}`);
+    }
+    const text = (data.content || [])
+      .filter((b) => b.type === 'text' && typeof b.text === 'string')
+      .map((b) => b.text as string)
+      .join('');
+    if (!text.trim()) {
+      throw new Error('The model returned an empty response.');
+    }
+    return text;
+  }
+
+  // --- OpenAI chat-completions shape (api + openai) ---
   const body: Record<string, unknown> = {
     model: options.model,
     stream: false,
     messages: [
-      { role: 'system', content: buildSystemPrompt(options.language || 'English', options.userContext) },
-      { role: 'user', content: options.summary },
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent },
     ],
   };
-  // Reasoning effort (supported by e.g. DeepSeek V4). Ignored by models that
-  // do not recognise the fields.
   if (options.reasoningEffort && options.reasoningEffort.trim() !== '') {
     body.reasoning_effort = options.reasoningEffort.trim();
     body.thinking = { type: 'enabled' };
   }
-
-  const url = normalizeUrl(options.apiUrl);
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const reqOpts = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${options.apiKey}`,
-    },
-    body: JSON.stringify(body),
+  const url = normalizeOpenAiUrl(options.apiUrl);
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${options.apiKey}`,
   };
-
-  // Transport failures ("terminated", connection resets, timeouts) are
-  // intermittent on some networks: retry fetch once, then fall back to the
-  // system curl — the same transport of last resort the quota client uses.
-  // HTTP error statuses are NOT retried (a 401 won't get better).
-  let response: HttpResponse;
-  try {
-    response = await requestViaFetch(url, { ...reqOpts, timeoutMs });
-  } catch {
-    try {
-      response = await requestViaFetch(url, { ...reqOpts, timeoutMs });
-    } catch {
-      response = await requestViaCurl(url, { ...reqOpts, timeoutSec: Math.ceil(timeoutMs / 1000) });
-    }
-  }
-
+  const response = await send(url, headers, JSON.stringify(body), timeoutMs);
   if (response.status < 200 || response.status >= 300) {
     const hint =
       response.status === 404
-        ? ' (check adviceApiUrl — for DeepSeek it is https://api.deepseek.com/chat/completions)'
+        ? ' (check advice.apiUrl — for DeepSeek it is https://api.deepseek.com/chat/completions)'
         : '';
     throw new Error(`API ${response.status}${hint}: ${response.body.slice(0, 300)}`);
   }
-
   let data: { choices?: { message?: { content?: string } }[] };
   try {
     data = JSON.parse(response.body);
@@ -129,4 +226,12 @@ export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
     throw new Error('The model returned an empty response.');
   }
   return content;
+}
+
+/**
+ * Request usage advice. Returns the advice text (markdown).
+ */
+export async function getUsageAdvice(options: AdviceOptions): Promise<string> {
+  const systemPrompt = buildSystemPrompt(options.language || 'English', options.userContext);
+  return callModel(systemPrompt, options.summary, options);
 }

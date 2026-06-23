@@ -239,6 +239,12 @@ export interface ExtensionConfig {
   // Free-text background about the user/project; when set, the advice ends
   // with a "Personalised for this project" section calibrated against it.
   adviceUserContext: string;
+  // Advice/optimizer transport (v2.1 Phase 9). backend: 'subscription' reuses
+  // the Claude Code OAuth session (no key, prefers haiku); 'api' uses a key.
+  // apiFormat: 'anthropic' (default) or 'openai'-compatible.
+  adviceBackend: 'subscription' | 'api';
+  adviceApiFormat: 'anthropic' | 'openai';
+  adviceSubscriptionModel: string;
   // Run the (CPU-heavy) content/prompt-token analysis. When false the Content
   // tab is hidden and the analysis is skipped during refresh.
   enableContentAnalysis: boolean;

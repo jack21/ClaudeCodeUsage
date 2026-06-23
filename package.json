@@ -124,6 +124,29 @@
           "default": "",
           "description": "Optional background about yourself or the project (e.g. \"non-programmer building a VS Code extension; expect heavy exploratory tool use\"). When set, AI advice ends with a 'Personalised for this project' section calibrated against it."
         },
+        "claudeCodeUsage.advice.backend": {
+          "type": "string",
+          "enum": [
+            "subscription",
+            "api"
+          ],
+          "default": "subscription",
+          "description": "Where AI advice (and the Usage Optimizer) send their request. 'subscription' reuses your existing Claude Code sign-in (no API key) and a cheap model — it uses a little of your Claude quota. 'api' uses the advice.apiKey / apiUrl / model below."
+        },
+        "claudeCodeUsage.advice.apiFormat": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai"
+          ],
+          "default": "anthropic",
+          "description": "Request format for the 'api' backend: 'anthropic' (the /v1/messages shape, the default) or 'openai' (the chat-completions shape, e.g. DeepSeek and other OpenAI-compatible proxies)."
+        },
+        "claudeCodeUsage.advice.subscriptionModel": {
+          "type": "string",
+          "default": "claude-haiku-4-5",
+          "description": "Model used by the 'subscription' backend. A cheap model (Haiku) is recommended so advice barely touches your quota."
+        },
         "claudeCodeUsage.advice.reasoningEffort": {
           "type": "string",
           "enum": [

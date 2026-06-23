@@ -171,6 +171,17 @@ export class ClaudeApiClient {
     return credentials;
   }
 
+  /**
+   * A valid OAuth access token (refreshed if needed), or null when not signed
+   * in. Lets the advice/optimizer features reuse the user's Claude subscription
+   * — `Authorization: Bearer <token>` + `anthropic-beta: oauth-2025-04-20` —
+   * to call the Messages API with no separate API key (verified 2026-06-13).
+   */
+  async getAccessToken(): Promise<string | null> {
+    const credentials = await this.getValidCredentials();
+    return credentials?.claudeAiOauth?.accessToken ?? null;
+  }
+
   /** Run an HTTP request via fetch, falling back to curl on TLS-fingerprint
    * rejection ("403 Request not allowed"). */
   private async request(

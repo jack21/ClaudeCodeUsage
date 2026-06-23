@@ -45,6 +45,14 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   Full panel in the Content tab; a compact strip (≥5% lines only) on the
   Today tab.
 
+- **AI advice works with no API key** — a new `advice.backend` (default
+  `subscription`) reuses your existing Claude Code sign-in (the same OAuth
+  session the quota indicator reads) to call the Messages API with a cheap
+  model (`advice.subscriptionModel`, default Haiku), so the feature works out
+  of the box and barely touches your quota. The `api` backend speaks the
+  **Anthropic** `/v1/messages` shape by default (`advice.apiFormat`), with the
+  OpenAI chat-completions shape kept for DeepSeek and other compatible proxies.
+  All transports share the timeout / retry / curl-fallback hardening.
 - **AI advice fed with the new signals** — the advice prompt now includes
   the multi-agent runs (per-run cost, agent fan-out, cache hit rate per
   provider), the estimated thinking share and the usage-attribution panel

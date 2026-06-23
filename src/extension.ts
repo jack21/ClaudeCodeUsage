@@ -115,7 +115,11 @@ export class ClaudeCodeUsageExtension {
 
   private async getAdvice(): Promise<void> {
     const config = this.getConfiguration();
-    if (!config.adviceApiKey || config.adviceApiKey.trim() === '') {
+    // The subscription backend needs no API key (it reuses the Claude Code
+    // OAuth session); only the 'api' backend requires a configured key.
+    const needsKey =
+      config.adviceBackend === 'api' && (!config.adviceApiKey || config.adviceApiKey.trim() === '');
+    if (needsKey) {
       const picked = await vscode.window.showWarningMessage(
         I18n.t.popup.adviceNeedsKey,
         I18n.t.popup.settings,
@@ -179,6 +183,10 @@ export class ClaudeCodeUsageExtension {
       async () => {
         try {
           const advice = await getUsageAdvice({
+            backend: config.adviceBackend,
+            apiFormat: config.adviceApiFormat,
+            subscriptionModel: config.adviceSubscriptionModel,
+            getSubscriptionToken: () => this.apiClient.getAccessToken(),
             apiKey: config.adviceApiKey,
             apiUrl: config.adviceApiUrl,
             model: config.adviceModel,
@@ -255,6 +263,9 @@ export class ClaudeCodeUsageExtension {
       adviceReasoningEffort:
         config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
       adviceUserContext: config.get<string>('advice.userContext', ''),
+      adviceBackend: config.get<'subscription' | 'api'>('advice.backend', 'subscription'),
+      adviceApiFormat: config.get<'anthropic' | 'openai'>('advice.apiFormat', 'anthropic'),
+      adviceSubscriptionModel: config.get<string>('advice.subscriptionModel', 'claude-haiku-4-5'),
       enableContentAnalysis: config.get('enableContentAnalysis', true),
       projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
       fileWatching: config.get('fileWatching', true),
