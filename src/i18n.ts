@@ -1385,6 +1385,208 @@ const translations: Record<SupportedLanguage, Translations> = {
       decimalPlaces: '소수점 자릿수',
     },
   },
+  'pt-BR': {
+    statusBar: {
+      loading: 'Carregando...',
+      noData: 'Sem dados do Claude Code',
+      notRunning: 'Claude Code não está em execução',
+      error: 'Erro',
+      currentSession: 'Sessão',
+    },
+    popup: {
+      title: 'Uso do Claude Code',
+      currentSession: 'Sessão atual',
+      today: 'Hoje',
+      thisMonth: 'Este mês',
+      allTime: 'Todo o período',
+      workspaceToday: 'Este projeto',
+      refresh: 'Atualizar',
+      autoRefresh: 'Atualização automática',
+      settings: 'Configurações',
+      settingsTab: 'Configurações',
+      settingsIntro:
+        'As configurações agora ficam aqui. Apenas idioma, diretório de dados e chave de API permanecem nas Configurações do VS Code (para sincronizar). As alterações são aplicadas imediatamente.',
+      settingsResetAll: 'Restaurar tudo para os padrões',
+      settingsGroupGeneral: 'Geral',
+      settingsGroupStatusBar: 'Barra de status',
+      settingsGroupData: 'Dados e atualização',
+      settingsGroupAdvice: 'Conselho de IA e Optimizer',
+      totalTokens: 'Total de tokens',
+      inputTokens: 'Tokens de entrada',
+      outputTokens: 'Tokens de saída',
+      cacheCreation: 'Cache de entrada (Miss)',
+      cacheRead: 'Cache de entrada (Hit)',
+      cost: 'Custo',
+      messages: 'Mensagens',
+      modelBreakdown: 'Uso por modelo',
+      dailyBreakdown: 'Uso diário',
+      monthlyBreakdown: 'Uso mensal',
+      hourlyBreakdown: 'Uso por hora',
+      sessions: 'Sessões',
+      sessionBreakdown: 'Uso por sessão',
+      project: 'Projeto',
+      startTime: 'Início',
+      duration: 'Duração',
+      hour: 'Hora',
+      projects: 'Projetos',
+      projectBreakdown: 'Uso por projeto',
+      fullPath: 'Caminho completo',
+      peakContext: 'Pico de contexto',
+      tokenComposition: 'Composição de tokens',
+      lastActive: 'Última atividade',
+      pricing: 'Preços',
+      refreshPricing: 'Atualizar preço dos tokens',
+      pricingUpdated: 'Preços atualizados',
+      pricingUpdateFailed: 'Falha ao atualizar preços',
+      sortHint: 'Clique no cabeçalho da coluna para ordenar',
+      quota: 'Cota',
+      quotaWindow: 'Janela',
+      quotaLimit: 'Limite',
+      quota5h: '5 horas',
+      quotaWeekly: 'Semanal',
+      quotaHint: 'Dados reais da Anthropic /usage.',
+      contextWindow: 'Janela de contexto',
+      contextHint: 'Nova tarefa → /clear',
+      contextHintCompact: 'Mesma tarefa → /compact',
+      contextLeft: 'Contexto restante',
+      contentAnalysis: 'Conteúdo',
+      estimatedNote: 'Estimado pelo tamanho do texto — as proporções relativas são confiáveis; os valores absolutos são aproximados.',
+      calibratedNote: 'Calibrado: as proporções por categoria vêm do tamanho do texto, ajustadas aos totais exatos de tokens cobrados (lado da saída / lado da entrada + escrita de cache). Alterne com analysis.calibrate.',
+      calibratedTokens: 'Tokens calibrados',
+      thinkingTokensCalibrated: 'tokens reais de raciocínio (calibrado)',
+      byTool: 'Resultados de ferramentas por ferramenta',
+      catUserPrompts: 'Seus prompts',
+      catAssistantText: 'Respostas do assistente',
+      catAssistantThinking: 'Raciocínio do assistente',
+      catToolCalls: 'Chamadas de ferramenta',
+      catToolResults: 'Resultados de ferramenta',
+      estTokens: 'Tokens estimados',
+      share: 'Proporção',
+      resets: 'Reinicia em',
+      cacheHitRate: 'Taxa de acerto do cache',
+      last30days: 'Últimos 30 dias',
+      branches: 'Branches',
+      branchBreakdown: 'Uso por branch',
+      branch: 'Branch',
+      workflows: 'Workflows',
+      workflowBreakdown: 'Uso por workflow',
+      workflowName: 'Workflow',
+      model: 'Modelo',
+      agents: 'Agentes',
+      agent: 'Agente',
+      workflowsThisMonth: 'Workflows neste mês',
+      workflowCostShare: 'do custo deste mês',
+      workflowCacheHint:
+        'Taxa de acerto do cache = leituras de cache ÷ todos os tokens do lado da entrada. Workflows nativos do Claude reaproveitam o cache de prompt entre agentes (taxa alta); um provedor sem cache entre agentes mostra ~0% — o mesmo workflow custa desproporcionalmente mais nele.',
+      adhocBadge: 'subagentes (ad-hoc)',
+      workflowModeBadge: 'workflow',
+      workflowModeHint:
+        '"workflow" = um diretório de execução de workflow dinâmico em disco; "subagentes (ad-hoc)" = um disparo simples da ferramenta Task. O nível de esforço (ultracode/xhigh) não é registrado nos logs, então nenhum dos selos afirma um.',
+      workflowNativeHint:
+        'O ultracode nativo do Claude muitas vezes mantém a orquestração na sessão principal (sem arquivos de agente), então aparece em Sessões / Uso em vez de como uma linha aqui. Execuções que gravam arquivos de agente mostram seu custo Claude na linha de orquestração. (Previsto para uma versão futura.)',
+      orchestration: 'orquestração na sessão principal',
+      commonTaskPrefix: 'Texto de tarefa compartilhado',
+      thinkingShare: '% de raciocínio',
+      effortHint: 'Alta proporção de raciocínio — considere /effort high em vez de xhigh para tarefas como esta.',
+      quotaWarnBanner:
+        'Resta apenas {remaining}% da sua janela de 5 horas. Uma execução de workflow pode consumir grande parte dela — considere esperar o reset: execuções interrompidas perdem o cache de prompt e refazem ~40% mais caro.',
+      dismiss: 'Dispensar',
+      attribution: 'Acompanhamento de uso',
+      attrDisclaimer:
+        'Aproximado, baseado nas sessões locais desta máquina — não inclui outros dispositivos nem o claude.ai. São características independentes do seu uso, não uma decomposição.',
+      attrLargeContext: '{pct}% do seu uso foi com contexto >150k',
+      attrLargeContextShort: 'contexto >150k',
+      attrLargeContextHint:
+        'Sessões mais longas são mais caras mesmo com cache. Use /compact no meio da tarefa e /clear ao mudar para novas tarefas.',
+      attrLongSessions: '{pct}% do seu uso veio de sessões ativas por 8+ horas',
+      attrLongSessionsShort: 'sessões de 8h+',
+      attrLongSessionsHint:
+        'Costumam ser sessões em segundo plano/loop. O uso contínuo soma rápido, então confirme se é intencional.',
+      attrSubagentHeavy: '{pct}% do seu uso veio de sessões com muitos subagentes',
+      attrSubagentHeavyShort: 'Sessões com muitos subagentes',
+      attrSubagentHeavyHint:
+        'Cada subagente executa suas próprias requisições. Seja deliberado ao criá-los — e considere um modelo mais barato para subagentes mais simples.',
+      attrWorkflows: '{pct}% do seu uso veio de execuções de workflow',
+      attrWorkflowsShort: 'Execuções de workflow',
+      attrWorkflowsHint: 'Veja a aba Workflows para detalhes por execução e taxas de acerto de cache.',
+      attrSkillChar: '{pct}% do seu uso veio de {name}',
+      attrSkillCharHint: 'Skills pesadas podem ter o escopo reduzido ou rodar com um modelo mais barato via frontmatter da skill.',
+      attrPluginChar: '{pct}% do seu uso veio do plugin "{name}"',
+      attrPluginCharHint:
+        'Revise o que este plugin contribui — seus agentes, skills e ferramentas MCP contam para o seu limite.',
+      attrSkills: 'Skills',
+      attrSubagents: 'Subagentes',
+      attrPlugins: 'Plugins',
+      attrModels: 'Modelos',
+      attrShare: '% do uso',
+      count: 'Quantidade',
+      scopeDay: 'Dia',
+      scopeWeek: 'Semana',
+      scopeMonth: 'Mês',
+      attrTodayPointer: 'Detalhes: aba Conteúdo',
+      sessionTitle: 'Sessão',
+      getAdvice: 'Obter conselho de IA',
+      adviceCardTitle: 'Conselho de IA',
+      adviceCardDesc:
+        'Envie o resumo do seu uso + uma amostra dos seus próprios prompts ao seu modelo e receba dicas concretas para escrever instruções mais claras e reduzir desperdício.',
+      optimizerTitle: 'Otimizador de uso',
+      optimizerDesc:
+        'Transforme um pedido rascunhado e malformado em um prompt limpo para colar direto no Claude Code — além de um esforço / raciocínio / modelo sugeridos para a tarefa.',
+      optimizerHowto:
+        'Digite ou cole seu rascunho abaixo, marque quaisquer ajustes opcionais e clique em Otimizar. Apenas o texto que você cola é enviado ao seu modelo — nunca ao Claude Code nem ao seu terminal.',
+      optimizerConsent:
+        'O Otimizador de Uso envia o texto que você cola ao modelo de API configurado. Nada é enviado ao Claude Code e nada é digitado em um terminal. Continuar?',
+      optimizerEnableBtn: 'Ativar nas configurações',
+      optimizerPlaceholder: 'Cole um prompt rascunhado para otimizar…',
+      optimizerRun: 'Otimizar',
+      optimizerRunning: 'Otimizando…',
+      optimizerCopy: 'Copiar prompt',
+      optimizerCopied: 'Copiado',
+      optimizerResolve: 'Sinalizar referências vagas',
+      optimizerResolveHint:
+        'Faça o modelo apontar referências vagas (ex.: "isto", "o arquivo", "aquele bug") e defini-las ou marcar uma suposição clara.',
+      optimizerDistil: 'Condensar texto longo colado',
+      optimizerDistilHint:
+        'Se o seu rascunho cola logs / código / docs longos, condense-os ao que o Claude realmente precisa.',
+      optimizerAesthetic: 'Sugerir uma direção de estilo',
+      optimizerAestheticHint:
+        'Para tarefas de UI / visuais / de escrita, proponha uma direção de estilo concreta para o resultado não ficar genérico.',
+      optimizerPromptHeading: 'Prompt otimizado',
+      optimizerSettingsHeading: 'Configurações de execução recomendadas',
+      experimentalBadge: 'experimental',
+      adviceNeedsKey: 'Defina uma chave de API nas configurações para usar o conselho de IA.',
+      adviceGenerating: 'Gerando conselho de uso…',
+      adviceFailed: 'Falha ao obter conselho',
+      adviceScopeOverall: 'Geral (todos os projetos)',
+      adviceScopePrompt: 'Escolha o foco do conselho',
+      adviceDemoButton: 'Ver demonstração',
+      adviceDemoNotice:
+        '# DEMO — Prévia do conselho de uso de IA\n\n' +
+        '> **Este arquivo é uma demo estática, não um conselho real.**\n' +
+        '> O texto abaixo foi escrito manualmente para ilustrar o tipo de saída\n' +
+        '> que o recurso produz. Ele **não** é baseado nos seus dados reais de uso\n' +
+        '> do Claude Code — nada foi enviado a nenhuma API para gerar isso.\n\n' +
+        '### Para obter um conselho real e personalizado com base no SEU uso:\n\n' +
+        '1. Abra as Configurações (`Ctrl+,` / `Cmd+,`)\n' +
+        '2. Pesquise por **`claudeCodeUsage.advice.apiKey`**\n' +
+        '3. Cole uma chave de API compatível com OpenAI — DeepSeek funciona direto\n' +
+        '   ([deepseek.com](https://platform.deepseek.com))\n' +
+        '4. Execute novamente **`Claude Code Usage: Get AI Usage Advice`**',
+      costComposition: 'Composição de custos',
+      date: 'Data',
+      yesterday: 'Ontem',
+      dataDirectory: 'Diretório de dados',
+      noDataMessage: 'Nenhum dado de uso encontrado. Verifique se o Claude Code está em execução e configurado corretamente.',
+      errorMessage: 'Erro ao carregar os dados de uso. Verifique sua configuração.',
+    },
+    settings: {
+      title: 'Configurações de uso do Claude Code',
+      refreshInterval: 'Intervalo de atualização (segundos)',
+      dataDirectory: 'Caminho do diretório de dados',
+      language: 'Idioma',
+      decimalPlaces: 'Casas decimais',
+    },
+  },
 };
 
 // Per-setting label / help translations for the dashboard ⚙ Settings panel.
@@ -1533,6 +1735,34 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'advice.userContext': { label: '개인/프로젝트 컨텍스트', help: '선택적 배경 정보; "Personalised" 섹션을 추가합니다.' },
     'advice.optimizer.enabled': { label: '사용량 최적화 도구 활성화', help: 'Content 탭에 옵트인 Optimizer 카드를 표시합니다.' },
   },
+  'pt-BR': {
+    'language': { label: 'Idioma de exibição', help: 'Idioma da interface. "auto" segue o VS Code.' },
+    'decimalPlaces': { label: 'Casas decimais do custo', help: '' },
+    'compactNumbers': { label: 'Contagem de tokens compacta', help: 'Mostra 1.2M / 345K em vez dos números completos.' },
+    'timezone': { label: 'Fuso horário das datas', help: 'Zona IANA (ex.: America/Fortaleza). Vazio = sistema.' },
+    'projectGroupingMode': { label: 'Agrupamento de projetos', help: 'git = por repositório · folder = nível superior · flat = cada cwd.' },
+    'showCost': { label: 'Mostrar custo / tokens de hoje', help: '' },
+    'statusBarMetric': { label: 'Métrica da barra de status', help: 'O que o primeiro item da barra de status mostra: o custo de hoje ou o total de tokens de hoje (k/M).' },
+    'showContext': { label: 'Mostrar ocupação da janela de contexto (experimental)', help: 'Desativado por padrão. Estima a % do contexto da sessão atual a partir do registro de log mais recente, parecido com /context. Só mostra o total do lado da entrada, não a divisão por categoria do /context (são dados internos do Claude Code, não gravados em disco), então é uma aproximação — um "~" indica um tamanho de janela estimado.' },
+    'contextWindowOverride': { label: 'Substituir janela de contexto (tokens)', help: '0 = detectar automaticamente pelo modelo. Defina sua janela real (ex.: 1000000) para modelos de proxy ou personalizados que a detecção automática não reconhece.' },
+    'usageLimitTracking': { label: 'Mostrar cota de 5 horas / semanal', help: '' },
+    'showOpusWeekly': { label: 'Mostrar limite semanal do Opus', help: 'Acrescenta o teto semanal do Opus (opus:NN%) após os valores de 5h / semanais.' },
+    'workflowQuotaWarnPercent': { label: 'Aviso de cota de workflow %', help: 'Avisa antes de uma execução quando a cota de 5h restante estiver abaixo disto. 0 = desligado.' },
+    'dataDirectory': { label: 'Diretório de dados personalizado', help: 'Diretório de dados do Claude; vazio = detectar automaticamente.' },
+    'refreshInterval': { label: 'Intervalo de atualização (s)', help: '' },
+    'fileWatching': { label: 'Monitoramento de arquivos em tempo real', help: 'Atualiza ~1,5s após cada nova mensagem.' },
+    'pauseDashboardRefresh': { label: 'Pausar atualização do dashboard', help: 'A barra de status continua atualizando; o dashboard só atualiza manualmente.' },
+    'enableContentAnalysis': { label: 'Análise de conteúdo (aba Content)', help: 'Desative para pular a varredura de texto, que usa muita CPU.' },
+    'analysis.calibrate': { label: 'Calibrar números de conteúdo', help: 'Ajusta as estimativas aos totais exatos de tokens cobrados.' },
+    'advice.apiKey': { label: 'Chave de API', help: 'Para o backend api. Permanece nas Configurações do VS Code.' },
+    'advice.apiFormat': { label: 'Formato da API', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'URL da API', help: 'Endpoint do backend api.' },
+    'advice.model': { label: 'Modelo da API', help: '' },
+    'advice.reasoningEffort': { label: 'Esforço de raciocínio (openai)', help: '' },
+    'advice.promptWindowDays': { label: 'Janela de amostragem de prompts (dias)', help: '' },
+    'advice.userContext': { label: 'Contexto pessoal/do projeto', help: 'Informação de fundo opcional; adiciona uma seção "Personalizado".' },
+    'advice.optimizer.enabled': { label: 'Ativar o Otimizador de uso', help: 'Mostra o cartão opt-in do Optimizer na aba Content.' },
+  },
 };
 
 export class I18n {
@@ -1597,6 +1827,8 @@ export class I18n {
         return '한국어 (Korean)';
       case 'de-DE':
         return 'Deutsch (German)';
+      case 'pt-BR':
+        return 'Português Brasileiro (Brazilian Portuguese)';
       case 'en':
       default:
         return 'English';
@@ -1627,6 +1859,7 @@ export class I18n {
 
     if (locale.includes('ja')) return 'ja';
     if (locale.includes('ko')) return 'ko';
+    if (locale.includes('pt')) return 'pt-BR';
 
     return 'en';
   }
