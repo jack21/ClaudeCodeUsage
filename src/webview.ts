@@ -90,6 +90,9 @@ export class UsageWebviewProvider {
 
     this.panel.onDidDispose(() => {
       this.panel = undefined;
+      // Force a fresh render into the next panel (the lastHtml guard must not
+      // suppress the first paint after the panel was closed and reopened).
+      this.lastHtml = '';
     });
 
     this.panel.webview.onDidReceiveMessage(async (message) => {
@@ -311,10 +314,20 @@ export class UsageWebviewProvider {
     );
   }
 
+  // Last HTML pushed to the webview. Assigning panel.webview.html triggers a
+  // full reload (re-parse + re-run the inline script + reset scroll), which is
+  // the heaviest recurring cost during active sessions. Skip it when the render
+  // is byte-identical — nothing visible would change anyway.
+  private lastHtml: string = '';
+
   private updateWebview(): void {
     if (!this.panel) return;
-
-    this.panel.webview.html = this.getWebviewContent();
+    const html = this.getWebviewContent();
+    if (html === this.lastHtml) {
+      return;
+    }
+    this.lastHtml = html;
+    this.panel.webview.html = html;
   }
 
   private getWebviewContent(): string {
@@ -4180,7 +4193,6 @@ window.closeAllMonthlyDetails = closeAllMonthlyDetails;
 // Handle messages from extension
 window.addEventListener('message', function(event) {
   const message = event.data;
-  console.log("[DEBUG] Received message from extension:", message);
 
   if (message.command === 'hourlyDataResponse') {
     const container = document.getElementById('hourly-detail-' + message.date);
@@ -4218,8 +4230,6 @@ window.addEventListener('message', function(event) {
 
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {
-  console.log("[DEBUG] Document click event:", event.target);
-
   // Handle sortable table header clicks
   var sortableTh = event.target.closest ? event.target.closest('th.sortable') : null;
   if (sortableTh) {
