@@ -104,6 +104,10 @@ a one-time consent prompt.*
   syncing (`language`, `dataDirectory`, `advice.apiKey`). Header buttons
   trimmed to ✨ AI advice and ⚙ Settings (both jump to their tab); the
   auto-refresh toggle moved into Settings (a manual ↻ appears when paused).
+  If you hide the cost, quota *and* context items, the status bar keeps a small
+  icon as a way back into the dashboard.
+- **Status-bar metric** (`statusBarMetric`) — keep showing today's cost, or
+  switch the first item to today's total **token** count (compact k/M).
 - **AI advice 2.0** — bring your own key: **Anthropic** (`/v1/messages`) by
   default, or any OpenAI-compatible endpoint (`advice.apiFormat`). Fed with the
   new signals (runs, cache hit rates, attribution, thinking share); optional
