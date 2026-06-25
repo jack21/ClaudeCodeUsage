@@ -13,6 +13,9 @@ export class StatusBarManager {
   private usageLimitTracking: boolean = true;
   // First item shows today's cost ('cost') or today's total token count ('tokens').
   private metric: 'cost' | 'tokens' = 'cost';
+  // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38,
+  // @wheelbarrel00).
+  private showOpusWeekly: boolean = false;
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -46,12 +49,14 @@ export class StatusBarManager {
     showCost: boolean,
     showContext: boolean,
     usageLimitTracking: boolean = true,
-    metric: 'cost' | 'tokens' = 'cost'
+    metric: 'cost' | 'tokens' = 'cost',
+    showOpusWeekly: boolean = false
   ): void {
     this.showCost = showCost;
     this.showContext = showContext;
     this.usageLimitTracking = usageLimitTracking;
     this.metric = metric;
+    this.showOpusWeekly = showOpusWeekly;
     if (!showContext) {
       this.contextItem.hide();
     }
@@ -214,7 +219,8 @@ export class StatusBarManager {
     const live = this.liveWindows(usageLimits);
     const fiveHour = live?.five_hour;
     const weekly = live?.seven_day;
-    if (!fiveHour && !weekly) {
+    const opus = live?.seven_day_opus;
+    if (!fiveHour && !weekly && !(this.showOpusWeekly && opus)) {
       this.quotaItem.hide();
       return;
     }
@@ -228,6 +234,11 @@ export class StatusBarManager {
     if (weekly) {
       worstPct = Math.max(worstPct, weekly.utilization);
       parts.push(`wk:${Math.round(weekly.utilization)}%`);
+    }
+    // Opt-in weekly Opus cap (PR #38, @wheelbarrel00).
+    if (this.showOpusWeekly && opus) {
+      worstPct = Math.max(worstPct, opus.utilization);
+      parts.push(`opus:${Math.round(opus.utilization)}%`);
     }
 
     this.quotaItem.text = `$(dashboard) ${parts.join(' ')}`;

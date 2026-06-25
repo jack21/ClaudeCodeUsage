@@ -108,6 +108,8 @@ a one-time consent prompt.*
   icon as a way back into the dashboard.
 - **Status-bar metric** (`statusBarMetric`) — keep showing today's cost, or
   switch the first item to today's total **token** count (compact k/M).
+- **Weekly Opus limit** (`showOpusWeekly`, opt-in) — append `opus:NN%` to the
+  quota item for heavy Opus users. (PR #38, [@wheelbarrel00](https://github.com/wheelbarrel00).)
 - **AI advice 2.0** — bring your own key: **Anthropic** (`/v1/messages`) by
   default, or any OpenAI-compatible endpoint (`advice.apiFormat`). Fed with the
   new signals (runs, cache hit rates, attribution, thinking share); optional
@@ -326,6 +328,9 @@ Contributors whose upstream PRs / issues are incorporated here:
 - [@ScherbakovAl](https://github.com/ScherbakovAl) —
   [PR #31](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/31), the
   original status-bar context-window indicator and the `showCost` toggle.
+- [@wheelbarrel00](https://github.com/wheelbarrel00) —
+  [PR #38](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/38), the opt-in
+  weekly Opus limit (`showOpusWeekly`) in the status bar.
 - [@brenoneill](https://github.com/brenoneill) —
   [PR #14](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/14), custom
   data directory (merged into upstream 1.0.8).

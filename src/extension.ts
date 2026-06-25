@@ -351,7 +351,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric, config.showOpusWeekly);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -387,6 +387,7 @@ export class ClaudeCodeUsageExtension {
       showContext: s.get<boolean>('showContext'),
       contextWindowOverride: s.get<number>('contextWindowOverride'),
       statusBarMetric: s.get<'cost' | 'tokens'>('statusBarMetric'),
+      showOpusWeekly: s.get<boolean>('showOpusWeekly'),
       usageLimitTracking: s.get<boolean>('usageLimitTracking'),
       adviceApiKey: s.get<string>('advice.apiKey'),
       adviceApiUrl: s.get<string>('advice.apiUrl'),
@@ -413,7 +414,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric, config.showOpusWeekly);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();

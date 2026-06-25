@@ -232,6 +232,8 @@ export interface ExtensionConfig {
   contextWindowOverride: number;
   // First status-bar item: today's cost, or today's total token count.
   statusBarMetric: 'cost' | 'tokens';
+  // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38).
+  showOpusWeekly: boolean;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).

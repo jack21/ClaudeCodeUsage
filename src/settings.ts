@@ -141,6 +141,16 @@ export const SETTINGS: SettingDef[] = [
     label: 'Show 5h / weekly quota',
   },
   {
+    // Opt-in weekly Opus limit in the status bar (PR #38, @wheelbarrel00).
+    key: 'showOpusWeekly',
+    type: 'boolean',
+    default: false,
+    storage: 'state',
+    group: 'statusBar',
+    label: 'Show weekly Opus limit',
+    help: 'Append the weekly Opus cap (opus:NN%) after the 5h / weekly figures.',
+  },
+  {
     key: 'workflowQuotaWarnPercent',
     type: 'number',
     default: 50,
