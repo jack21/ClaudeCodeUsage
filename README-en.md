@@ -72,7 +72,7 @@ See the [full settings table in the main README](README.md#configuration).
 
 ## Credits
 
-Forked from [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage). MIT-licensed. Community contributions credited in [CHANGELOG.md](CHANGELOG.md). Many code changes drafted with [Claude Code](https://claude.com/claude-code).
+Forked from [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage). MIT-licensed. Community contributions credited in [CHANGELOG.md](CHANGELOG.md). Many code changes drafted with [Claude Code](https://claude.com/claude-code).
 
 **Issues, PRs and ideas are warmly welcomed** — that's how the project grows.
 

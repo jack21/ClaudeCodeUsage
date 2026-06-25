@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this fork compared to upstream
-[`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
+[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [2.1.0] — Unreleased
@@ -54,14 +54,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   Full panel in the Content tab; a compact strip (≥5% lines only) on the
   Today tab.
 
-- **AI advice works with no API key** — a new `advice.backend` (default
-  `subscription`) reuses your existing Claude Code sign-in (the same OAuth
-  session the quota indicator reads) to call the Messages API with a cheap
-  model (`advice.subscriptionModel`, default Haiku), so the feature works out
-  of the box and barely touches your quota. The `api` backend speaks the
-  **Anthropic** `/v1/messages` shape by default (`advice.apiFormat`), with the
-  OpenAI chat-completions shape kept for DeepSeek and other compatible proxies.
-  All transports share the timeout / retry / curl-fallback hardening.
+- **AI advice transport** — speaks the **Anthropic** `/v1/messages` shape by
+  default (`advice.apiFormat`), with the OpenAI chat-completions shape kept for
+  DeepSeek and other compatible proxies. Timeout / retry / curl-fallback
+  hardening across both. *(A keyless "subscription" backend — reuse the Claude
+  Code OAuth session to call the API with no key — was prototyped and verified
+  working via curl, but is NOT shipped: Anthropic returns 403 "Request not
+  allowed" for that use of the OAuth token, so it's too fragile/inappropriate
+  for a public extension. The transport stays dormant in advisor.ts to
+  re-enable if direct calls become permitted.)*
 - **AI advice fed with the new signals** — the advice prompt now includes
   the multi-agent runs (per-run cost, agent fan-out, cache hit rate per
   provider), the estimated thinking share and the usage-attribution panel
@@ -85,8 +86,14 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   session's context fill as a percentage (like `/context`), estimated from
   the latest log record (`input + cache read + cache write` tokens vs the
   model's window; `[1m]` long-context variants use 1M). Amber at 80%, red at
-  95%; hidden after 5 h of inactivity. Toggle with `claudeCodeUsage.showContext`.
-  (Merged from [PR #31](https://github.com/jack21/ClaudeCodeUsage/pull/31), @ScherbakovAl.)
+  95%. **Experimental, off by default** (`claudeCodeUsage.showContext`) — it can
+  only show the input-side total, not `/context`'s category breakdown (those are
+  Claude Code internals not on disk). A `~` marks a guessed window size;
+  `contextWindowOverride` pins the real size for proxied/custom models. Reads
+  the main-thread record (a running sub-agent no longer hijacks it) and stays
+  visible across an overnight gap (24 h staleness guard). The tooltip shows a
+  quota-style bar + the input-side composition.
+  (Built on [PR #31](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/31), @ScherbakovAl.)
 - **`claudeCodeUsage.showCost` setting** — hide the status-bar cost item for
   those who only want the quota / context indicators (the dashboard still
   shows all cost figures). (PR #31, @ScherbakovAl.)
@@ -120,6 +127,18 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   creation is invisible to character counts). Sessions' Thinking column gains a
   calibrated "real thinking tokens" figure in its tooltip.
 
+### Changed
+- **Header trimmed** — the apple-style auto-refresh toggle moved into the ⚙
+  Settings tab (a manual ↻ refresh still appears top-right when auto-refresh is
+  paused). Two shortcut buttons remain: ✨ AI advice and ⚙ Settings, each
+  jumping to its tab. The gear icon sits on the header button; the tab label
+  drops it.
+- **Usage Optimizer output is plain text** — the rewritten prompt is now
+  returned without Markdown (no bold/headings/backticks/bullets) so it pastes
+  cleanly into a terminal. Copy clearer, task-framed help; marked experimental.
+- **AI advice + Optimizer cards redesigned** as a cohesive "action card"
+  treatment (accent rail + icon badge), distinct from the data panels.
+
 ### Fixed
 - **"Get AI Usage Advice" hanging or failing with `terminated`** — the
   request now has a 120 s timeout with a clear error, one retry, and a
@@ -128,6 +147,11 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Advice prompt samples polluted by agent traffic** — sub-agent logs,
   meta/sidechain lines and agent-framework scaffolding text are no longer
   harvested as "user prompts" for the advice feature.
+- **Quota indicator blanked after switching folders in the same window** — the
+  curl fallback now pins its working directory to the home dir (an inherited,
+  now-invalid cwd made `spawn` fail with ENOENT), and a workspace-folders-change
+  listener forces a fresh fetch — so the quota survives a folder switch without
+  needing a new window.
 
 ## [2.0.2] — 2026-06-09
 
@@ -150,7 +174,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Quota indicator stale / stuck after reset** — an expired window now shows
   0% (rolled forward to the new period) and is refetched, instead of lingering
   on a stale value or vanishing. Adapted from
-  [PR #24](https://github.com/jack21/ClaudeCodeUsage/pull/24) by
+  [PR #24](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/24) by
   [@nickearnshaw](https://github.com/nickearnshaw).
 - **Quota "only comes back after I restart VS Code"** — an expired in-memory
   OAuth token now triggers a re-read of `~/.claude/.credentials.json` (which
@@ -160,7 +184,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Usage not showing the first time you open VS Code** — the status bar now
   shows a loading state immediately and the quota fetch is non-blocking, so
   local cost figures appear at once and the quota follows.
-  ([#26](https://github.com/jack21/ClaudeCodeUsage/issues/26))
+  ([#26](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/26))
 - **"This project" figure undercounted / disappeared** — per-conversation
   attribution now keys off the session's home project directory instead of the
   per-record working directory (which wanders mid-session), and the figure is
@@ -179,16 +203,16 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - Drill-down charts: removed a double scrollbar; date labels parse the date
   textually (UTC parsing shifted labels a day in negative-UTC timezones).
 - `launch.json` `preLaunchTask` fixed so F5 works in a single-root checkout
-  ([PR #22](https://github.com/jack21/ClaudeCodeUsage/pull/22), @nickearnshaw).
+  ([PR #22](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/22), @nickearnshaw).
 
 ### Docs / project
 - Refreshed all language READMEs to v2 (en / zh-TW / ja / ko concise; zh-CN
   full translation); fixed the `CHANGELOG.md` link casing.
 - Added `CONTRIBUTING.md`, a PR template, and issue templates; documented
   `cleanupPeriodDays` for history retention
-  ([PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21), @nickearnshaw).
+  ([PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21), @nickearnshaw).
 - Loading-spinner / re-entrancy guard for the webview
-  ([PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20), @nickearnshaw).
+  ([PR #20](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/20), @nickearnshaw).
 - Updated `CLAUDE.md` to the v2 architecture and release process.
 
 ---
@@ -278,7 +302,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **5-hour and weekly limit utilisation** + reset times fetched via Claude
   Code's own OAuth session at `~/.claude/.credentials.json` →
   `api.anthropic.com/api/oauth/usage`. Zero configuration. _Approach adapted
-  from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9) by
+  from upstream [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9) by
   [@Dobidop](https://github.com/Dobidop)._
 - Dedicated, quieter status-bar item shows `5h:N% wk:N%`; warns yellow at
   ≥80%, red at ≥95%.
@@ -414,11 +438,11 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 
 ### Acknowledgements
 
-Based on [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
+Based on [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
 MIT-licensed. Significant inspiration / patches from upstream
 PRs:
 
-- [#9](https://github.com/jack21/ClaudeCodeUsage/pull/9) — Real 5-hour and
+- [#9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9) — Real 5-hour and
   weekly usage limit tracking via the Anthropic OAuth API, by
   [@Dobidop](https://github.com/Dobidop). The OAuth approach in this fork is
   adapted from that PR.
@@ -431,7 +455,7 @@ Many code changes in this fork were drafted with assistance from
 
 ## Pre-2.0 history (upstream 1.0.x)
 
-Released under [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
+Released under [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
 before the 2.0 fork.
 
 ## [1.0.8] — 2025-11-28

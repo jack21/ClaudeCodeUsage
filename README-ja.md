@@ -72,7 +72,7 @@ Cursor / Windsurf 向けに [Open VSX Registry](https://open-vsx.org/extension/G
 
 ## クレジット
 
-[`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) からフォーク。MIT ライセンス。コミュニティの貢献は [CHANGELOG.md](CHANGELOG.md) に記載。多くのコード変更は [Claude Code](https://claude.com/claude-code) の支援で作成されました。
+[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) からフォーク。MIT ライセンス。コミュニティの貢献は [CHANGELOG.md](CHANGELOG.md) に記載。多くのコード変更は [Claude Code](https://claude.com/claude-code) の支援で作成されました。
 
 **Issue・PR・アイデアを歓迎します** —— それがプロジェクトの成長につながります。
 

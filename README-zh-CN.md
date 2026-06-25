@@ -58,7 +58,7 @@
 
 ## 2.0 新功能
 
-- **真实的 5 小时和每周配额** 显示在状态栏 —— 读取 Claude Code 现有的 OAuth 会话（`~/.claude/.credentials.json`），无需配置。借鉴上游 [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)（[@Dobidop](https://github.com/Dobidop)）。
+- **真实的 5 小时和每周配额** 显示在状态栏 —— 读取 Claude Code 现有的 OAuth 会话（`~/.claude/.credentials.json`），无需配置。借鉴上游 [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9)（[@Dobidop](https://github.com/Dobidop)）。
 - **四个新标签页**：Sessions、Projects、Content、Branches，均可排序。
 - **堆叠成本构成图**，含 Y 轴和参考线。
 - **AI 建议命令**（默认 DeepSeek V4 Pro，`reasoning_effort=max`），未配置 key 时提供示例演示。
@@ -68,7 +68,7 @@
 - 全程 **locale 感知的数字与日期**（德语用 `.`，英语用 `,`）。
 - **实时状态栏**：基于 `fs.watch`（1.5s 防抖）+ 空闲跳过 + 非阻塞加载（每 25 个文件让出事件循环）。
 
-完整变更：[CHANGELOG.md](CHANGELOG.md)。关闭上游 issue [#7](https://github.com/jack21/ClaudeCodeUsage/issues/7)、[#10](https://github.com/jack21/ClaudeCodeUsage/issues/10)、[#11](https://github.com/jack21/ClaudeCodeUsage/issues/11)、[#13](https://github.com/jack21/ClaudeCodeUsage/issues/13)。
+完整变更：[CHANGELOG.md](CHANGELOG.md)。关闭上游 issue [#7](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/7)、[#10](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/10)、[#11](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/11)、[#13](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/13)。
 
 ---
 
@@ -167,7 +167,7 @@ ext install GrowthJack.claude-code-usage
   ```json
   { "cleanupPeriodDays": 365 }
   ```
-  此设置仅对之后生成的日志有效。感谢 [@nickearnshaw](https://github.com/nickearnshaw)（[PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21)）记录此项。
+  此设置仅对之后生成的日志有效。感谢 [@nickearnshaw](https://github.com/nickearnshaw)（[PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21)）记录此项。
 
 **Token 数量低于模型提供商后台**
 - 如果你通过第三方代理使用 Claude Code，且请求经由 sub-agent 或后台 workflow（如 ultracode / 动态工作流），每个 agent 会在子目录写入独立的 `.jsonl` 文件。扩展会读取所有这些文件，但部分代理配置可能根本不写 agent 级记录。在未来版本加入原生工作流归因之前，此处显示的总量可能低于供应商的上游统计。实际消费始终以你的供应商账单页面为准。
@@ -176,11 +176,11 @@ ext install GrowthJack.claude-code-usage
 
 ## 致谢
 
-Fork 自 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)。MIT 授权。
+Fork 自 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)。MIT 授权。
 
-- [@Dobidop](https://github.com/Dobidop) —— [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)，读取真实 `/usage` 数据的 OAuth 方案。本版配额指示器借鉴自该工作。
-- [@nickearnshaw](https://github.com/nickearnshaw) —— [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8) locale 感知的数字/日期格式；[PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20) 修复 webview/状态栏卡在 "Loading…"（重入保护 + 仅冷启动显示加载动画）；[PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21) 关于 `cleanupPeriodDays` 的文档。
-- [@brenoneill](https://github.com/brenoneill) —— [PR #14](https://github.com/jack21/ClaudeCodeUsage/pull/14)，自定义数据目录（已并入上游 1.0.8）。
+- [@Dobidop](https://github.com/Dobidop) —— [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9)，读取真实 `/usage` 数据的 OAuth 方案。本版配额指示器借鉴自该工作。
+- [@nickearnshaw](https://github.com/nickearnshaw) —— [PR #8](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/8) locale 感知的数字/日期格式；[PR #20](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/20) 修复 webview/状态栏卡在 "Loading…"（重入保护 + 仅冷启动显示加载动画）；[PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21) 关于 `cleanupPeriodDays` 的文档。
+- [@brenoneill](https://github.com/brenoneill) —— [PR #14](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/14)，自定义数据目录（已并入上游 1.0.8）。
 - [@mxzinke](https://github.com/mxzinke) —— Opus 4.5 / Haiku 4.5 价格 + 德语翻译（上游 1.0.8）。
 
 本 fork 中许多代码改动由 [Claude Code](https://claude.com/claude-code) 协助起草（commit 含 `Co-Authored-By: Claude <noreply@anthropic.com>`）。

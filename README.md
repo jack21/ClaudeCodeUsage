@@ -70,16 +70,16 @@ for optimising your usage. Scoped to the last 30 days
 
 ![AI advice](images/v2-advice-en.png)
 
-*Two action cards lead the Content tab. **AI advice** sends your aggregates +
-a sample of your prompts to a model and suggests concrete rewrites — and now
-**works with no API key**: it reuses your existing Claude Code sign-in (a cheap
-model, a little of your quota) by default, or you can bring your own Anthropic /
-OpenAI-compatible key.*
+*Two action cards lead the Content tab. **AI advice** sends your usage
+aggregates + a sample of your prompts to your model and suggests concrete
+rewrites. Bring your own key — Anthropic (`/v1/messages`) by default, or any
+OpenAI-compatible endpoint.*
 
-*The opt-in **Usage Optimizer** (off by default) takes a rough request you paste
-and returns one tightened, paste-ready prompt plus a recommended reasoning
-effort / thinking / model for that task. **Only the text you paste is sent** —
-never your files or the terminal — behind a one-time consent prompt.*
+*The opt-in **Usage Optimizer** (experimental, off by default) turns a rough,
+half-formed request into one clean, paste-ready prompt — plain text, no
+Markdown — plus a recommended reasoning effort / thinking / model for the task.
+**Only the text you paste is sent** — never your files or the terminal — behind
+a one-time consent prompt.*
 
 ---
 
@@ -99,28 +99,35 @@ never your files or the terminal — behind a one-time consent prompt.*
 - **Workflow quota guard** — a dismissible banner before you start a run
   the remaining 5-hour window can't finish
   (`claudeCodeUsage.workflowQuotaWarnPercent`).
-- **AI advice 2.0** — now **works with no API key**: `advice.backend`
-  (default `subscription`) reuses your Claude Code sign-in and a cheap model,
-  so advice works out of the box and barely touches your quota; or set it to
-  `api` for your own Anthropic (`/v1/messages`, the default shape) or
-  OpenAI-compatible key. Fed with the new signals (runs, cache hit rates,
-  attribution, thinking share); optional `advice.userContext` adds a
-  "Personalised for this project" section; `advice.promptWindowDays` (default
-  30) sets the sampling window. Transport hardened: timeout, retry, curl
-  fallback — no more silent hangs.
-- **Usage Optimizer** (opt-in, `advice.optimizer.enabled`, default off) — a
-  Content-tab card where you paste a rough request and get back one tightened,
-  paste-ready prompt plus a recommended effort / thinking / model. Three
-  optional lenses (flag ambiguous references · condense long pastes · suggest a
-  style direction). Runs through the same backend as AI advice; **only the text
-  you paste is sent**, behind a one-time consent prompt.
+- **Settings in the dashboard** — a new ⚙ Settings tab manages every option
+  in place; VS Code's own Settings keeps only the three that benefit from
+  syncing (`language`, `dataDirectory`, `advice.apiKey`). Header buttons
+  trimmed to ✨ AI advice and ⚙ Settings (both jump to their tab); the
+  auto-refresh toggle moved into Settings (a manual ↻ appears when paused).
+- **AI advice 2.0** — bring your own key: **Anthropic** (`/v1/messages`) by
+  default, or any OpenAI-compatible endpoint (`advice.apiFormat`). Fed with the
+  new signals (runs, cache hit rates, attribution, thinking share); optional
+  `advice.userContext` adds a "Personalised for this project" section;
+  `advice.promptWindowDays` (default 30) sets the sampling window. Transport
+  hardened: timeout, retry, curl fallback. *(A keyless "subscription" backend
+  was prototyped but isn't shipped — Anthropic blocks calling the API with the
+  Claude Code OAuth token; it may return if that changes.)*
+- **Usage Optimizer** (experimental, `advice.optimizer.enabled`, default off) —
+  a Content-tab card where you paste a rough request and get back one tightened
+  prompt as **plain text** (paste-ready, no Markdown) plus a recommended effort
+  / thinking / model. Three optional lenses (flag ambiguous references ·
+  condense long pastes · suggest a style direction). **Only the text you paste
+  is sent**, behind a one-time consent prompt.
+- **Context-window indicator** (experimental, off by default) — opt in via
+  Settings to show the current session's context fill in the status bar. A "~"
+  marks a guessed window; set `contextWindowOverride` for proxied/custom models.
 
 ## What's new in 2.0
 
 - **Real 5-hour and weekly quota** in the status bar — reads Claude Code's
   existing OAuth session from `~/.claude/.credentials.json` or the macOS
   Keychain, zero config.
-  Adapted from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9)
+  Adapted from upstream [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9)
   by [@Dobidop](https://github.com/Dobidop).
 - **Four new tabs**: Sessions, Projects, Content, Branches — all sortable.
 - **Token-composition stacked chart** with Y-axis and reference lines.
@@ -138,10 +145,10 @@ never your files or the terminal — behind a one-time consent prompt.*
 
 Full changelog: [CHANGELOG.md](CHANGELOG.md).
 Closes upstream issues
-[#7](https://github.com/jack21/ClaudeCodeUsage/issues/7),
-[#10](https://github.com/jack21/ClaudeCodeUsage/issues/10),
-[#11](https://github.com/jack21/ClaudeCodeUsage/issues/11),
-[#13](https://github.com/jack21/ClaudeCodeUsage/issues/13).
+[#7](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/7),
+[#10](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/10),
+[#11](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/11),
+[#13](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/13).
 
 ---
 
@@ -183,7 +190,7 @@ for **`Claude Code Usage`**:
 |---|---|---|
 | `language` | `"auto"` | UI language: `auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`. |
 | `dataDirectory` | `""` | Custom Claude data dir; empty = auto-detect. |
-| `advice.apiKey` | `""` | API key for the AI advice `api` backend (empty = use the subscription backend). |
+| `advice.apiKey` | `""` | API key for AI advice + the Usage Optimizer (empty = advice opens a demo instead). |
 
 Everything else — refresh interval, status-bar items, number/date formatting,
 project grouping, content analysis, and all the AI advice / Optimizer options —
@@ -230,12 +237,10 @@ authoritative.
   model — and only when *you* trigger them. AI advice sends an aggregate
   summary of your usage plus a sample of your recent prompts; the Optimizer
   sends **only the text you paste into it** (never your files or the terminal),
-  behind a one-time consent prompt. Both honour `advice.backend`:
-  - `subscription` (default) sends to **`api.anthropic.com/v1/messages`** via
-    your existing Claude Code OAuth session — the same account, a cheap model,
-    a little of your quota. No extra key.
-  - `api` sends to the endpoint in `advice.apiUrl` with your own key. **Bring
-    your own key**; nothing is shipped with the extension.
+  behind a one-time consent prompt. Both send to the endpoint in `advice.apiUrl`
+  with your own `advice.apiKey` (Anthropic `/v1/messages` by default, or any
+  OpenAI-compatible endpoint). **Bring your own key**; nothing is shipped with
+  the extension.
 
 ---
 
@@ -258,11 +263,9 @@ authoritative.
   `/v1` if present.
 
 **`Get AI Usage Advice` shows demo instead of real advice**
-- Only the `api` backend needs a key. If `advice.backend` is `api` and no key
-  is set under `claudeCodeUsage.advice.apiKey`, the command opens a demo
-  (filename-marked `…-DEMO-…`, with a prominent banner). Either add a key, or
-  switch `advice.backend` back to `subscription` (the default) to use your
-  Claude Code sign-in with no key.
+- AI advice needs a key. With no key under `claudeCodeUsage.advice.apiKey`, the
+  command opens a hand-written demo (filename-marked `…-DEMO-…`, with a prominent
+  banner) instead of calling any API. Add a key in Settings to get real advice.
 
 **Sluggish refresh on large histories**
 - 2.0 yields to the event loop every 25 files; idle ticks skip recompute.
@@ -279,7 +282,7 @@ authoritative.
   ```
   This only affects logs kept from now on; already-deleted logs cannot be
   restored. Thanks to [@nickearnshaw](https://github.com/nickearnshaw) for
-  documenting this ([PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21)).
+  documenting this ([PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21)).
 
 **Token counts appear lower than the model provider's own dashboard**
 - If you use Claude Code with a third-party proxy that routes requests
@@ -295,25 +298,40 @@ authoritative.
 
 ## Credits
 
-Forked from [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage). MIT-licensed.
+Forked from the upstream project now maintained at
+[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
+(originally by [@jack21](https://github.com/jack21)). MIT-licensed. This fork has
+grown well beyond the 2.0 baseline since — see [CHANGELOG.md](CHANGELOG.md).
+
+Contributors whose upstream PRs / issues are incorporated here:
 
 - [@Dobidop](https://github.com/Dobidop) —
-  [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9), the OAuth
-  approach for reading real `/usage` data. The quota indicator in this
-  release is adapted from that work.
+  [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9), the OAuth
+  approach for reading real `/usage` data; the quota indicator is adapted from
+  that work.
 - [@nickearnshaw](https://github.com/nickearnshaw) —
-  [PR #8](https://github.com/jack21/ClaudeCodeUsage/pull/8) locale-aware
+  [PR #8](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/8) locale-aware
   number/date formatting;
-  [PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20) fix for
-  webview/status-bar getting stuck on "Loading…" (re-entrancy guard +
+  [PR #20](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/20) fix for
+  the webview/status-bar getting stuck on "Loading…" (re-entrancy guard +
   spinner only on cold start);
-  [PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21) docs
-  explaining `cleanupPeriodDays` for retaining usage history.
+  [PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21) docs on
+  `cleanupPeriodDays` for retaining usage history;
+  [PR #24](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/24) quota-window
+  rollover handling (drop a window once its reset has passed).
+- [@ScherbakovAl](https://github.com/ScherbakovAl) —
+  [PR #31](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/31), the
+  original status-bar context-window indicator and the `showCost` toggle.
 - [@brenoneill](https://github.com/brenoneill) —
-  [PR #14](https://github.com/jack21/ClaudeCodeUsage/pull/14), custom
+  [PR #14](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/14), custom
   data directory (merged into upstream 1.0.8).
 - [@mxzinke](https://github.com/mxzinke) — Opus 4.5 / Haiku 4.5 prices
   + German translation (upstream 1.0.8).
+
+Also closed along the way: the test-suite seed
+([#25](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/25)) and
+unreliable context-window detection for proxied/custom models
+([#31](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/31)).
 
 Many code changes in this fork were drafted with assistance from
 [Claude Code](https://claude.com/claude-code) (commits include
@@ -324,7 +342,7 @@ Many code changes in this fork were drafted with assistance from
 ## Changelog
 
 The current changelog lives in [**CHANGELOG.md**](CHANGELOG.md). The
-most recent 2.0 entry summarises every feature, fix and personalisation
+most recent 2.1 entry summarises every feature, fix and personalisation
 option in this release.
 
 <details>
@@ -362,7 +380,7 @@ option in this release.
 ## Contributing
 
 Issues and pull requests are welcome on the
-[GitHub repository](https://github.com/jack21/ClaudeCodeUsage).
+[GitHub repository](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage).
 
 ## License
 

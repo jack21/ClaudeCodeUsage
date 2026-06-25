@@ -72,7 +72,7 @@ ext install GrowthJack.claude-code-usage
 
 ## 致謝
 
-Fork 自 [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)。MIT 授權。社群貢獻致謝見 [CHANGELOG.md](CHANGELOG.md)。許多程式碼改動由 [Claude Code](https://claude.com/claude-code) 協助起草。
+Fork 自 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)。MIT 授權。社群貢獻致謝見 [CHANGELOG.md](CHANGELOG.md)。許多程式碼改動由 [Claude Code](https://claude.com/claude-code) 協助起草。
 
 **歡迎提出 Issue、PR 與想法** —— 這正是專案成長的方式。
 
