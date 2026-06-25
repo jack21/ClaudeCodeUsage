@@ -181,24 +181,21 @@ export class StatusBarManager {
     md.supportThemeIcons = true;
     md.supportHtml = true;
     md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
-    // A quota-style progress bar (wider here so the tooltip's right edge lines
-    // up with the figures below), then the percentage. "~" before the window
-    // size when it was guessed (see the override setting).
-    md.appendMarkdown(
-      `${this.progressBarSvg(pct, 40)} &nbsp; ${pct.toFixed(1)}%\n\n`
-    );
-    md.appendMarkdown(
-      `${I18n.formatNumber(info.contextTokens)} / ${approx}${I18n.formatNumber(info.windowTokens)}\n\n`
-    );
-    // Input-side composition of the latest request.
+    // One HTML table: the bar sits in the right (value) column, right-aligned, so
+    // its right edge lines up with the figures' right edges below it. "~" marks a
+    // guessed window size (see the override setting).
     const freeSpace = Math.max(0, info.windowTokens - info.contextTokens);
-    md.appendMarkdown('| | |\n|:--|--:|\n');
-    md.appendMarkdown(`| ${t.inputTokens} | ${I18n.formatNumber(info.inputTokens)} |\n`);
-    md.appendMarkdown(`| ${t.cacheRead} | ${I18n.formatNumber(info.cacheReadTokens)} |\n`);
-    md.appendMarkdown(`| ${t.cacheCreation} | ${I18n.formatNumber(info.cacheCreationTokens)} |\n`);
-    md.appendMarkdown(`| ${t.contextLeft} | ${I18n.formatNumber(freeSpace)} |\n\n`);
-    // One short, actionable line only (the explanation lives in Settings).
-    md.appendMarkdown(`*${t.contextHint}*`);
+    const num = (n: number): string => I18n.formatNumber(n);
+    let html = '<table>';
+    html += `<tr><td><b>${pct.toFixed(1)}%</b></td><td align="right">${this.progressBarSvg(pct, 30)}</td></tr>`;
+    html += `<tr><td>${t.inputTokens}</td><td align="right">${num(info.inputTokens)}</td></tr>`;
+    html += `<tr><td>${t.cacheRead}</td><td align="right">${num(info.cacheReadTokens)}</td></tr>`;
+    html += `<tr><td>${t.cacheCreation}</td><td align="right">${num(info.cacheCreationTokens)}</td></tr>`;
+    html += `<tr><td>${t.contextLeft}</td><td align="right">${num(freeSpace)} / ${approx}${num(info.windowTokens)}</td></tr>`;
+    html += '</table>';
+    md.appendMarkdown(html + '\n\n');
+    // Two short, actionable lines (the rest of the explanation lives in Settings).
+    md.appendMarkdown(`*${t.contextHint}*  \n*${t.contextHintCompact}*`);
     this.contextItem.tooltip = md;
     this.contextItem.show();
   }

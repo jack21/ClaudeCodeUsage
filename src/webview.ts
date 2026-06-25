@@ -2049,12 +2049,14 @@ export class UsageWebviewProvider {
       '<h4 class="opt-subhead">' + t.optimizerPromptHeading + '</h4>' +
       '<div class="opt-output"><pre id="optPrompt">' +
       (st && st.prompt ? this.escapeHtml(st.prompt) : '') + '</pre>' +
-      '<button class="btn-secondary btn-small" data-copy="' +
-      this.escapeHtml(t.optimizerCopy) + '" data-copied="' +
-      this.escapeHtml(t.optimizerCopied) + '" onclick="copyOptPrompt(this)">' +
-      t.optimizerCopy + '</button></div>' +
+      '<button class="opt-copy" data-copy="' + this.escapeHtml(t.optimizerCopy) +
+      '" data-copied="' + this.escapeHtml(t.optimizerCopied) +
+      '" title="' + this.escapeHtml(t.optimizerCopy) + '" onclick="copyOptPrompt(this)">' +
+      '<span class="opt-copy-ico">⧉</span><span class="opt-copy-lbl">' +
+      this.escapeHtml(t.optimizerCopy) + '</span></button></div>' +
       '<h4 class="opt-subhead">' + t.optimizerSettingsHeading + '</h4>' +
-      '<div id="optSettings" class="opt-settings">' +
+      '<div id="optSettings" class="opt-settings" data-raw="' +
+      (st && st.settings ? this.escapeHtml(st.settings) : '') + '">' +
       (st && st.settings ? this.escapeHtml(st.settings) : '') + '</div>' +
       '</div>' +
       '</div>'
@@ -2672,19 +2674,72 @@ export class UsageWebviewProvider {
         background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
         border-radius: 4px;
       }
-      /* The settings recommendation is read, not copied — render it cleanly in
-         the UI font with a soft accent rail, not as a code block. */
+      /* Floating "copy" button on the optimised-prompt block. */
+      .opt-output { position: relative; }
+      .opt-copy {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        padding: 3px 8px;
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.35));
+        border-radius: 5px;
+        color: var(--vscode-descriptionForeground);
+        background: var(--vscode-editor-background);
+        cursor: pointer;
+        opacity: 0.85;
+      }
+      .opt-copy:hover {
+        opacity: 1;
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder, var(--vscode-button-background));
+      }
+      .opt-copy.copied {
+        color: var(--vscode-testing-iconPassed, #2ea043);
+        border-color: var(--vscode-testing-iconPassed, #2ea043);
+      }
+      .opt-copy-ico { font-size: 12px; line-height: 1; }
+      /* The settings recommendation is read, not copied — render each line as a
+         "Label  [value chip]  reason" row so the key choice stands out. */
       .opt-settings {
-        white-space: pre-wrap;
-        word-break: break-word;
         font-size: 12px;
-        line-height: 1.5;
         padding: 8px 10px;
         margin: 0;
         color: var(--vscode-foreground);
         background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
         border-left: 2px solid var(--vscode-textLink-foreground, var(--vscode-button-background));
         border-radius: 0 4px 4px 0;
+      }
+      .opt-set-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+        padding: 3px 0;
+      }
+      .opt-set-row + .opt-set-row {
+        border-top: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.12));
+      }
+      .opt-set-key {
+        flex: 0 0 auto;
+        min-width: 64px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .opt-set-val {
+        flex: 0 0 auto;
+        font-weight: 600;
+        padding: 1px 8px;
+        border-radius: 999px;
+        color: var(--vscode-button-foreground);
+        background: var(--vscode-button-background);
+      }
+      .opt-set-rest {
+        flex: 1 1 auto;
+        min-width: 120px;
+        color: var(--vscode-descriptionForeground);
       }
 
       /* ⚙ Settings tab */
@@ -3810,7 +3865,10 @@ function showOptimizeResult(msg) {
   var promptEl = document.getElementById('optPrompt');
   var settingsEl = document.getElementById('optSettings');
   if (promptEl) { promptEl.textContent = msg.prompt || ''; }
-  if (settingsEl) { settingsEl.textContent = msg.settings || ''; }
+  if (settingsEl) {
+    settingsEl.setAttribute('data-raw', msg.settings || '');
+    formatOptSettings();
+  }
   if (res) { res.style.display = ''; }
 }
 
@@ -3818,11 +3876,15 @@ function copyOptPrompt(btn) {
   var promptEl = document.getElementById('optPrompt');
   if (!promptEl) { return; }
   var text = promptEl.textContent || '';
+  var lbl = btn ? btn.querySelector('.opt-copy-lbl') : null;
   var done = function() {
     if (!btn) { return; }
-    var label = btn.getAttribute('data-copy') || 'Copy';
-    btn.textContent = btn.getAttribute('data-copied') || 'Copied';
-    setTimeout(function() { btn.textContent = label; }, 1500);
+    btn.classList.add('copied');
+    if (lbl) { lbl.textContent = btn.getAttribute('data-copied') || 'Copied'; }
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      if (lbl) { lbl.textContent = btn.getAttribute('data-copy') || 'Copy'; }
+    }, 1500);
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done, done);
@@ -3830,6 +3892,31 @@ function copyOptPrompt(btn) {
     promptEl.focus();
     done();
   }
+}
+
+// Render the optimiser's "Recommended run settings" with the key value of each
+// line (high / on / opus …) highlighted as a chip. Parses "Label: value — reason"
+// from the raw text stashed in data-raw (so re-runs don't double-format).
+function optEscHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function formatOptSettings() {
+  var el = document.getElementById('optSettings');
+  if (!el) { return; }
+  var raw = el.getAttribute('data-raw');
+  if (raw === null) { raw = el.textContent || ''; el.setAttribute('data-raw', raw); }
+  var lines = raw.split('\\n').filter(function(l) { return l.trim() !== ''; });
+  if (!lines.length) { el.innerHTML = ''; return; }
+  el.innerHTML = lines.map(function(line) {
+    var clean = line.replace(/^[\\s\\-*•]+/, '');
+    var m = clean.match(/^([^:：]{1,28})[:：]\\s*([^\\s—()（]+)\\s*[—-]?\\s*(.*)$/);
+    if (m) {
+      var rest = m[3] && m[3].trim() ? '<span class="opt-set-rest">' + optEscHtml(m[3].trim()) + '</span>' : '';
+      return '<div class="opt-set-row"><span class="opt-set-key">' + optEscHtml(m[1].trim()) +
+        '</span><span class="opt-set-val">' + optEscHtml(m[2].trim()) + '</span>' + rest + '</div>';
+    }
+    return '<div class="opt-set-row">' + optEscHtml(clean) + '</div>';
+  }).join('');
 }
 
 function dismissQuotaWarn() {
@@ -4227,6 +4314,9 @@ window.addEventListener('message', function(event) {
     showOptimizeResult(message);
   }
 });
+
+// Format any optimiser settings restored into the DOM by a re-render.
+formatOptSettings();
 
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {

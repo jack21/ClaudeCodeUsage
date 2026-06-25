@@ -61,6 +61,7 @@ export interface Translations {
     quotaHint: string;
     contextWindow: string;
     contextHint: string;
+    contextHintCompact: string;
     contextLeft: string;
     contentAnalysis: string;
     estimatedNote: string;
@@ -236,7 +237,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: 'Weekly',
       quotaHint: 'Real data from Anthropic /usage.',
       contextWindow: 'Context window',
-      contextHint: 'New task? Use /clear to reset the context.',
+      contextHint: 'New task → /clear',
+      contextHintCompact: 'Same task → /compact',
       contextLeft: 'Context left',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
@@ -437,7 +439,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: "Woche",
       quotaHint: "Echte Daten von Anthropic /usage.",
       contextWindow: "Kontextfenster",
-      contextHint: "Neue Aufgabe? Mit /clear den Kontext zurücksetzen.",
+      contextHint: "Neue Aufgabe → /clear",
+      contextHintCompact: "Gleiche Aufgabe → /compact",
       contextLeft: "Kontext frei",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
@@ -641,7 +644,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每週',
       quotaHint: '來自 Anthropic /usage 的真實資料。',
       contextWindow: '上下文視窗',
-      contextHint: '切換任務時用 /clear 重置上下文。',
+      contextHint: '切換任務用 /clear',
+      contextHintCompact: '同任務可 /compact',
       contextLeft: '上下文餘量',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
@@ -838,7 +842,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每周',
       quotaHint: '来自 Anthropic /usage 的真实数据。',
       contextWindow: '上下文窗口',
-      contextHint: '切换任务时用 /clear 重置上下文。',
+      contextHint: '切换任务用 /clear',
+      contextHintCompact: '同任务可 /compact',
       contextLeft: '上下文余量',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
@@ -1035,7 +1040,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '週間',
       quotaHint: 'Anthropic /usage からの実データ。',
       contextWindow: 'コンテキストウィンドウ',
-      contextHint: 'タスク切替時は /clear でコンテキストをリセット。',
+      contextHint: 'タスク切替 → /clear',
+      contextHintCompact: '同じタスク → /compact',
       contextLeft: 'コンテキスト残り',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
@@ -1237,7 +1243,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '주간',
       quotaHint: 'Anthropic /usage의 실제 데이터입니다.',
       contextWindow: '컨텍스트 윈도우',
-      contextHint: '작업 전환 시 /clear로 컨텍스트를 초기화하세요.',
+      contextHint: '작업 전환 → /clear',
+      contextHintCompact: '같은 작업 → /compact',
       contextLeft: '컨텍스트 여유',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',

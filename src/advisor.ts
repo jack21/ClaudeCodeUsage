@@ -288,8 +288,7 @@ export function buildOptimizerSystemPrompt(
     'CRITICAL: write the rewritten prompt as PLAIN TEXT — no Markdown at all (no **bold**, ' +
     'no #headings, no backticks, no bullet characters), so it pastes cleanly into a ' +
     'terminal. Use short paragraphs or hyphen lines if structure helps. ' +
-    'Then recommend run settings for THIS task as a few short lines: reasoning ' +
-    'effort (low / medium / high / max), extended thinking (on / off), and model. ' +
+    'Then recommend run settings for THIS task. ' +
     (availableModels.length > 0
       ? 'For the model, choose ONLY from the models the user actually uses: ' +
         availableModels.join(', ') +
@@ -298,9 +297,15 @@ export function buildOptimizerSystemPrompt(
         'strongest for ambiguous or design-heavy work. '
       : 'Refer to Claude models by family only (haiku / sonnet / opus / fable), never a ' +
         'version number; pick the cheaper for mechanical edits, the strongest for ambiguous work. ') +
-    'Justify each in a few words. Output EXACTLY this shape and nothing else:\n' +
-    '===PROMPT===\n<the rewritten prompt, plain text>\n===SETTINGS===\n<the settings lines>\n' +
-    `Write everything in ${language}.`
+    'Format the settings as EXACTLY three lines, each "Label: value — reason":\n' +
+    'Effort: <low|medium|high|max> — <short reason>\n' +
+    'Thinking: <on|off> — <short reason>\n' +
+    'Model: <model> — <short reason>\n' +
+    'Keep the labels (Effort / Thinking / Model) AND the value tokens (e.g. high, ' +
+    'on, opus) in English; write only the reason in the target language. ' +
+    'Output EXACTLY this shape and nothing else:\n' +
+    '===PROMPT===\n<the rewritten prompt, plain text>\n===SETTINGS===\n<the three settings lines>\n' +
+    `Write the prompt and the reasons in ${language}.`
   );
 }
 
