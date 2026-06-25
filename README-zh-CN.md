@@ -4,9 +4,9 @@
 
 ---
 
-**状态栏里的 Claude Code 教练。** 不是账单工具，不是多 provider 监控面板。一个专注 token 精确归因、并用 AI 帮你把 Claude Code 用得更好的轻量 VS Code 插件。
+**状态栏中的 Claude Code 使用教练。** 它不是账单工具，也不是多供应商监控面板，而是一个轻量级 VS Code 插件，专注于精确归因 token 消耗，并借助 AI 帮你更聪明地使用 Claude Code。
 
-> **它是什么**：一个 VS Code 状态栏小工具，读取本地 Claude Code 对话日志，按 **token × 公开单价**估算用量与成本；并提供可选的 AI 建议，帮你优化提示词、减少浪费。
+> **它是什么**：一个 VS Code 状态栏小工具，读取本地 Claude Code 对话日志，用 token 数量乘以公开单价来估算使用量和成本；并可提供 AI 建议，帮你优化提示、减少浪费。
 >
 > **它不是什么**：账单工具。所有金额均为估算值（基于公开的每百万 token 单价），实际费用请以 Anthropic 官方账单为准。
 
@@ -22,11 +22,11 @@
 
 *今日成本 · 当前 session 成本 · 5 小时和每周配额利用率。*
 
-将鼠标移到配额指示器上看明细：
+将鼠标移到配额指示器上查看明细：
 
 ![配额提示](images/v2-quota-en.png)
 
-*来自真实 `/usage` 数据 —— 利用率百分比、重置倒计时，以及每周重置的星期与时间。*
+*来自真实 `/usage` 数据：利用率百分比、重置倒计时，以及每周重置的星期和时间。*
 
 ### 仪表板
 
@@ -34,15 +34,15 @@
 
 *点击状态栏打开完整仪表板：堆叠 token 构成图、小时分布、缓存命中率、按 token 类型的成本构成，以及下方的按模型 / 按日表格。*
 
-### Content 标签页 —— 看清 token 究竟花在哪
+### Content 标签页：看清 token 究竟花在了哪里
 
 ![Content 标签页](images/v2-content-en.png)
 
-*估算各类内容的 token 占比 —— 你的提示词 vs 工具结果（按工具）vs 助手输出 / 思考。这是优化使用的着力点，范围为最近 30 天（`advice.promptWindowDays`）。*
+*估算各类内容的 token 占比：你的提示词 vs 工具结果（按工具）vs 助手输出 / 思考。这是优化使用的切入点，范围为最近 30 天（`advice.promptWindowDays`）。*
 
-### AI 建议 —— 基于你真实用量的一份教练报告
+### AI 建议：基于你真实用量的一份教练报告
 
-AI 建议生成的是一份 **Markdown 文档**，用文字展示比截图更直观。配好 key（`advice.apiKey`），点 **Get AI advice**（✨ 按钮，或 Content 标签页那张卡），选一个范围（全部项目，或某个项目），它会把你的用量汇总加上一份**你自己的**提示词样本发给你的模型，打开一份按优先级排好的报告。自备 key —— 默认 Anthropic（`/v1/messages`），也支持任意 OpenAI 兼容端点。
+AI 建议生成的是一份 **Markdown 文档**，用文字展示比截图更直观。配好 key（`advice.apiKey`），点击 **Get AI advice**（✨ 按钮，或 Content 标签页那张卡），选一个范围（全部项目，或某个项目），它会把你的用量汇总加上一份**你自己的**提示词样本发给你的模型，打开一份按优先级排好的报告。自备 key，默认使用 Anthropic（`/v1/messages`），也支持任意 OpenAI 兼容端点。
 
 返回内容大致是这样（示意）：
 
@@ -56,26 +56,26 @@ AI 建议生成的是一份 **Markdown 文档**，用文字展示比截图更直
 
 ![用量优化器卡片](images/v2-optimizer-en.png)
 
-粘进一条粗略、没成形的需求，得到一条干净、**可直接粘贴**的提示词（纯文本、无 Markdown），并附上推荐的 effort / thinking / 模型（以小标签显示）。三个可选开关进一步微调（标出含糊指代 · 压缩长粘贴内容 · 建议风格方向）。实验性，默认关闭；**只发送你粘贴的文字** —— 不碰你的文件、不进终端 —— 且首次有一次性同意确认。
+粘贴进一条粗略、没成形的需求，获得一条干净、**可直接粘贴**的提示词（纯文本、无 Markdown），并附上推荐的 effort / thinking / 模型（以小标签显示）。三个可选开关进一步微调（标出含糊指代 · 压缩长粘贴内容 · 建议风格方向）。实验性，默认关闭；**只发送你粘贴的文字**，不碰你的文件、不进终端，且首次有一次性同意确认。
 
 ---
 
 ## 2.1 新功能
 
-- **工作流标签页** —— 所有多代理运行尽收一处：动态工作流（ultracode）和临时子代理批次，含每次运行的成本、代理数、所用模型、**缓存命中率**（"我的供应商是否适配工作流"的诊断信号），以及按任务内容标注的逐代理明细。
-- **用量追踪面板** —— 对标官方 `/usage` 的"用量构成"视图，但支持全部模型 / 供应商和五档范围（日 / 周 / 月 / 会话 / 项目）：>150k 上下文占比、8 小时以上会话占比、子代理密集占比、工作流占比，以及 Skills／子代理／插件／模型四类细分。今日标签页有精简卡片。
-- **思考占比** —— 每会话的估算思考 token 占比（Sessions 列 + 今日卡片），过高时提示改用 `/effort`。
-- **工作流配额护栏** —— 当 5 小时窗口剩余不足以完成一次运行时，仪表板显示可关闭的警告横幅（`claudeCodeUsage.workflowQuotaWarnPercent`）。
-- **设置搬进仪表板** —— 新增 ⚙ 设置标签页，就地管理所有选项；VS Code 原生设置只保留三个适合同步的（`language`、`dataDirectory`、`advice.apiKey`）。右上角按钮精简为 ✨ AI 建议 和 ⚙ 设置（都跳到对应标签）；自动刷新开关挪进设置（暂停时右上角才出现手动 ↻）。如果你把成本、配额、上下文三项**全部隐藏**，状态栏会保留一个小图标作为回到仪表板的入口。
-- **状态栏指标**（`statusBarMetric`）—— 默认显示今日成本，也可切换为今日**总 token** 消耗（紧凑 k/M）。
-- **每周 Opus 上限**（`showOpusWeekly`，可选开启）—— 在配额项后追加 `opus:NN%`，方便重度 Opus 用户一眼看到每周 Opus 额度。（PR #38，[@wheelbarrel00](https://github.com/wheelbarrel00)。）
-- **AI 建议 2.0** —— 自备 key：默认 **Anthropic**（`/v1/messages`），也支持任意 OpenAI 兼容端点（`advice.apiFormat`）。喂入新信号（运行、缓存命中率、归因、思考占比）；可选 `advice.userContext` 会附上"针对本项目的个性化"一节；`advice.promptWindowDays`（默认 30）设定采样窗口。传输层加固：超时、重试、curl 兜底。*（一个免 key 的"订阅"后端做过原型，但本版未上线 —— Anthropic 封禁用 Claude Code 的 OAuth token 直连 API；若日后放开会再启用。）*
-- **用量优化器**（实验性，`advice.optimizer.enabled`，默认关闭）—— Content 标签页的一张卡，粘进粗略需求，返回一条精炼提示词，以**纯文本**形式（可直接粘贴、无 Markdown），并附推荐的 effort / thinking / 模型。三个可选微调项（标出含糊指代 · 压缩长粘贴内容 · 建议风格方向）。**只发送你粘贴的文字**，且首次有一次性同意确认。
-- **上下文窗口指示器**（实验性，默认关闭）—— 在设置里开启后，状态栏显示当前 session 的上下文占用。`~` 表示窗口大小是猜测；代理 / 自定义模型可用 `contextWindowOverride` 手填真实窗口。
+- **工作流标签页**：所有多代理运行集中查看：动态工作流（ultracode）和临时子代理批次，含每次运行的成本、代理数、所用模型、**缓存命中率**（"我的供应商是否适配工作流"的诊断信号），以及按任务内容标注的逐代理明细。
+- **用量追踪面板**：对标官方 `/usage` 的"用量构成"视图，但支持全部模型 / 供应商和五档范围（日 / 周 / 月 / 会话 / 项目）：>150k 上下文占比、8 小时以上会话占比、子代理密集占比、工作流占比，以及 Skills／子代理／插件／模型四类细分。今日标签页有精简卡片。
+- **思考占比**：每会话的估算思考 token 占比（Sessions 列 + 今日卡片），过高时提示改用 `/effort`。
+- **工作流配额护栏**：当 5 小时窗口剩余不足以完成一次运行时，仪表板显示可关闭的警告横幅（`claudeCodeUsage.workflowQuotaWarnPercent`）。
+- **设置搬进仪表板**：新增 ⚙ 设置标签页，就地管理所有选项；VS Code 原生设置只保留三个适合同步的（`language`、`dataDirectory`、`advice.apiKey`）。右上角按钮精简为 ✨ AI 建议 和 ⚙ 设置（都跳到对应标签）；自动刷新开关挪进设置（暂停时右上角才出现手动 ↻）。如果你把成本、配额、上下文三项**全部隐藏**，状态栏会保留一个小图标作为回到仪表板的入口。
+- **状态栏指标**（`statusBarMetric`）：默认显示今日成本，也可切换为今日**总 token** 消耗（紧凑 k/M）。
+- **每周 Opus 上限**（`showOpusWeekly`，可选开启）：在配额项后追加 `opus:NN%`，方便重度 Opus 用户一眼看到每周 Opus 额度。（PR #38，[@wheelbarrel00](https://github.com/wheelbarrel00)。）
+- **AI 建议 2.0**：自备 key：默认 **Anthropic**（`/v1/messages`），也支持任意 OpenAI 兼容端点（`advice.apiFormat`）。引入新信号（运行、缓存命中率、归因、思考占比）；可选 `advice.userContext` 会附上"针对本项目的个性化"一节；`advice.promptWindowDays`（默认 30）设定采样窗口。传输层加强了：超时、重试、curl 兜底。*（一个免 key 的"订阅"后端做过原型，但本版未上线 —— Anthropic 封禁用 Claude Code 的 OAuth token 直连 API；若日后放开会再启用。）*
+- **用量优化器**（实验性，`advice.optimizer.enabled`，默认关闭）：Content 标签页的一张卡，粘贴进粗略需求，返回一条精炼提示词，以**纯文本**形式（可直接粘贴、无 Markdown），并附推荐的 effort / thinking / 模型。三个可选微调项（标出含糊指代 · 压缩长粘贴内容 · 建议风格方向）。**只发送你粘贴的文字**，且首次有一次性同意确认。
+- **上下文窗口指示器**（实验性，默认关闭）：在设置里开启后，状态栏显示当前 session 的上下文占用。`~` 表示窗口大小是猜测；代理 / 自定义模型可用 `contextWindowOverride` 手填真实窗口。
 
 ## 2.0 新功能
 
-- **真实的 5 小时和每周配额** 显示在状态栏 —— 读取 Claude Code 现有的 OAuth 会话（`~/.claude/.credentials.json` 或 macOS 钥匙串），无需配置。借鉴上游 [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9)（[@Dobidop](https://github.com/Dobidop)）。
+- **真实的 5 小时和每周配额** 显示在状态栏：读取 Claude Code 现有的 OAuth 会话（`~/.claude/.credentials.json` 或 macOS 钥匙串），无需配置。借鉴上游 [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9)（[@Dobidop](https://github.com/Dobidop)）。
 - **四个新标签页**：Sessions、Projects、Content、Branches，均可排序。
 - **堆叠 token 构成图**，含 Y 轴和参考线。
 - **AI 建议命令**（默认 DeepSeek V4 Pro，`reasoning_effort=max`），未配置 key 时提供 demo 演示。
@@ -139,7 +139,7 @@ ext install GrowthJack.claude-code-usage
 - 你的代理供应商是否采用不同费率。
 - 任何未记录在本地 `.jsonl` 日志中的内容。
 
-**5h / 每周配额指示器**则不同 —— 它通过 OAuth 会话查询 Claude Code 真实的 `/usage` 端点，显示 Anthropic 为你的账户记录的实际百分比。该数值是权威的。
+**5h / 每周配额指示器**则不同，它通过 OAuth 会话查询 Claude Code 真实的 `/usage` 端点，显示 Anthropic 为你的账户记录的实际百分比。该数值是权威的。
 
 ---
 
