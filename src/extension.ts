@@ -323,6 +323,16 @@ export class ClaudeCodeUsageExtension {
         this.onConfigurationChanged();
       }
     });
+
+    // Switching the open folder in the same window can leave the quota indicator
+    // blank (it does not always restart the extension host, and the inherited
+    // process state — e.g. the curl spawn cwd — can go stale). Force a fresh
+    // quota fetch + refresh so it reappears without needing a new window.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      this.cache.usageLimitsLastUpdate = new Date(0);
+      this.quotaColdRetryDone = false;
+      this.refreshData();
+    });
   }
 
   private getConfiguration(): ExtensionConfig {

@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import * as os from 'os';
 
 // Shared HTTP transport helpers. Node's fetch is the default path; curl is
 // the fallback for two failure classes seen in the wild:
@@ -77,7 +78,12 @@ export function requestViaCurl(
     // On Windows be explicit about the .exe extension so spawn doesn't
     // depend on PATHEXT resolution; on POSIX 'curl' is correct.
     const cmd = process.platform === 'win32' ? 'curl.exe' : 'curl';
-    const child = spawn(cmd, args, { shell: false, windowsHide: true });
+    // Pin cwd to the home dir. The extension host inherits its cwd from VS Code,
+    // and after switching folders in the SAME window that inherited cwd can point
+    // at a directory that no longer exists — spawn then fails with ENOENT and the
+    // quota silently stops loading (while a fresh window, with a valid cwd, works
+    // fine). curl needs no particular cwd, so anchor it somewhere always valid.
+    const child = spawn(cmd, args, { shell: false, windowsHide: true, cwd: os.homedir() });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (c: Buffer) => (stdout += c.toString('utf-8')));
