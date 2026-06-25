@@ -7,6 +7,15 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ## [2.1.0] — Unreleased
 
 ### Added
+- **Settings in the dashboard** — a new ⚙ Settings tab edits every option in
+  place (grouped: General, Status bar, Data & refresh, AI advice & Optimizer),
+  applied immediately. To keep VS Code's own Settings UI uncluttered, only
+  three settings stay declared there (so they still sync via Settings Sync):
+  `language`, `dataDirectory`, `advice.apiKey`. The rest now live in the
+  extension's own storage and are managed from the dashboard. A one-time
+  migration copies any existing `settings.json` values into the new store on
+  first launch, so upgrades keep your configuration. (Setting labels/help are
+  English; group headers and chrome are localised in all six languages.)
 - **Workflows tab** — one row per multi-agent run: true dynamic-workflow
   runs (wf_ dirs) **and ad-hoc sub-agent batches** (≥2 Task-tool agents in
   one session, tagged "subagents" — what ultracode produces when the

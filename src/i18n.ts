@@ -18,6 +18,13 @@ export interface Translations {
     refresh: string;
     autoRefresh: string;
     settings: string;
+    settingsTab: string;
+    settingsIntro: string;
+    settingsResetAll: string;
+    settingsGroupGeneral: string;
+    settingsGroupStatusBar: string;
+    settingsGroupData: string;
+    settingsGroupAdvice: string;
     totalTokens: string;
     inputTokens: string;
     outputTokens: string;
@@ -182,6 +189,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: 'Refresh',
       autoRefresh: 'Auto refresh',
       settings: 'Settings',
+      settingsTab: 'Settings',
+      settingsIntro:
+        'Settings live here now. Only language, data directory and API key remain in VS Code Settings (so they sync). Changes apply immediately.',
+      settingsResetAll: 'Reset all to defaults',
+      settingsGroupGeneral: 'General',
+      settingsGroupStatusBar: 'Status bar',
+      settingsGroupData: 'Data & refresh',
+      settingsGroupAdvice: 'AI advice & Optimizer',
       totalTokens: 'Total Tokens',
       inputTokens: 'Input Tokens',
       outputTokens: 'Output Tokens',
@@ -367,6 +382,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: "Aktualisieren",
       autoRefresh: "Auto-Aktualisierung",
       settings: "Einstellungen",
+      settingsTab: "Einstellungen",
+      settingsIntro:
+        "Die Einstellungen sind jetzt hier. Nur Sprache, Datenverzeichnis und API-Schlüssel bleiben in den VS-Code-Einstellungen (damit sie synchronisiert werden). Änderungen wirken sofort.",
+      settingsResetAll: "Alle zurücksetzen",
+      settingsGroupGeneral: "Allgemein",
+      settingsGroupStatusBar: "Statusleiste",
+      settingsGroupData: "Daten & Aktualisierung",
+      settingsGroupAdvice: "KI-Beratung & Optimizer",
       totalTokens: "Gesamte Token",
       inputTokens: "Eingabe Token",
       outputTokens: "Ausgabe Token",
@@ -555,6 +578,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: '重新整理',
       autoRefresh: '自動刷新',
       settings: '設定',
+      settingsTab: '設定',
+      settingsIntro:
+        '設定現在都在這裡。只有語言、資料目錄與 API 金鑰仍留在 VS Code 設定中(以便同步)。變更會立即生效。',
+      settingsResetAll: '全部還原為預設',
+      settingsGroupGeneral: '一般',
+      settingsGroupStatusBar: '狀態列',
+      settingsGroupData: '資料與重新整理',
+      settingsGroupAdvice: 'AI 建議與最佳化工具',
       totalTokens: '總 Token 數',
       inputTokens: '輸入 Token',
       outputTokens: '輸出 Token',
@@ -736,6 +767,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: '刷新',
       autoRefresh: '自动刷新',
       settings: '设置',
+      settingsTab: '设置',
+      settingsIntro:
+        '设置现在都在这里。只有语言、数据目录和 API key 仍留在 VS Code 设置中(便于同步)。更改即时生效。',
+      settingsResetAll: '全部恢复默认',
+      settingsGroupGeneral: '常规',
+      settingsGroupStatusBar: '状态栏',
+      settingsGroupData: '数据与刷新',
+      settingsGroupAdvice: 'AI 建议与优化器',
       totalTokens: '总 Token 数',
       inputTokens: '输入 Token',
       outputTokens: '输出 Token',
@@ -917,6 +956,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: '更新',
       autoRefresh: '自動更新',
       settings: '設定',
+      settingsTab: '設定',
+      settingsIntro:
+        '設定はここにまとまりました。言語・データディレクトリ・API キーのみ VS Code 設定に残ります(同期のため)。変更は即時反映されます。',
+      settingsResetAll: 'すべて既定値に戻す',
+      settingsGroupGeneral: '一般',
+      settingsGroupStatusBar: 'ステータスバー',
+      settingsGroupData: 'データと更新',
+      settingsGroupAdvice: 'AI アドバイス & オプティマイザー',
       totalTokens: '総トークン数',
       inputTokens: '入力トークン',
       outputTokens: '出力トークン',
@@ -1103,6 +1150,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       refresh: '새로고침',
       autoRefresh: '자동 새로고침',
       settings: '설정',
+      settingsTab: '설정',
+      settingsIntro:
+        '설정이 이제 여기로 모였습니다. 언어, 데이터 디렉터리, API 키만 VS Code 설정에 남습니다(동기화를 위해). 변경은 즉시 적용됩니다.',
+      settingsResetAll: '모두 기본값으로',
+      settingsGroupGeneral: '일반',
+      settingsGroupStatusBar: '상태 표시줄',
+      settingsGroupData: '데이터 및 새로고침',
+      settingsGroupAdvice: 'AI 조언 & 옵티마이저',
       totalTokens: '총 토큰 수',
       inputTokens: '입력 토큰',
       outputTokens: '출력 토큰',

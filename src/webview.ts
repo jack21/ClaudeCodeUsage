@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ClaudeDataLoader } from './dataLoader';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
+import { SETTINGS, SettingsStore, SettingView } from './settings';
 import {
   AttributionScope,
   BranchUsage,
@@ -47,8 +48,18 @@ export class UsageWebviewProvider {
     draft: string,
     options: { resolve: boolean; distil: boolean; aesthetic: boolean }
   ) => Promise<{ prompt?: string; settings?: string; error?: string }>;
+  // Shared settings store + a callback to let extension.ts re-apply config when
+  // the user edits a setting in the dashboard's ⚙ Settings tab. Both are set by
+  // extension.ts right after construction.
+  public settings?: SettingsStore;
+  public onSettingsChanged?: () => void;
 
   constructor(private context: vscode.ExtensionContext) {}
+
+  /** Read a moved/core setting through the shared store, with a fallback. */
+  private setting<T>(key: string, fallback: T): T {
+    return this.settings ? this.settings.get<T>(key) : fallback;
+  }
 
   private escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -84,14 +95,34 @@ export class UsageWebviewProvider {
           vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
         case 'setPauseDashboardRefresh':
-          // Persist the in-dashboard toggle so it survives reload and stays in
-          // sync with VS Code Settings.
-          await vscode.workspace
-            .getConfiguration('claudeCodeUsage')
-            .update('pauseDashboardRefresh', !!message.value, vscode.ConfigurationTarget.Global);
+          // Persist the in-dashboard toggle so it survives reload. Lives in the
+          // dashboard-managed store now (no longer in VS Code Settings).
+          await this.settings?.set('pauseDashboardRefresh', !!message.value);
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
+          break;
+        case 'updateSetting':
+          if (this.settings && typeof message.key === 'string') {
+            await this.settings.set(message.key, message.value);
+            // Re-apply config (status bar, refresh cadence, language…) and
+            // re-render. globalState changes don't fire onDidChangeConfiguration.
+            this.onSettingsChanged?.();
+          }
+          break;
+        case 'resetSetting':
+          if (this.settings && typeof message.key === 'string') {
+            await this.settings.reset(message.key);
+            this.onSettingsChanged?.();
+          }
+          break;
+        case 'resetAllSettings':
+          if (this.settings) {
+            for (const d of SETTINGS) {
+              await this.settings.reset(d.key);
+            }
+            this.onSettingsChanged?.();
+          }
           break;
         case 'dismissQuotaWarn':
           this.quotaWarnDismissed = true;
@@ -235,9 +266,7 @@ export class UsageWebviewProvider {
     if (this.quotaWarnDismissed) {
       return '';
     }
-    const warnPercent = vscode.workspace
-      .getConfiguration('claudeCodeUsage')
-      .get<number>('workflowQuotaWarnPercent', 50);
+    const warnPercent = this.setting<number>('workflowQuotaWarnPercent', 50);
     const fiveHour = this.usageLimits?.five_hour;
     if (!warnPercent || warnPercent <= 0 || !fiveHour || typeof fiveHour.utilization !== 'number') {
       return '';
@@ -369,6 +398,7 @@ export class UsageWebviewProvider {
     const contentTab = I18n.t.popup.contentAnalysis;
     const branchesTab = I18n.t.popup.branches;
     const workflowsTab = I18n.t.popup.workflows;
+    const settingsTab = I18n.t.popup.settingsTab;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
@@ -378,6 +408,7 @@ export class UsageWebviewProvider {
     const contentActive = this.currentTab === 'content' ? 'active' : '';
     const branchesActive = this.currentTab === 'branches' ? 'active' : '';
     const workflowsActive = this.currentTab === 'workflows' ? 'active' : '';
+    const settingsActive = this.currentTab === 'settings' ? 'active' : '';
 
     // The Content tab is hidden when content analysis is disabled via
     // claudeCodeUsage.enableContentAnalysis (the analyser returned null).
@@ -404,11 +435,7 @@ export class UsageWebviewProvider {
       this.getStyles() +
       `</style>
       </head>
-      <body class="${
-        vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
-          ? 'auto-off'
-          : ''
-      }">
+      <body class="${this.setting<boolean>('pauseDashboardRefresh', false) ? 'auto-off' : ''}">
         <div class="container">
           <header>
             <h1>` +
@@ -419,9 +446,7 @@ export class UsageWebviewProvider {
                 <span class="auto-refresh-label">${I18n.t.popup.autoRefresh}</span>
                 <span class="switch">
                   <input type="checkbox" id="autoRefreshCheckbox" ${
-                    vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
-                      ? ''
-                      : 'checked'
+                    this.setting<boolean>('pauseDashboardRefresh', false) ? '' : 'checked'
                   } onchange="toggleAutoRefresh()">
                   <span class="slider"></span>
                 </span>
@@ -429,7 +454,7 @@ export class UsageWebviewProvider {
               <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
       refresh +
       `</button>
-              <button onclick="openSettings()" class="btn-secondary">` +
+              <button onclick="showTab('settings')" class="btn-secondary">` +
       settings +
       `</button>
             </div>
@@ -474,6 +499,11 @@ export class UsageWebviewProvider {
       workflowsActive +
       `" onclick="showTab('workflows')">` +
       workflowsTab +
+      `</button>
+            <button id="tab-settings" class="tab ` +
+      settingsActive +
+      `" onclick="showTab('settings')">⚙ ` +
+      settingsTab +
       `</button>
           </div>
 
@@ -536,6 +566,14 @@ export class UsageWebviewProvider {
       this.renderWorkflowData() +
       `
           </div>
+
+          <div id="settings" class="tab-content ` +
+      settingsActive +
+      `">
+            ` +
+      this.renderSettingsPanel() +
+      `
+          </div>
         </div>
         <script>` +
       this.getScript() +
@@ -543,6 +581,109 @@ export class UsageWebviewProvider {
       </body>
       </html>
     `
+    );
+  }
+
+  /**
+   * The ⚙ Settings tab: every setting, grouped, editable in place. Core
+   * settings (language / dataDirectory / advice.apiKey) still write to VS Code
+   * config; the rest write to the dashboard-managed store. Setting labels/help
+   * are English (technical); group headers + chrome are localised.
+   */
+  private renderSettingsPanel(): string {
+    const t = I18n.t.popup;
+    const snap: SettingView[] = this.settings ? this.settings.snapshot() : [];
+    const groups: { key: string; label: string }[] = [
+      { key: 'general', label: t.settingsGroupGeneral },
+      { key: 'statusBar', label: t.settingsGroupStatusBar },
+      { key: 'data', label: t.settingsGroupData },
+      { key: 'advice', label: t.settingsGroupAdvice },
+    ];
+    let html = '<div class="settings-panel">';
+    html += '<p class="table-hint">' + t.settingsIntro + '</p>';
+    html +=
+      '<div class="settings-toolbar">' +
+      '<button class="btn-secondary btn-small" onclick="resetAllSettings()">' +
+      t.settingsResetAll +
+      '</button></div>';
+    for (const g of groups) {
+      const items = snap.filter((s) => s.group === g.key);
+      if (items.length === 0) {
+        continue;
+      }
+      html += '<div class="settings-group"><h3>' + this.escapeHtml(g.label) + '</h3>';
+      for (const it of items) {
+        html += this.renderSettingRow(it);
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /** One row in the settings panel: label + help + the right input control. */
+  private renderSettingRow(it: SettingView): string {
+    const esc = (s: string): string => this.escapeHtml(s);
+    const id = 'set_' + it.key.replace(/[^a-zA-Z0-9]/g, '_');
+    const onCh = (type: string): string =>
+      ` onchange="setSetting('${it.key}', ${
+        type === 'boolean' ? 'this.checked' : 'this.value'
+      }, '${type}')"`;
+    let control = '';
+    if (it.type === 'boolean') {
+      control =
+        '<label class="set-switch"><input type="checkbox" id="' +
+        id +
+        '"' +
+        (it.value ? ' checked' : '') +
+        onCh('boolean') +
+        '><span class="set-slider"></span></label>';
+    } else if (it.type === 'enum') {
+      const opts = (it.enumValues || [])
+        .map((v, i) => {
+          const label = (it.enumLabels && it.enumLabels[i]) || (v === '' ? '(default)' : v);
+          const sel = String(it.value) === v ? ' selected' : '';
+          return '<option value="' + esc(v) + '"' + sel + '>' + esc(label) + '</option>';
+        })
+        .join('');
+      control = '<select id="' + id + '"' + onCh('string') + '>' + opts + '</select>';
+    } else if (it.type === 'number') {
+      control =
+        '<input type="number" id="' +
+        id +
+        '" value="' +
+        esc(String(it.value)) +
+        '"' +
+        (it.min !== undefined ? ' min="' + it.min + '"' : '') +
+        (it.max !== undefined ? ' max="' + it.max + '"' : '') +
+        onCh('number') +
+        '>';
+    } else if (it.multiline) {
+      control =
+        '<textarea id="' + id + '" rows="2"' + onCh('string') + '>' + esc(String(it.value)) + '</textarea>';
+    } else {
+      control =
+        '<input type="' +
+        (it.secret ? 'password' : 'text') +
+        '" id="' +
+        id +
+        '" value="' +
+        esc(String(it.value)) +
+        '"' +
+        onCh('string') +
+        '>';
+    }
+    const help = it.help ? '<div class="set-help">' + esc(it.help) + '</div>' : '';
+    return (
+      '<div class="set-row"><div class="set-label"><label for="' +
+      id +
+      '">' +
+      esc(it.label) +
+      '</label>' +
+      help +
+      '</div><div class="set-control">' +
+      control +
+      '</div></div>'
     );
   }
 
@@ -1821,9 +1962,7 @@ export class UsageWebviewProvider {
    */
   private renderOptimizerCard(): string {
     const t = I18n.t.popup;
-    const enabled = vscode.workspace
-      .getConfiguration('claudeCodeUsage')
-      .get<boolean>('advice.optimizer.enabled', false);
+    const enabled = this.setting<boolean>('advice.optimizer.enabled', false);
     const header =
       '<div class="section-header"><h3>🛠 ' + t.optimizerTitle + '</h3>';
     if (!enabled) {
@@ -1831,7 +1970,7 @@ export class UsageWebviewProvider {
         '<div class="daily-breakdown advice-card">' +
         header +
         '<span class="section-header-right">' +
-        '<button class="btn-secondary btn-small" onclick="openSettings()">' +
+        '<button class="btn-secondary btn-small" onclick="showTab(\'settings\')">' +
         t.optimizerEnableBtn +
         '</button></span></div>' +
         '<p class="table-hint">' + t.optimizerDesc + '</p>' +
@@ -1890,9 +2029,7 @@ export class UsageWebviewProvider {
     // input-side to real (input + cache-creation). Within-side relative shares
     // stay as estimated; the cross-side ratio (e.g. tool-results vs assistant
     // output) is corrected to billing reality. Toggle: analysis.calibrate.
-    const calibrateOn = vscode.workspace
-      .getConfiguration('claudeCodeUsage')
-      .get<boolean>('analysis.calibrate', true);
+    const calibrateOn = this.setting<boolean>('analysis.calibrate', true);
     const cal = calibrateOn && analysis.calibration ? analysis.calibration : null;
     const ASSISTANT_CATS = new Set(['assistantText', 'assistantThinking', 'toolCalls']);
     const INPUT_CATS = new Set(['userPrompts', 'toolResults']);
@@ -2410,6 +2547,77 @@ export class UsageWebviewProvider {
         margin: 0;
         background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
         border-radius: 4px;
+      }
+
+      /* ⚙ Settings tab */
+      .settings-panel { max-width: 780px; }
+      .settings-toolbar { margin: 4px 0 14px; }
+      .settings-group { margin-bottom: 18px; }
+      .settings-group h3 {
+        margin: 0 0 8px;
+        padding-bottom: 4px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.2));
+      }
+      .set-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 7px 0;
+      }
+      .set-label { flex: 1; min-width: 0; }
+      .set-label label { font-size: 13px; }
+      .set-help {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin-top: 2px;
+      }
+      .set-control { flex: 0 0 auto; display: flex; align-items: center; }
+      .set-control input[type="text"],
+      .set-control input[type="password"],
+      .set-control input[type="number"],
+      .set-control select,
+      .set-control textarea {
+        font-family: inherit;
+        font-size: 12px;
+        padding: 4px 6px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+        min-width: 230px;
+      }
+      .set-control input[type="number"] { min-width: 96px; width: 96px; }
+      .set-control textarea { resize: vertical; min-width: 260px; }
+      .set-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+      .set-switch input { opacity: 0; width: 0; height: 0; }
+      .set-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, rgba(127, 127, 127, 0.4));
+        border-radius: 22px;
+        transition: 0.15s;
+      }
+      .set-slider:before {
+        content: "";
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background: var(--vscode-descriptionForeground);
+        border-radius: 50%;
+        transition: 0.15s;
+      }
+      .set-switch input:checked + .set-slider {
+        background: var(--vscode-testing-iconPassed, #2ea043);
+      }
+      .set-switch input:checked + .set-slider:before {
+        transform: translateX(18px);
+        background: #fff;
       }
 
       /* Refresh-Now button is only relevant when auto-refresh is OFF — hide
@@ -3420,6 +3628,19 @@ function refreshPricing() {
 function getAdvice() {
   console.log("[DEBUG] getAdvice called");
   vscode.postMessage({ command: 'getAdvice' });
+}
+
+function setSetting(key, value, type) {
+  if (type === 'number') {
+    var n = Number(value);
+    if (!isFinite(n)) { return; }
+    value = n;
+  }
+  vscode.postMessage({ command: 'updateSetting', key: key, value: value });
+}
+
+function resetAllSettings() {
+  vscode.postMessage({ command: 'resetAllSettings' });
 }
 
 function runOptimizer() {

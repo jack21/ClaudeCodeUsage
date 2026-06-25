@@ -16,11 +16,13 @@ import {
 import { buildAdviceSummary } from './adviceSummary';
 import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
+import { SettingsStore } from './settings';
 
 export class ClaudeCodeUsageExtension {
   private statusBar: StatusBarManager;
   private webviewProvider: UsageWebviewProvider;
   private apiClient: ClaudeApiClient;
+  private settings: SettingsStore;
   private refreshTimer: NodeJS.Timeout | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
   private watchDebounceTimer: NodeJS.Timeout | undefined;
@@ -68,12 +70,21 @@ export class ClaudeCodeUsageExtension {
     this.outputChannel = vscode.window.createOutputChannel('Claude Code Usage');
     context.subscriptions.push(this.outputChannel);
     this.statusBar = new StatusBarManager();
+    this.settings = new SettingsStore(context);
     this.webviewProvider = new UsageWebviewProvider(context);
     this.apiClient = new ClaudeApiClient(this.outputChannel);
+    // Migrate any pre-2.1 settings.json values for the keys that have moved out
+    // of the VS Code Settings UI into the dashboard-managed store. Runs once.
+    void this.settings.migrateOnce();
     // Usage Optimizer (Phase 9c): the webview posts a draft prompt; we run it
     // through the same model backend as the advice feature and post back a
     // tightened prompt + a settings recommendation. Consent gate lives here.
     this.webviewProvider.onOptimize = (draft, options) => this.runOptimizer(draft, options);
+    // Share the settings store with the dashboard's ⚙ Settings panel, and have
+    // it tell us when the user changes a setting there so we re-apply config
+    // (globalState changes don't fire onDidChangeConfiguration).
+    this.webviewProvider.settings = this.settings;
+    this.webviewProvider.onSettingsChanged = () => this.onConfigurationChanged();
 
     this.setupCommands();
     this.loadConfiguration();
@@ -315,40 +326,33 @@ export class ClaudeCodeUsageExtension {
   }
 
   private getConfiguration(): ExtensionConfig {
-    const config = vscode.workspace.getConfiguration('claudeCodeUsage');
+    // All settings now flow through SettingsStore: the core trio (language,
+    // dataDirectory, advice.apiKey) still lives in VS Code config; the rest in
+    // the dashboard-managed store. Defaults come from the settings catalog.
+    const s = this.settings;
     return {
-      refreshInterval: config.get('refreshInterval', 60),
-      dataDirectory: config.get('dataDirectory', ''),
-      language: config.get('language', 'auto'),
-      decimalPlaces: config.get('decimalPlaces', 2),
-      compactNumbers: config.get('compactNumbers', false),
-      timezone: config.get('timezone', ''),
-      showCost: config.get('showCost', true),
-      showContext: config.get('showContext', true),
-      usageLimitTracking: config.get('usageLimitTracking', true),
-      // apiKey is the gate for the advice feature: ONLY read the new dotted
-      // key. We deliberately do NOT fall back to the pre-2.0 flat
-      // `adviceApiKey` here — otherwise users who clear the new key in
-      // Settings would silently keep the feature enabled via the stale flat
-      // key, with no way to enter demo mode. Other config (URL / model /
-      // effort) still falls back, since they only affect *how* requests are
-      // sent, not whether they are sent.
-      adviceApiKey: config.get<string>('advice.apiKey', ''),
-      adviceApiUrl:
-        config.get<string>('advice.apiUrl') ||
-        config.get<string>('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
-      adviceModel: config.get<string>('advice.model') || config.get<string>('adviceModel', 'deepseek-v4-pro'),
-      adviceReasoningEffort:
-        config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
-      adviceUserContext: config.get<string>('advice.userContext', ''),
-      adviceBackend: config.get<'subscription' | 'api'>('advice.backend', 'subscription'),
-      adviceApiFormat: config.get<'anthropic' | 'openai'>('advice.apiFormat', 'anthropic'),
-      adviceSubscriptionModel: config.get<string>('advice.subscriptionModel', 'claude-haiku-4-5'),
-      advicePromptWindowDays: config.get<number>('advice.promptWindowDays', 30),
-      enableContentAnalysis: config.get('enableContentAnalysis', true),
-      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
-      fileWatching: config.get('fileWatching', true),
-      pauseDashboardRefresh: config.get('pauseDashboardRefresh', false)
+      refreshInterval: s.get<number>('refreshInterval'),
+      dataDirectory: s.get<string>('dataDirectory'),
+      language: s.get<string>('language'),
+      decimalPlaces: s.get<number>('decimalPlaces'),
+      compactNumbers: s.get<boolean>('compactNumbers'),
+      timezone: s.get<string>('timezone'),
+      showCost: s.get<boolean>('showCost'),
+      showContext: s.get<boolean>('showContext'),
+      usageLimitTracking: s.get<boolean>('usageLimitTracking'),
+      adviceApiKey: s.get<string>('advice.apiKey'),
+      adviceApiUrl: s.get<string>('advice.apiUrl'),
+      adviceModel: s.get<string>('advice.model'),
+      adviceReasoningEffort: s.get<string>('advice.reasoningEffort'),
+      adviceUserContext: s.get<string>('advice.userContext'),
+      adviceBackend: s.get<'subscription' | 'api'>('advice.backend'),
+      adviceApiFormat: s.get<'anthropic' | 'openai'>('advice.apiFormat'),
+      adviceSubscriptionModel: s.get<string>('advice.subscriptionModel'),
+      advicePromptWindowDays: s.get<number>('advice.promptWindowDays'),
+      enableContentAnalysis: s.get<boolean>('enableContentAnalysis'),
+      projectGroupingMode: s.get<'git' | 'folder' | 'flat'>('projectGroupingMode'),
+      fileWatching: s.get<boolean>('fileWatching'),
+      pauseDashboardRefresh: s.get<boolean>('pauseDashboardRefresh')
     };
   }
 

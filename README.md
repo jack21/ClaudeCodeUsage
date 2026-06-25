@@ -170,33 +170,25 @@ downloaded `.vsix`.
 
 ## Configuration
 
-Open Settings (`Ctrl+,`) and search for **`Claude Code Usage`**. All
-settings are optional; defaults preserve upstream behaviour where
-reasonable.
+**Most settings live in the dashboard now.** Open the dashboard (run
+**Show Usage Details**, or click the ⚙ in its header) and use the **⚙ Settings**
+tab — grouped into General, Status bar, Data & refresh, and AI advice &
+Optimizer. Changes apply immediately.
+
+To keep VS Code's own Settings UI uncluttered, only three settings stay there
+(so they still travel with Settings Sync). Open Settings (`Ctrl+,`) and search
+for **`Claude Code Usage`**:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `refreshInterval` | `60` | Refresh interval in seconds (min 30). |
-| `dataDirectory` | `""` | Custom Claude data dir; empty = auto-detect. |
 | `language` | `"auto"` | UI language: `auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`. |
-| `decimalPlaces` | `2` | Decimal places in cost display (0–4). |
-| `compactNumbers` | `false` | Show `1.2M` / `345K` instead of full numbers. |
-| `timezone` | `""` | IANA timezone for date display (e.g. `Asia/Hong_Kong`). |
-| `usageLimitTracking` | `true` | Show real 5h / weekly quota in the status bar. |
-| `showCost` | `true` | Show today's cost item in the status bar. |
-| `showContext` | `true` | Show the current session's context-window fill (like `/context`). Set this, `showCost`, or `usageLimitTracking` to `false` to hide that status-bar item. |
-| `enableContentAnalysis` | `true` | Run the Content tab token analysis. |
-| `projectGroupingMode` | `"git"` | Projects tab grouping: `git` / `folder` / `flat`. |
-| `advice.backend` | `"subscription"` | Where AI advice + Optimizer send requests. `subscription` reuses your Claude Code sign-in (no key, a little quota); `api` uses the key below. |
-| `advice.apiFormat` | `"anthropic"` | `api`-backend request shape: `anthropic` (`/v1/messages`) or `openai` (chat-completions, e.g. DeepSeek). |
-| `advice.subscriptionModel` | `"claude-haiku-4-5"` | Model for the `subscription` backend (a cheap model keeps quota use tiny). |
-| `advice.apiKey` | `""` | API key for the `api` backend. |
-| `advice.apiUrl` | `https://api.deepseek.com/chat/completions` | Endpoint for the `api` backend (Anthropic or chat-completions). |
-| `advice.model` | `"deepseek-v4-pro"` | Model name for the `api` backend. |
-| `advice.reasoningEffort` | `"max"` | Reasoning effort for the `openai` format. |
-| `advice.userContext` | `""` | Optional background about you/the project; adds a "Personalised for this project" section. |
-| `advice.promptWindowDays` | `30` | Days of prompts/content the analysis samples (1–365). |
-| `advice.optimizer.enabled` | `false` | Show the opt-in Usage Optimizer on the Content tab. |
+| `dataDirectory` | `""` | Custom Claude data dir; empty = auto-detect. |
+| `advice.apiKey` | `""` | API key for the AI advice `api` backend (empty = use the subscription backend). |
+
+Everything else — refresh interval, status-bar items, number/date formatting,
+project grouping, content analysis, and all the AI advice / Optimizer options —
+is in the dashboard's ⚙ Settings tab. Upgrading keeps your existing values: a
+one-time migration copies them out of `settings.json` on first launch.
 
 ---
 
