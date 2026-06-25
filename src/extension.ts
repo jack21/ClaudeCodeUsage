@@ -339,15 +339,19 @@ export class ClaudeCodeUsageExtension {
       timezone: s.get<string>('timezone'),
       showCost: s.get<boolean>('showCost'),
       showContext: s.get<boolean>('showContext'),
+      contextWindowOverride: s.get<number>('contextWindowOverride'),
       usageLimitTracking: s.get<boolean>('usageLimitTracking'),
       adviceApiKey: s.get<string>('advice.apiKey'),
       adviceApiUrl: s.get<string>('advice.apiUrl'),
       adviceModel: s.get<string>('advice.model'),
       adviceReasoningEffort: s.get<string>('advice.reasoningEffort'),
       adviceUserContext: s.get<string>('advice.userContext'),
-      adviceBackend: s.get<'subscription' | 'api'>('advice.backend'),
+      // Subscription backend is not shipped this version (Anthropic 403s the
+      // OAuth-token direct call) — advice/optimizer are API-only. The dormant
+      // subscription transport remains in advisor.ts.
+      adviceBackend: 'api',
       adviceApiFormat: s.get<'anthropic' | 'openai'>('advice.apiFormat'),
-      adviceSubscriptionModel: s.get<string>('advice.subscriptionModel'),
+      adviceSubscriptionModel: 'claude-haiku-4-5',
       advicePromptWindowDays: s.get<number>('advice.promptWindowDays'),
       enableContentAnalysis: s.get<boolean>('enableContentAnalysis'),
       projectGroupingMode: s.get<'git' | 'folder' | 'flat'>('projectGroupingMode'),
@@ -591,7 +595,8 @@ export class ClaudeCodeUsageExtension {
         this.statusBar.updateContext(
           ClaudeDataLoader.getCurrentContextInfo(
             this.cache.records,
-            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+            config.contextWindowOverride
           )
         );
         return;
@@ -655,7 +660,9 @@ export class ClaudeCodeUsageExtension {
       // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
       // above; passing undefined leaves the quota item untouched here.
       this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
-      this.statusBar.updateContext(ClaudeDataLoader.getCurrentContextInfo(records, workspacePath));
+      this.statusBar.updateContext(
+        ClaudeDataLoader.getCurrentContextInfo(records, workspacePath, config.contextWindowOverride)
+      );
       if (updateWebview) {
         this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown, workflowBreakdown);
       }

@@ -228,6 +228,8 @@ export interface ExtensionConfig {
   showCost: boolean;
   // Show the current session's context-window fill in the status bar.
   showContext: boolean;
+  // Manual context-window size override in tokens (0 = auto-detect).
+  contextWindowOverride: number;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).
@@ -324,6 +326,10 @@ export interface ContextWindowInfo {
   contextTokens: number;
   windowTokens: number;
   model: string;
+  // True when the window size is a conservative guess (unrecognised / proxied
+  // model and no user override) rather than a known value — surfaced as a "~"
+  // marker so the percentage isn't presented as exact.
+  estimated: boolean;
   // Input-side composition of the latest request — lets the tooltip show a
   // /context-style breakdown instead of a single percentage.
   inputTokens: number;

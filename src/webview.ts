@@ -442,19 +442,15 @@ export class UsageWebviewProvider {
       title +
       `</h1>
             <div class="actions">
-              <label class="auto-refresh-switch" title="${this.escapeHtml(I18n.t.popup.autoRefresh)}">
-                <span class="auto-refresh-label">${I18n.t.popup.autoRefresh}</span>
-                <span class="switch">
-                  <input type="checkbox" id="autoRefreshCheckbox" ${
-                    this.setting<boolean>('pauseDashboardRefresh', false) ? '' : 'checked'
-                  } onchange="toggleAutoRefresh()">
-                  <span class="slider"></span>
-                </span>
-              </label>
-              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
+              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now" title="${this.escapeHtml(
+                I18n.t.popup.refresh
+              )}">↻ ` +
       refresh +
       `</button>
-              <button onclick="showTab('settings')" class="btn-secondary">` +
+              <button onclick="showTab('content')" class="btn-secondary">✨ ` +
+      I18n.t.popup.adviceCardTitle +
+      `</button>
+              <button onclick="showTab('settings')" class="btn-secondary">⚙ ` +
       settings +
       `</button>
             </div>
@@ -502,7 +498,7 @@ export class UsageWebviewProvider {
       `</button>
             <button id="tab-settings" class="tab ` +
       settingsActive +
-      `" onclick="showTab('settings')">⚙ ` +
+      `" onclick="showTab('settings')">` +
       settingsTab +
       `</button>
           </div>
@@ -3606,13 +3602,6 @@ const __dateOpts = (extra) => {
 function refresh() {
   console.log("[DEBUG] refresh called");
   vscode.postMessage({ command: 'refresh' });
-}
-
-function toggleAutoRefresh() {
-  var checkbox = document.getElementById('autoRefreshCheckbox');
-  var nowOff = !checkbox.checked;
-  document.body.classList.toggle('auto-off', nowOff);
-  vscode.postMessage({ command: 'setPauseDashboardRefresh', value: nowOff });
 }
 
 function openSettings() {

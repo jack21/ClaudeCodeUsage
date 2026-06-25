@@ -131,7 +131,9 @@ export class StatusBarManager {
       return;
     }
     const pct = Math.min(100, (info.contextTokens / info.windowTokens) * 100);
-    this.contextItem.text = `$(layers) ${Math.round(pct)}%`;
+    // "~" marks an estimated (guessed) window size so the % doesn't read as exact.
+    const approx = info.estimated ? '~' : '';
+    this.contextItem.text = `$(layers) ${approx}${Math.round(pct)}%`;
 
     // Same thresholds as the quota item: amber at 80%, red at 95%.
     if (pct >= 95) {
@@ -145,24 +147,25 @@ export class StatusBarManager {
     const t = I18n.t.popup;
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
+    md.supportHtml = true;
     md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
+    // A quota-style progress bar, then the figures. "~" before the window size
+    // when it was guessed (see the override setting).
     md.appendMarkdown(
-      `$(layers) ${I18n.formatNumber(info.contextTokens)} / ${I18n.formatNumber(info.windowTokens)} ` +
-        `(${pct.toFixed(1)}%)\n\n`
+      `${this.progressBarSvg(pct)} &nbsp; ${pct.toFixed(1)}%\n\n`
     );
-    // A /context-style breakdown of the latest request's input side, so the
-    // tooltip earns its space instead of repeating the percentage.
+    md.appendMarkdown(
+      `${I18n.formatNumber(info.contextTokens)} / ${approx}${I18n.formatNumber(info.windowTokens)}\n\n`
+    );
+    // Input-side composition of the latest request.
     const freeSpace = Math.max(0, info.windowTokens - info.contextTokens);
     md.appendMarkdown('| | |\n|:--|--:|\n');
     md.appendMarkdown(`| ${t.inputTokens} | ${I18n.formatNumber(info.inputTokens)} |\n`);
     md.appendMarkdown(`| ${t.cacheRead} | ${I18n.formatNumber(info.cacheReadTokens)} |\n`);
     md.appendMarkdown(`| ${t.cacheCreation} | ${I18n.formatNumber(info.cacheCreationTokens)} |\n`);
-    md.appendMarkdown(`| ${t.freeSpace} | ${I18n.formatNumber(freeSpace)} |\n\n`);
-    // Each \n-separated note line becomes its own italic line (keeps the
-    // /clear sentence on a line of its own).
-    const ital = (s: string): string => s.split('\n').map((l) => `*${l}*`).join('  \n');
-    md.appendMarkdown(ital(t.contextCostHint) + '  \n');
-    md.appendMarkdown(ital(t.contextHint));
+    md.appendMarkdown(`| ${t.contextLeft} | ${I18n.formatNumber(freeSpace)} |\n\n`);
+    // One short, actionable line only (the explanation lives in Settings).
+    md.appendMarkdown(`*${t.contextHint}*`);
     this.contextItem.tooltip = md;
     this.contextItem.show();
   }

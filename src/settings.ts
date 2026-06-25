@@ -104,11 +104,23 @@ export const SETTINGS: SettingDef[] = [
   {
     key: 'showContext',
     type: 'boolean',
-    default: true,
+    default: false,
     storage: 'state',
     group: 'statusBar',
-    label: 'Show context-window fill',
-    help: 'Current session context %, like /context.',
+    label: 'Show context-window fill (experimental)',
+    help:
+      'Off by default. Estimates the current session context %, like /context, from the latest log record. It can only show the input-side total, not /context’s category breakdown (those are Claude Code internals not written to disk), so it is approximate — a "~" marks a guessed window size.',
+  },
+  {
+    key: 'contextWindowOverride',
+    type: 'number',
+    default: 0,
+    storage: 'state',
+    group: 'statusBar',
+    label: 'Context window override (tokens)',
+    help: '0 = auto-detect from the model. Set your real window (e.g. 1000000) for proxied/custom models the auto-detect cannot recognise.',
+    min: 0,
+    max: 10_000_000,
   },
   {
     key: 'usageLimitTracking',
@@ -188,25 +200,12 @@ export const SETTINGS: SettingDef[] = [
   },
 
   // --- AI advice & Optimizer ---
-  {
-    key: 'advice.backend',
-    type: 'enum',
-    default: 'subscription',
-    storage: 'state',
-    group: 'advice',
-    label: 'Advice backend',
-    help: 'subscription = your Claude sign-in (no key) · api = your own key.',
-    enumValues: ['subscription', 'api'],
-  },
-  {
-    key: 'advice.subscriptionModel',
-    type: 'string',
-    default: 'claude-haiku-4-5',
-    storage: 'state',
-    group: 'advice',
-    label: 'Subscription model',
-    help: 'Cheap model for the subscription backend.',
-  },
+  // NOTE: the 'subscription' backend (call Anthropic with the Claude Code OAuth
+  // session, no API key) is intentionally NOT shipped in this version. Anthropic
+  // returns 403 "Request not allowed" for that gray-area use of the OAuth token
+  // (it only succeeds by routing around the TLS-fingerprint gate via curl), so
+  // it is too fragile/inappropriate for a public extension. The transport code
+  // stays in advisor.ts, dormant, to re-enable if direct calls become allowed.
   {
     key: 'advice.apiKey',
     type: 'string',

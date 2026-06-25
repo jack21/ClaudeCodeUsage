@@ -1114,7 +1114,11 @@ export class ClaudeDataLoader {
    * Same workspace scoping and 5-hour recency rule as getCurrentSessionData.
    * (Merged from PR #31, @ScherbakovAl.)
    */
-  static getCurrentContextInfo(records: ClaudeUsageRecord[], workspacePath?: string): ContextWindowInfo | null {
+  static getCurrentContextInfo(
+    records: ClaudeUsageRecord[],
+    workspacePath?: string,
+    windowOverride: number = 0
+  ): ContextWindowInfo | null {
     let pool = records;
     if (workspacePath) {
       const scoped = this.filterByWorkspace(records, workspacePath);
@@ -1122,28 +1126,38 @@ export class ClaudeDataLoader {
         pool = scoped;
       }
     }
+    // Main thread only: sub-agent / workflow records carry _agentId / _workflowId
+    // and would otherwise hijack "current context" with a sub-agent's own (often
+    // smaller) window while a workflow runs. Fall back to the full pool only if
+    // there are no main-thread records at all.
+    const mainThread = pool.filter((r) => !r._agentId && !r._workflowId);
+    const base = mainThread.length > 0 ? mainThread : pool;
     // Only real assistant requests carry context information — synthetic
     // user-prompt markers and API-error records have zero usage.
-    pool = pool.filter((r) => this.recordContextTokens(r) > 0);
-    if (pool.length === 0) {
+    const withCtx = base.filter((r) => this.recordContextTokens(r) > 0);
+    if (withCtx.length === 0) {
       return null;
     }
 
-    let latest = pool[0];
-    for (const r of pool) {
+    let latest = withCtx[0];
+    for (const r of withCtx) {
       if (new Date(r.timestamp).getTime() > new Date(latest.timestamp).getTime()) {
         latest = r;
       }
     }
-    if (Date.now() - new Date(latest.timestamp).getTime() > 5 * 60 * 60 * 1000) {
+    // Show the most-recent session's context on startup too (opening a window
+    // in the morning shouldn't blank it). Hide only once it is genuinely stale.
+    if (Date.now() - new Date(latest.timestamp).getTime() > 24 * 60 * 60 * 1000) {
       return null;
     }
 
     const model = latest.message.model || '';
     const usage = latest.message.usage;
+    const win = this.contextWindowFor(model, windowOverride);
     return {
       contextTokens: this.recordContextTokens(latest),
-      windowTokens: this.contextWindowFor(model),
+      windowTokens: win.tokens,
+      estimated: win.estimated,
       model,
       inputTokens: usage.input_tokens || 0,
       cacheReadTokens: usage.cache_read_input_tokens || 0,
@@ -1151,29 +1165,38 @@ export class ClaudeDataLoader {
     };
   }
 
-  /** Model context-window size in tokens. Current-generation Claude (Opus
-   * 4.6+, Sonnet 4.6+, Fable/Mythos 5) is 1M; Haiku and older Claude are 200K;
-   * a "[1m]" suffix forces 1M (the marker pricing.ts strips). Verified against
-   * the model catalog 2026-06-13. Unknown/proxy models default conservatively. */
-  private static contextWindowFor(model: string): number {
+  /** Model context-window size in tokens, plus whether it's a guess. Current
+   * Claude (Opus 4.6+, Sonnet 4.6+, Fable/Mythos 5) is 1M; Haiku and older
+   * Claude are 200K; a "[1m]" suffix forces 1M (the marker pricing.ts strips).
+   * A user override (>0) wins outright and is treated as exact. Unrecognised /
+   * proxied models fall back to 200K and are flagged `estimated` so the UI can
+   * mark the percentage as approximate. Verified vs the catalog 2026-06-13. */
+  private static contextWindowFor(
+    model: string,
+    override: number = 0
+  ): { tokens: number; estimated: boolean } {
+    if (override && override > 0) {
+      return { tokens: override, estimated: false };
+    }
     const m = (model || '').toLowerCase();
     if (/\[1m\]/.test(m)) {
-      return 1_000_000;
+      return { tokens: 1_000_000, estimated: false };
     }
     if (/fable|mythos/.test(m)) {
-      return 1_000_000;
+      return { tokens: 1_000_000, estimated: false };
     }
     // Opus 4.6+ and Sonnet 4.6+ are 1M; earlier 4.x and 3.x are 200K.
     if (/opus-4-(?:[6-9]|\d\d)\b/.test(m) || /sonnet-4-(?:[6-9]|\d\d)\b/.test(m)) {
-      return 1_000_000;
+      return { tokens: 1_000_000, estimated: false };
     }
     if (/haiku/.test(m) || /opus|sonnet/.test(m)) {
-      return 200_000;
+      return { tokens: 200_000, estimated: false };
     }
     if (/deepseek/.test(m)) {
-      return 128_000;
+      return { tokens: 128_000, estimated: false };
     }
-    return 200_000;
+    // Unknown / proxied model — conservative default, flagged as a guess.
+    return { tokens: 200_000, estimated: true };
   }
 
   static getTodayData(records: ClaudeUsageRecord[]): UsageData {

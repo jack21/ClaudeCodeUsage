@@ -61,8 +61,7 @@ export interface Translations {
     quotaHint: string;
     contextWindow: string;
     contextHint: string;
-    contextCostHint: string;
-    freeSpace: string;
+    contextLeft: string;
     contentAnalysis: string;
     estimatedNote: string;
     calibratedNote: string;
@@ -232,9 +231,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: 'Weekly',
       quotaHint: 'Real data from Anthropic /usage.',
       contextWindow: 'Context window',
-      contextHint: 'Estimate; updates next message.\n/clear & compaction may lag a turn.',
-      contextCostHint: 'Longer sessions cost more even when cached.\n/compact mid-task · /clear between tasks.',
-      freeSpace: 'Free space',
+      contextHint: 'New task? Use /clear to reset the context.',
+      contextLeft: 'Context left',
       contentAnalysis: 'Content',
       estimatedNote: 'Estimated from text length — relative shares are reliable, absolute figures are approximate.',
       calibratedNote: 'Calibrated: per-category shares from text length, scaled to the exact billed token totals (output side / input + cache-write side). Toggle with analysis.calibrate.',
@@ -425,9 +423,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: "Woche",
       quotaHint: "Echte Daten von Anthropic /usage.",
       contextWindow: "Kontextfenster",
-      contextHint: "Schätzung; aktualisiert bei nächster Nachricht.\n/clear & Komprimierung ggf. verzögert.",
-      contextCostHint: "Längere Sitzungen kosten mehr, auch im Cache.\n/compact während der Aufgabe · /clear beim Themenwechsel.",
-      freeSpace: "Freier Platz",
+      contextHint: "Neue Aufgabe? Mit /clear den Kontext zurücksetzen.",
+      contextLeft: "Kontext frei",
       contentAnalysis: "Inhalt",
       estimatedNote: "Aus Textlänge geschätzt — relative Anteile sind verlässlich, absolute Werte ungefähr.",
       calibratedNote: "Kalibriert: Anteile je Kategorie aus der Textlänge, skaliert auf die exakten abgerechneten Token-Summen (Ausgabeseite / Eingabe + Cache-Schreiben). Umschalten mit analysis.calibrate.",
@@ -621,9 +618,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每週',
       quotaHint: '來自 Anthropic /usage 的真實資料。',
       contextWindow: '上下文視窗',
-      contextHint: '估算值，下一則訊息更新。\n/clear 或壓縮可能延後一輪反映。',
-      contextCostHint: '工作階段長，成本高。\n任務中用 /compact · 切換任務時用 /clear。',
-      freeSpace: '剩餘空間',
+      contextHint: '切換任務時用 /clear 重置上下文。',
+      contextLeft: '上下文餘量',
       contentAnalysis: '內容分析',
       estimatedNote: '由文字長度估算 —— 相對佔比可靠,絕對數值為近似值。',
       calibratedNote: '已校準：各類別佔比由文字長度估算,再縮放到精確的帳單 token 總量（輸出側 / 輸入＋快取寫入側）。用 analysis.calibrate 切換。',
@@ -810,9 +806,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '每周',
       quotaHint: '来自 Anthropic /usage 的真实数据。',
       contextWindow: '上下文窗口',
-      contextHint: '估算值，下一条消息更新。\n/clear 或压缩可能延后一轮反映。',
-      contextCostHint: '会话长，成本高。\n任务中用 /compact · 切换任务时用 /clear。',
-      freeSpace: '剩余空间',
+      contextHint: '切换任务时用 /clear 重置上下文。',
+      contextLeft: '上下文余量',
       contentAnalysis: '内容分析',
       estimatedNote: '由文本长度估算 —— 相对占比可靠,绝对数值为近似值。',
       calibratedNote: '已校准：各类别占比由文本长度估算,再缩放到精确的账单 token 总量（输出侧 / 输入＋缓存写入侧）。用 analysis.calibrate 切换。',
@@ -999,9 +994,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '週間',
       quotaHint: 'Anthropic /usage からの実データ。',
       contextWindow: 'コンテキストウィンドウ',
-      contextHint: '推定値。次のメッセージで更新。\n/clear や圧縮は1ターン遅れる場合あり。',
-      contextCostHint: 'セッションが長いほどコスト増（キャッシュでも）。\n作業中は /compact · タスク切替時は /clear。',
-      freeSpace: '空き容量',
+      contextHint: 'タスク切替時は /clear でコンテキストをリセット。',
+      contextLeft: 'コンテキスト残り',
       contentAnalysis: 'コンテンツ',
       estimatedNote: 'テキスト長からの推定値 — 相対割合は信頼でき、絶対値は概算です。',
       calibratedNote: 'キャリブレーション済み：カテゴリ別の割合はテキスト長から推定し、正確な請求トークン総量（出力側 / 入力＋キャッシュ書込側）にスケールしています。analysis.calibrate で切替。',
@@ -1193,9 +1187,8 @@ const translations: Record<SupportedLanguage, Translations> = {
       quotaWeekly: '주간',
       quotaHint: 'Anthropic /usage의 실제 데이터입니다.',
       contextWindow: '컨텍스트 윈도우',
-      contextHint: '추정치. 다음 메시지에서 갱신.\n/clear·압축은 한 턴 늦을 수 있음.',
-      contextCostHint: '세션이 길수록 비용 증가(캐시여도).\n작업 중 /compact · 전환 시 /clear.',
-      freeSpace: '여유 공간',
+      contextHint: '작업 전환 시 /clear로 컨텍스트를 초기화하세요.',
+      contextLeft: '컨텍스트 여유',
       contentAnalysis: '콘텐츠',
       estimatedNote: '텍스트 길이로 추정 — 상대 비율은 신뢰할 수 있고 절대값은 근사치입니다.',
       calibratedNote: '보정됨: 카테고리별 비율은 텍스트 길이로 추정하고, 정확한 청구 토큰 총량(출력 측 / 입력＋캐시 쓰기 측)에 맞춰 스케일했습니다. analysis.calibrate로 전환.',
