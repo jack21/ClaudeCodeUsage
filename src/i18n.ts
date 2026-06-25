@@ -146,6 +146,8 @@ export interface Translations {
     optimizerAesthetic: string;
     optimizerPromptHeading: string;
     optimizerSettingsHeading: string;
+    optimizerHowto: string;
+    experimentalBadge: string;
     adviceNeedsKey: string;
     adviceGenerating: string;
     adviceFailed: string;
@@ -315,9 +317,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         'Send your usage digest + a sample of your own prompts to your model and get concrete tips on writing clearer instructions and cutting waste.',
       optimizerTitle: 'Usage optimizer',
       optimizerDesc:
-        'Paste a rough request; get back a tightened, ready-to-paste prompt plus a suggested effort / thinking / model. Off by default; only your pasted text is sent.',
+        'Turn a rough, half-formed request into a clean prompt you can paste straight into Claude Code — plus a suggested effort / thinking / model for the task.',
+      optimizerHowto:
+        'Type or paste your draft below, tick any of the optional lenses, then click Optimise. Only the text you paste is sent to your model — never to Claude Code or your terminal.',
       optimizerConsent:
-        'The Usage Optimizer sends the text you paste to your configured model (advice.backend). Nothing is sent to Claude Code and nothing is typed into a terminal. Continue?',
+        'The Usage Optimizer sends the text you paste to your configured API model. Nothing is sent to Claude Code and nothing is typed into a terminal. Continue?',
       optimizerEnableBtn: 'Enable in settings',
       optimizerPlaceholder: 'Paste a rough prompt to optimise…',
       optimizerRun: 'Optimise',
@@ -329,6 +333,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: 'Offer style directions',
       optimizerPromptHeading: 'Optimised prompt',
       optimizerSettingsHeading: 'Recommended run settings',
+      experimentalBadge: 'experimental',
       adviceNeedsKey: 'Set an API key in Settings to use AI advice.',
       adviceGenerating: 'Generating usage advice…',
       adviceFailed: 'Failed to get advice',
@@ -507,9 +512,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         "Sende deine Nutzungsübersicht + eine Auswahl deiner eigenen Prompts an dein Modell und erhalte konkrete Tipps für klarere Anweisungen und weniger Verschwendung.",
       optimizerTitle: "Nutzungs-Optimierer",
       optimizerDesc:
-        "Füge eine grobe Anfrage ein; erhalte einen verdichteten, einfügefertigen Prompt plus empfohlenes Effort / Thinking / Modell. Standardmäßig aus; nur dein eingefügter Text wird gesendet.",
+        "Mach aus einer groben, halbfertigen Anfrage einen sauberen Prompt, den du direkt in Claude Code einfügen kannst — plus empfohlenes Effort / Thinking / Modell für die Aufgabe.",
+      optimizerHowto:
+        "Tippe oder füge deinen Entwurf unten ein, aktiviere optionale Linsen und klicke Optimieren. Nur der eingefügte Text wird an dein Modell gesendet — nie an Claude Code oder dein Terminal.",
       optimizerConsent:
-        "Der Nutzungs-Optimierer sendet den eingefügten Text an dein konfiguriertes Modell (advice.backend). Nichts geht an Claude Code, nichts wird ins Terminal getippt. Fortfahren?",
+        "Der Nutzungs-Optimierer sendet den eingefügten Text an dein konfiguriertes API-Modell. Nichts geht an Claude Code, nichts wird ins Terminal getippt. Fortfahren?",
       optimizerEnableBtn: "In Einstellungen aktivieren",
       optimizerPlaceholder: "Groben Prompt zum Optimieren einfügen…",
       optimizerRun: "Optimieren",
@@ -521,6 +528,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: "Stilrichtungen anbieten",
       optimizerPromptHeading: "Optimierter Prompt",
       optimizerSettingsHeading: "Empfohlene Lauf-Einstellungen",
+      experimentalBadge: "experimentell",
       adviceNeedsKey: "API-Schlüssel in den Einstellungen festlegen, um KI-Rat zu nutzen.",
       adviceGenerating: "Nutzungsrat wird erstellt…",
       adviceFailed: "Rat konnte nicht abgerufen werden",
@@ -698,9 +706,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         '將你的用量摘要 + 你自己的 prompt 樣本送給模型，取得寫出更清楚指令、減少浪費的具體建議。',
       optimizerTitle: '用量優化器',
       optimizerDesc:
-        '貼上粗略的需求，得到精煉、可直接貼上的 prompt，以及建議的 effort / thinking / 模型。預設關閉；只會送出你貼上的文字。',
+        '把粗略、半成形的需求，變成可直接貼進 Claude Code 的乾淨 prompt，並附上這個任務建議的 effort / thinking / 模型。',
+      optimizerHowto:
+        '在下方輸入或貼上你的草稿，勾選任意可選透鏡，再按「優化」。只有你貼上的文字會送給模型——不會送給 Claude Code 或終端。',
       optimizerConsent:
-        '用量優化器會把你貼上的文字送給你配置的模型（advice.backend）。不會送給 Claude Code，也不會注入終端。要繼續嗎？',
+        '用量優化器會把你貼上的文字送給你配置的 API 模型。不會送給 Claude Code，也不會注入終端。要繼續嗎？',
       optimizerEnableBtn: '在設定中啟用',
       optimizerPlaceholder: '貼上要優化的粗略 prompt…',
       optimizerRun: '優化',
@@ -712,6 +722,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: '提供風格方向',
       optimizerPromptHeading: '優化後 prompt',
       optimizerSettingsHeading: '建議運行設定',
+      experimentalBadge: '實驗性',
       adviceNeedsKey: '請先在設定中填入 API 金鑰以使用 AI 建議。',
       adviceGenerating: '正在產生使用建議…',
       adviceFailed: '取得建議失敗',
@@ -886,9 +897,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         '将你的用量摘要 + 你自己的 prompt 样本送给模型，获得写出更清晰指令、减少浪费的具体建议。',
       optimizerTitle: '用量优化器',
       optimizerDesc:
-        '粘贴粗略的需求，得到精炼、可直接粘贴的 prompt，以及建议的 effort / thinking / 模型。默认关闭；只会发送你粘贴的文字。',
+        '把粗略、没成形的需求，变成可以直接粘进 Claude Code 的干净 prompt，并附上这个任务建议的 effort / thinking / 模型。',
+      optimizerHowto:
+        '在下方输入或粘贴你的草稿，按需勾选可选透镜，再点「优化」。只有你粘贴的文字会发给模型——不会发给 Claude Code，也不会注入终端。',
       optimizerConsent:
-        '用量优化器会把你粘贴的文字发送给你配置的模型（advice.backend）。不会发送给 Claude Code，也不会注入终端。要继续吗？',
+        '用量优化器会把你粘贴的文字发送给你配置的 API 模型。不会发送给 Claude Code，也不会注入终端。要继续吗？',
       optimizerEnableBtn: '在设置中启用',
       optimizerPlaceholder: '粘贴要优化的粗略 prompt…',
       optimizerRun: '优化',
@@ -900,6 +913,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: '提供风格方向',
       optimizerPromptHeading: '优化后 prompt',
       optimizerSettingsHeading: '建议运行设置',
+      experimentalBadge: '实验性',
       adviceNeedsKey: '请先在设置中填入 API 密钥以使用 AI 建议。',
       adviceGenerating: '正在生成使用建议…',
       adviceFailed: '获取建议失败',
@@ -1078,9 +1092,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         '使用量サマリー + あなた自身のプロンプトのサンプルをモデルに送り、より明確な指示と無駄削減の具体的なヒントを得ます。',
       optimizerTitle: '使用量オプティマイザー',
       optimizerDesc:
-        '雑な依頼を貼り付けると、引き締まった貼り付け可能なプロンプトと、推奨 effort / thinking / モデルが返ります。既定でオフ。送信されるのは貼り付けたテキストのみ。',
+        '雑で半端な依頼を、Claude Code にそのまま貼り付けられる整ったプロンプトに変換し、そのタスクに推奨の effort / thinking / モデルも返します。',
+      optimizerHowto:
+        '下に下書きを入力または貼り付け、任意のレンズを選び「最適化」を押します。送信されるのは貼り付けたテキストのみ——Claude Code やターミナルには送られません。',
       optimizerConsent:
-        '使用量オプティマイザーは貼り付けたテキストを設定したモデル（advice.backend）に送信します。Claude Code には送られず、ターミナルにも入力されません。続行しますか？',
+        '使用量オプティマイザーは貼り付けたテキストを設定した API モデルに送信します。Claude Code には送られず、ターミナルにも入力されません。続行しますか？',
       optimizerEnableBtn: '設定で有効化',
       optimizerPlaceholder: '最適化する雑なプロンプトを貼り付け…',
       optimizerRun: '最適化',
@@ -1092,6 +1108,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: 'スタイル方向を提案',
       optimizerPromptHeading: '最適化されたプロンプト',
       optimizerSettingsHeading: '推奨実行設定',
+      experimentalBadge: '実験的',
       adviceNeedsKey: '設定で API キーを入力してください。',
       adviceGenerating: '使用アドバイスを生成中…',
       adviceFailed: 'アドバイスの取得に失敗しました',
@@ -1271,9 +1288,11 @@ const translations: Record<SupportedLanguage, Translations> = {
         '사용량 요약 + 본인 프롬프트 샘플을 모델에 보내 더 명확한 지시와 낭비 줄이기에 대한 구체적 팁을 받습니다.',
       optimizerTitle: '사용량 옵티마이저',
       optimizerDesc:
-        '대략적인 요청을 붙여넣으면 다듬어진 붙여넣기용 프롬프트와 추천 effort / thinking / 모델을 돌려줍니다. 기본 꺼짐; 붙여넣은 텍스트만 전송됩니다.',
+        '대략적이고 정리되지 않은 요청을 Claude Code에 바로 붙여넣을 수 있는 깔끔한 프롬프트로 바꾸고, 그 작업에 추천하는 effort / thinking / 모델도 함께 제공합니다.',
+      optimizerHowto:
+        '아래에 초안을 입력하거나 붙여넣고, 선택 렌즈를 고른 뒤 「최적화」를 누르세요. 붙여넣은 텍스트만 모델로 전송됩니다 — Claude Code나 터미널로는 가지 않습니다.',
       optimizerConsent:
-        '사용량 옵티마이저는 붙여넣은 텍스트를 설정한 모델(advice.backend)로 보냅니다. Claude Code로는 전송되지 않고 터미널에도 입력되지 않습니다. 계속할까요?',
+        '사용량 옵티마이저는 붙여넣은 텍스트를 설정한 API 모델로 보냅니다. Claude Code로는 전송되지 않고 터미널에도 입력되지 않습니다. 계속할까요?',
       optimizerEnableBtn: '설정에서 사용',
       optimizerPlaceholder: '최적화할 대략적인 프롬프트 붙여넣기…',
       optimizerRun: '최적화',
@@ -1285,6 +1304,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerAesthetic: '스타일 방향 제안',
       optimizerPromptHeading: '최적화된 프롬프트',
       optimizerSettingsHeading: '추천 실행 설정',
+      experimentalBadge: '실험적',
       adviceNeedsKey: '설정에서 API 키를 입력하세요.',
       adviceGenerating: '사용 조언 생성 중…',
       adviceFailed: '조언을 가져오지 못했습니다',

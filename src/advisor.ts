@@ -277,11 +277,14 @@ export function buildOptimizerSystemPrompt(language: string, lenses: OptimizerLe
     'and every specific detail; never invent requirements. ' +
     extra.join(' ') +
     (extra.length > 0 ? ' ' : '') +
-    'Then recommend run settings for THIS task as a few short bullet lines: reasoning ' +
+    'CRITICAL: write the rewritten prompt as PLAIN TEXT — no Markdown at all (no **bold**, ' +
+    'no #headings, no backticks, no bullet characters), so it pastes cleanly into a ' +
+    'terminal. Use short paragraphs or hyphen lines if structure helps. ' +
+    'Then recommend run settings for THIS task as a few short lines: reasoning ' +
     'effort (low / medium / high / max), extended thinking (on / off), and model (a cheaper ' +
     'model for mechanical edits, the strongest for ambiguous or design-heavy work). Justify ' +
     'each in a few words. Output EXACTLY this shape and nothing else:\n' +
-    '===PROMPT===\n<the rewritten prompt>\n===SETTINGS===\n<the settings bullets>\n' +
+    '===PROMPT===\n<the rewritten prompt, plain text>\n===SETTINGS===\n<the settings lines>\n' +
     `Write everything in ${language}.`
   );
 }

@@ -1939,12 +1939,15 @@ export class UsageWebviewProvider {
   private renderAdviceCard(): string {
     const t = I18n.t.popup;
     return (
-      '<div class="daily-breakdown advice-card">' +
-      '<div class="section-header"><h3>✨ ' + t.adviceCardTitle + '</h3>' +
-      '<span class="section-header-right">' +
-      '<button class="btn-primary" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
-      '</span></div>' +
-      '<p class="table-hint">' + t.adviceCardDesc + '</p>' +
+      '<div class="action-card">' +
+      '<div class="action-card-head">' +
+      '<span class="action-icon">✨</span>' +
+      '<div class="action-card-titles">' +
+      '<h3>' + t.adviceCardTitle + '</h3>' +
+      '<p class="action-card-desc">' + t.adviceCardDesc + '</p>' +
+      '</div>' +
+      '<button class="btn-primary" onclick="getAdvice()">' + t.getAdvice + '</button>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -1959,24 +1962,33 @@ export class UsageWebviewProvider {
   private renderOptimizerCard(): string {
     const t = I18n.t.popup;
     const enabled = this.setting<boolean>('advice.optimizer.enabled', false);
-    const header =
-      '<div class="section-header"><h3>🛠 ' + t.optimizerTitle + '</h3>';
+    // Shared header: icon badge + title (with an "experimental" pill) + purpose.
+    const head = (action: string): string =>
+      '<div class="action-card-head">' +
+      '<span class="action-icon">🛠</span>' +
+      '<div class="action-card-titles">' +
+      '<h3>' + t.optimizerTitle +
+      ' <span class="exp-pill">' + t.experimentalBadge + '</span></h3>' +
+      '<p class="action-card-desc">' + t.optimizerDesc + '</p>' +
+      '</div>' +
+      action +
+      '</div>';
+
     if (!enabled) {
       return (
-        '<div class="daily-breakdown advice-card">' +
-        header +
-        '<span class="section-header-right">' +
-        '<button class="btn-secondary btn-small" onclick="showTab(\'settings\')">' +
-        t.optimizerEnableBtn +
-        '</button></span></div>' +
-        '<p class="table-hint">' + t.optimizerDesc + '</p>' +
+        '<div class="action-card">' +
+        head(
+          '<button class="btn-secondary btn-small" onclick="showTab(\'settings\')">' +
+            t.optimizerEnableBtn +
+            '</button>'
+        ) +
         '</div>'
       );
     }
     return (
-      '<div class="daily-breakdown advice-card">' +
-      header + '</div>' +
-      '<p class="table-hint">' + t.optimizerDesc + '</p>' +
+      '<div class="action-card">' +
+      head('') +
+      '<p class="action-card-howto">' + t.optimizerHowto + '</p>' +
       '<textarea id="optDraft" class="opt-input" rows="4" placeholder="' +
       this.escapeHtml(t.optimizerPlaceholder) + '"></textarea>' +
       '<div class="opt-controls">' +
@@ -2480,11 +2492,84 @@ export class UsageWebviewProvider {
         cursor: default;
       }
 
-      /* AI advice + Usage Optimizer cards sit at the top of the Content tab. A
-         soft left accent + tint marks them as the actionable hero blocks. */
-      .advice-card {
-        border-left: 3px solid var(--vscode-focusBorder, var(--vscode-button-background));
-        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+      /* AI advice + Usage Optimizer "action cards" lead the Content tab. They
+         share one treatment — an accent rail + an icon badge — so they read as
+         the two tools, distinct from the data panels below, while staying quiet
+         and on-theme. The rail is the single signature element. */
+      .action-card {
+        position: relative;
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.25));
+        border-radius: 8px;
+        padding: 13px 16px 13px 18px;
+        margin-bottom: 14px;
+        background: var(--vscode-editor-background);
+      }
+      .action-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: var(--vscode-textLink-foreground, var(--vscode-button-background));
+      }
+      .action-card-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .action-icon {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        border-radius: 8px;
+        background: var(--vscode-badge-background);
+      }
+      .action-card-titles {
+        flex: 1;
+        min-width: 0;
+      }
+      .action-card-titles h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .action-card-desc {
+        margin: 3px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--vscode-descriptionForeground);
+      }
+      .action-card-howto {
+        margin: 12px 0 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--vscode-descriptionForeground);
+      }
+      .action-card-head .btn-primary,
+      .action-card-head .btn-secondary {
+        flex: 0 0 auto;
+        align-self: center;
+        white-space: nowrap;
+      }
+      .exp-pill {
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        color: var(--vscode-descriptionForeground);
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.4));
       }
       .opt-input {
         width: 100%;
