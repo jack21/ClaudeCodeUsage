@@ -66,20 +66,36 @@ tool results (by tool) vs. assistant output / thinking. This is the lever
 for optimising your usage. Scoped to the last 30 days
 (`advice.promptWindowDays`).*
 
-### AI advice + Usage Optimizer
+### AI advice — a coaching report from your real usage
 
-![AI advice](images/v2-advice-en.png)
+AI advice writes you a **Markdown document**, so it reads better as text than as
+a screenshot. Set a key (`advice.apiKey`), click **Get AI advice** (the ✨ button
+or the card on the Content tab), pick a scope (all projects, or one), and it sends
+your usage aggregates + a sample of *your own* prompts to your model and opens a
+prioritised report. Bring your own key — Anthropic (`/v1/messages`) by default, or
+any OpenAI-compatible endpoint.
 
-*Two action cards lead the Content tab. **AI advice** sends your usage
-aggregates + a sample of your prompts to your model and suggests concrete
-rewrites. Bring your own key — Anthropic (`/v1/messages`) by default, or any
-OpenAI-compatible endpoint.*
+A flavour of what it returns (illustrative):
 
-*The opt-in **Usage Optimizer** (experimental, off by default) turns a rough,
-half-formed request into one clean, paste-ready prompt — plain text, no
-Markdown — plus a recommended reasoning effort / thinking / model for the task.
-**Only the text you paste is sent** — never your files or the terminal — behind
-a one-time consent prompt.*
+> **Write more complete instructions**
+> - Several prompts open with "fix the bug" but don't name the file or the
+>   symptom, so the first turn is spent searching. Lead with the file + expected
+>   vs. actual behaviour.
+>
+> **Cut waste where it doesn't cost clarity**
+> - ~38% of your tokens are spent above 150k context. `/clear` between unrelated
+>   tasks keeps each request cheaper.
+
+### Usage Optimizer
+
+![Usage Optimizer card](images/v2-optimizer-en.png)
+
+Paste a rough, half-formed request; get back one clean, **paste-ready** prompt
+(plain text, no Markdown) plus a recommended reasoning effort / thinking / model
+shown as chips. Three optional toggles refine it (flag vague references · condense
+long pastes · suggest a style direction). Experimental, off by default; **only the
+text you paste is sent** — never your files or the terminal — behind a one-time
+consent prompt.
 
 ---
 
@@ -304,10 +320,14 @@ authoritative.
 
 ## Credits
 
-Forked from the upstream project now maintained at
-[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
-(originally by [@jack21](https://github.com/jack21)). MIT-licensed. This fork has
-grown well beyond the 2.0 baseline since — see [CHANGELOG.md](CHANGELOG.md).
+Maintained by [**@Carl723000**](https://github.com/Carl723000), who forked it
+from [@jack21](https://github.com/jack21)'s original
+[`ClaudeCodeUsage`](https://github.com/jack21) and now also helps own and
+maintain the upstream organization
+[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage).
+MIT-licensed. The 2.x work documented here (everything under "What's new") is by
+@Carl723000 with [Claude Code](https://claude.com/claude-code); it has grown well
+beyond the 2.0 baseline — see [CHANGELOG.md](CHANGELOG.md).
 
 Contributors whose upstream PRs / issues are incorporated here:
 

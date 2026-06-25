@@ -40,13 +40,23 @@
 
 *估算各类内容的 token 占比 —— 你的提示词 vs 工具结果（按工具）vs 助手输出 / 思考。这是优化使用的着力点，范围为最近 30 天（`advice.promptWindowDays`）。*
 
-### AI 建议 + 用量优化器
+### AI 建议 —— 基于你真实用量的一份教练报告
 
-![AI 建议](images/v2-advice-en.png)
+AI 建议生成的是一份 **Markdown 文档**，用文字展示比截图更直观。配好 key（`advice.apiKey`），点 **Get AI advice**（✨ 按钮，或 Content 标签页那张卡），选一个范围（全部项目，或某个项目），它会把你的用量汇总加上一份**你自己的**提示词样本发给你的模型，打开一份按优先级排好的报告。自备 key —— 默认 Anthropic（`/v1/messages`），也支持任意 OpenAI 兼容端点。
 
-*Content 标签页顶部有两张操作卡。**AI 建议**把你的用量汇总加上一份提示词样本发给你的模型，给出具体改写建议。**自备 key** —— 默认 Anthropic（`/v1/messages`），也支持任意 OpenAI 兼容端点。*
+返回内容大致是这样（示意）：
 
-*可选的**用量优化器**（实验性，默认关闭）把粗略、没成形的需求，变成一条可直接粘进 Claude Code 的干净提示词 —— **纯文本、无 Markdown** —— 并附上这个任务推荐的 effort / thinking / 模型。**只发送你粘贴的文字** —— 不碰你的文件、不进终端 —— 且首次使用有一次性同意确认。*
+> **把指令写得更完整**
+> - 有几条提示词只写了「修一下这个 bug」，没说是哪个文件、什么现象，于是第一轮要先去找。开头先点明文件 + 期望行为 vs 实际行为。
+>
+> **在不牺牲清晰度的地方省 token**
+> - 约 38% 的 token 花在 150k 上下文以上。不相关的任务之间用 `/clear`，每次请求都更省。
+
+### 用量优化器
+
+![用量优化器卡片](images/v2-optimizer-en.png)
+
+粘进一条粗略、没成形的需求，得到一条干净、**可直接粘贴**的提示词（纯文本、无 Markdown），并附上推荐的 effort / thinking / 模型（以小标签显示）。三个可选开关进一步微调（标出含糊指代 · 压缩长粘贴内容 · 建议风格方向）。实验性，默认关闭；**只发送你粘贴的文字** —— 不碰你的文件、不进终端 —— 且首次有一次性同意确认。
 
 ---
 
@@ -173,7 +183,7 @@ ext install GrowthJack.claude-code-usage
 
 ## 致谢
 
-Fork 自现由组织维护的上游项目 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)（原作者 [@jack21](https://github.com/jack21)）。MIT 授权。本 fork 在 2.0 基础上已推进许多 —— 见 [CHANGELOG.md](CHANGELOG.md)。
+由 [**@Carl723000**](https://github.com/Carl723000) 维护 —— 最早从 [@jack21](https://github.com/jack21) 的原始项目 [`ClaudeCodeUsage`](https://github.com/jack21) fork 而来，现在也是上游组织 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) 的 owner 之一、负责后续维护。MIT 授权。本文档「新功能」里的 2.x 内容由 @Carl723000 借助 [Claude Code](https://claude.com/claude-code) 完成，已在 2.0 基础上推进许多 —— 见 [CHANGELOG.md](CHANGELOG.md)。
 
 已并入的上游贡献者 PR / issue：
 
