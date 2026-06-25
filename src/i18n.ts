@@ -142,8 +142,11 @@ export interface Translations {
     optimizerCopy: string;
     optimizerCopied: string;
     optimizerResolve: string;
+    optimizerResolveHint: string;
     optimizerDistil: string;
+    optimizerDistilHint: string;
     optimizerAesthetic: string;
+    optimizerAestheticHint: string;
     optimizerPromptHeading: string;
     optimizerSettingsHeading: string;
     optimizerHowto: string;
@@ -319,7 +322,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         'Turn a rough, half-formed request into a clean prompt you can paste straight into Claude Code — plus a suggested effort / thinking / model for the task.',
       optimizerHowto:
-        'Type or paste your draft below, tick any of the optional lenses, then click Optimise. Only the text you paste is sent to your model — never to Claude Code or your terminal.',
+        'Type or paste your draft below, tick any of the optional tweaks, then click Optimise. Only the text you paste is sent to your model — never to Claude Code or your terminal.',
       optimizerConsent:
         'The Usage Optimizer sends the text you paste to your configured API model. Nothing is sent to Claude Code and nothing is typed into a terminal. Continue?',
       optimizerEnableBtn: 'Enable in settings',
@@ -329,8 +332,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerCopy: 'Copy prompt',
       optimizerCopied: 'Copied',
       optimizerResolve: 'Flag vague references',
-      optimizerDistil: 'Distil long pasted material',
-      optimizerAesthetic: 'Offer style directions',
+      optimizerResolveHint:
+        "Have the model point out vague references (e.g. 'this', 'the file', 'that bug') and pin them down or mark a clear assumption.",
+      optimizerDistil: 'Condense long pasted text',
+      optimizerDistilHint:
+        'If your draft pastes long logs / code / docs, condense them to just what Claude needs.',
+      optimizerAesthetic: 'Suggest a style direction',
+      optimizerAestheticHint:
+        'For UI / visual / writing tasks, propose one concrete style direction so the result is not generic.',
       optimizerPromptHeading: 'Optimised prompt',
       optimizerSettingsHeading: 'Recommended run settings',
       experimentalBadge: 'experimental',
@@ -514,7 +523,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         "Mach aus einer groben, halbfertigen Anfrage einen sauberen Prompt, den du direkt in Claude Code einfügen kannst — plus empfohlenes Effort / Thinking / Modell für die Aufgabe.",
       optimizerHowto:
-        "Tippe oder füge deinen Entwurf unten ein, aktiviere optionale Linsen und klicke Optimieren. Nur der eingefügte Text wird an dein Modell gesendet — nie an Claude Code oder dein Terminal.",
+        "Tippe oder füge deinen Entwurf unten ein, aktiviere optionale Feineinstellungen und klicke Optimieren. Nur der eingefügte Text wird an dein Modell gesendet — nie an Claude Code oder dein Terminal.",
       optimizerConsent:
         "Der Nutzungs-Optimierer sendet den eingefügten Text an dein konfiguriertes API-Modell. Nichts geht an Claude Code, nichts wird ins Terminal getippt. Fortfahren?",
       optimizerEnableBtn: "In Einstellungen aktivieren",
@@ -524,8 +533,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerCopy: "Prompt kopieren",
       optimizerCopied: "Kopiert",
       optimizerResolve: "Vage Referenzen markieren",
+      optimizerResolveHint:
+        "Lässt das Modell vage Bezüge (z. B. \"das\", \"die Datei\", \"der Bug\") benennen und festnageln oder eine klare Annahme markieren.",
       optimizerDistil: "Lange Inhalte verdichten",
-      optimizerAesthetic: "Stilrichtungen anbieten",
+      optimizerDistilHint:
+        "Wenn dein Entwurf lange Logs / Code / Docs enthält, werden sie auf das Nötige verdichtet.",
+      optimizerAesthetic: "Stilrichtung vorschlagen",
+      optimizerAestheticHint:
+        "Bei UI- / Visual- / Schreibaufgaben eine konkrete Stilrichtung vorschlagen, damit das Ergebnis nicht generisch wird.",
       optimizerPromptHeading: "Optimierter Prompt",
       optimizerSettingsHeading: "Empfohlene Lauf-Einstellungen",
       experimentalBadge: "experimentell",
@@ -708,7 +723,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         '把粗略、半成形的需求，變成可直接貼進 Claude Code 的乾淨 prompt，並附上這個任務建議的 effort / thinking / 模型。',
       optimizerHowto:
-        '在下方輸入或貼上你的草稿，勾選任意可選透鏡，再按「優化」。只有你貼上的文字會送給模型——不會送給 Claude Code 或終端。',
+        '在下方輸入或貼上你的草稿，按需勾選可選的微調項，再按「優化」。只有你貼上的文字會送給模型——不會送給 Claude Code 或終端。',
       optimizerConsent:
         '用量優化器會把你貼上的文字送給你配置的 API 模型。不會送給 Claude Code，也不會注入終端。要繼續嗎？',
       optimizerEnableBtn: '在設定中啟用',
@@ -717,9 +732,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerRunning: '優化中…',
       optimizerCopy: '複製 prompt',
       optimizerCopied: '已複製',
-      optimizerResolve: '標記模糊引用',
-      optimizerDistil: '提煉長貼上材料',
-      optimizerAesthetic: '提供風格方向',
+      optimizerResolve: '標出含糊指代',
+      optimizerResolveHint:
+        '讓模型標出含糊的指代（例如「這個」「那個檔案」「那個 bug」），並要求釐清或標注一個明確假設。',
+      optimizerDistil: '壓縮長貼上內容',
+      optimizerDistilHint:
+        '若草稿貼了很長的日誌／程式碼／文件，壓縮成 Claude 真正需要的部分。',
+      optimizerAesthetic: '建議風格方向',
+      optimizerAestheticHint:
+        '對 UI／視覺／寫作類任務，提出一個具體的風格方向，讓結果不流於通用。',
       optimizerPromptHeading: '優化後 prompt',
       optimizerSettingsHeading: '建議運行設定',
       experimentalBadge: '實驗性',
@@ -899,7 +920,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         '把粗略、没成形的需求，变成可以直接粘进 Claude Code 的干净 prompt，并附上这个任务建议的 effort / thinking / 模型。',
       optimizerHowto:
-        '在下方输入或粘贴你的草稿，按需勾选可选透镜，再点「优化」。只有你粘贴的文字会发给模型——不会发给 Claude Code，也不会注入终端。',
+        '在下方输入或粘贴你的草稿，按需勾选下面的可选微调项，再点「优化」。只有你粘贴的文字会发给模型——不会发给 Claude Code，也不会注入终端。',
       optimizerConsent:
         '用量优化器会把你粘贴的文字发送给你配置的 API 模型。不会发送给 Claude Code，也不会注入终端。要继续吗？',
       optimizerEnableBtn: '在设置中启用',
@@ -908,9 +929,15 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerRunning: '优化中…',
       optimizerCopy: '复制 prompt',
       optimizerCopied: '已复制',
-      optimizerResolve: '标记模糊引用',
-      optimizerDistil: '提炼长粘贴材料',
-      optimizerAesthetic: '提供风格方向',
+      optimizerResolve: '标出含糊指代',
+      optimizerResolveHint:
+        '让模型标出含糊的指代（比如「这个」「那个文件」「那个 bug」），并要求你澄清，或标注一个明确的假设。',
+      optimizerDistil: '压缩长粘贴内容',
+      optimizerDistilHint:
+        '如果草稿里粘了很长的日志／代码／文档，压缩成 Claude 真正需要的部分。',
+      optimizerAesthetic: '建议风格方向',
+      optimizerAestheticHint:
+        '对 UI／视觉／写作类任务，给出一个具体的风格方向，让结果不那么千篇一律。',
       optimizerPromptHeading: '优化后 prompt',
       optimizerSettingsHeading: '建议运行设置',
       experimentalBadge: '实验性',
@@ -1094,7 +1121,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         '雑で半端な依頼を、Claude Code にそのまま貼り付けられる整ったプロンプトに変換し、そのタスクに推奨の effort / thinking / モデルも返します。',
       optimizerHowto:
-        '下に下書きを入力または貼り付け、任意のレンズを選び「最適化」を押します。送信されるのは貼り付けたテキストのみ——Claude Code やターミナルには送られません。',
+        '下に下書きを入力または貼り付け、必要に応じて任意の調整オプションを選び「最適化」を押します。送信されるのは貼り付けたテキストのみ——Claude Code やターミナルには送られません。',
       optimizerConsent:
         '使用量オプティマイザーは貼り付けたテキストを設定した API モデルに送信します。Claude Code には送られず、ターミナルにも入力されません。続行しますか？',
       optimizerEnableBtn: '設定で有効化',
@@ -1104,8 +1131,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerCopy: 'プロンプトをコピー',
       optimizerCopied: 'コピー済み',
       optimizerResolve: '曖昧な参照を指摘',
-      optimizerDistil: '長い貼付材料を要約',
+      optimizerResolveHint:
+        '曖昧な参照（「これ」「そのファイル」「あのバグ」など）をモデルに指摘させ、明確化を求めるか、明示的な前提を置きます。',
+      optimizerDistil: '長い貼付内容を要約',
+      optimizerDistilHint:
+        '下書きに長いログ／コード／ドキュメントが貼られている場合、Claude に必要な部分だけに圧縮します。',
       optimizerAesthetic: 'スタイル方向を提案',
+      optimizerAestheticHint:
+        'UI／ビジュアル／文章のタスクでは、結果が無難になりすぎないよう具体的なスタイル方向を提案します。',
       optimizerPromptHeading: '最適化されたプロンプト',
       optimizerSettingsHeading: '推奨実行設定',
       experimentalBadge: '実験的',
@@ -1290,7 +1323,7 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerDesc:
         '대략적이고 정리되지 않은 요청을 Claude Code에 바로 붙여넣을 수 있는 깔끔한 프롬프트로 바꾸고, 그 작업에 추천하는 effort / thinking / 모델도 함께 제공합니다.',
       optimizerHowto:
-        '아래에 초안을 입력하거나 붙여넣고, 선택 렌즈를 고른 뒤 「최적화」를 누르세요. 붙여넣은 텍스트만 모델로 전송됩니다 — Claude Code나 터미널로는 가지 않습니다.',
+        '아래에 초안을 입력하거나 붙여넣고, 필요하면 선택 옵션을 고른 뒤 「최적화」를 누르세요. 붙여넣은 텍스트만 모델로 전송됩니다 — Claude Code나 터미널로는 가지 않습니다.',
       optimizerConsent:
         '사용량 옵티마이저는 붙여넣은 텍스트를 설정한 API 모델로 보냅니다. Claude Code로는 전송되지 않고 터미널에도 입력되지 않습니다. 계속할까요?',
       optimizerEnableBtn: '설정에서 사용',
@@ -1300,8 +1333,14 @@ const translations: Record<SupportedLanguage, Translations> = {
       optimizerCopy: '프롬프트 복사',
       optimizerCopied: '복사됨',
       optimizerResolve: '모호한 참조 표시',
-      optimizerDistil: '긴 붙여넣기 자료 요약',
+      optimizerResolveHint:
+        "모호한 참조(예: '이것', '그 파일', '그 버그')를 모델이 짚어내 명확히 하거나 분명한 가정을 표시하게 합니다.",
+      optimizerDistil: '긴 붙여넣기 내용 압축',
+      optimizerDistilHint:
+        '초안에 긴 로그/코드/문서가 붙어 있으면 Claude에 필요한 부분만 압축합니다.',
       optimizerAesthetic: '스타일 방향 제안',
+      optimizerAestheticHint:
+        'UI/비주얼/글쓰기 작업에서는 결과가 평범해지지 않도록 구체적인 스타일 방향을 제안합니다.',
       optimizerPromptHeading: '최적화된 프롬프트',
       optimizerSettingsHeading: '추천 실행 설정',
       experimentalBadge: '실험적',
@@ -1432,6 +1471,23 @@ export class I18n {
   static formatCurrency(amount: number, decimalPlaces?: number): string {
     const places = decimalPlaces != null ? decimalPlaces : this.currentDecimalPlaces;
     return `$${amount.toFixed(places)}`;
+  }
+
+  /** Always-compact token count (k / M / B) honouring the user's decimal
+   * places — used by the status-bar "tokens" metric so it stays short. */
+  static formatTokensCompact(num: number): string {
+    const p = this.currentDecimalPlaces;
+    const abs = Math.abs(num);
+    if (abs >= 1_000_000_000) {
+      return (num / 1_000_000_000).toFixed(p) + 'B';
+    }
+    if (abs >= 1_000_000) {
+      return (num / 1_000_000).toFixed(p) + 'M';
+    }
+    if (abs >= 1_000) {
+      return (num / 1_000).toFixed(p) + 'k';
+    }
+    return num.toLocaleString(this.currentLanguage);
   }
 
   static formatNumber(num: number): string {

@@ -53,6 +53,18 @@ export class UsageWebviewProvider {
   // extension.ts right after construction.
   public settings?: SettingsStore;
   public onSettingsChanged?: () => void;
+  // Last Usage Optimizer interaction (draft + lens choices + result). Persisted
+  // here so an auto-refresh re-render of the webview doesn't wipe a result the
+  // user is still reading — renderOptimizerCard restores it from this.
+  private optimizerState: {
+    draft: string;
+    resolve: boolean;
+    distil: boolean;
+    aesthetic: boolean;
+    prompt?: string;
+    settings?: string;
+    error?: string;
+  } | null = null;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -132,17 +144,26 @@ export class UsageWebviewProvider {
           if (!this.panel) {
             break;
           }
+          const draft = String(message.draft || '');
+          const opts = {
+            resolve: !!message.resolve,
+            distil: !!message.distil,
+            aesthetic: !!message.aesthetic,
+          };
+          // Persist the inputs immediately so a refresh mid-request keeps them.
+          this.optimizerState = { draft, ...opts };
           let result: { prompt?: string; settings?: string; error?: string };
           if (this.onOptimize) {
-            result = await this.onOptimize(String(message.draft || ''), {
-              resolve: !!message.resolve,
-              distil: !!message.distil,
-              aesthetic: !!message.aesthetic,
-            });
+            result = await this.onOptimize(draft, opts);
           } else {
             result = { error: 'Optimizer is not available.' };
           }
-          this.panel.webview.postMessage({ command: 'optimizeResult', ...result });
+          // Persist the result too, so re-rendering the webview (auto-refresh)
+          // restores it instead of wiping a prompt the user is still reading.
+          this.optimizerState = { draft, ...opts, ...result };
+          if (this.panel) {
+            this.panel.webview.postMessage({ command: 'optimizeResult', ...result });
+          }
           break;
         }
         case 'getAttribution': {
@@ -1985,34 +2006,43 @@ export class UsageWebviewProvider {
         '</div>'
       );
     }
+    // Restore the last interaction so an auto-refresh re-render doesn't wipe it.
+    const st = this.optimizerState;
+    const ck = (b?: boolean): string => (b ? ' checked' : '');
+    const draftVal = st ? this.escapeHtml(st.draft) : '';
+    const hasResult = !!(st && (st.prompt || st.settings));
+    const hasErr = !!(st && st.error);
+    const lens = (id: string, label: string, hint: string, on?: boolean): string =>
+      '<label title="' + this.escapeHtml(hint) + '"><input type="checkbox" id="' + id + '"' +
+      ck(on) + '> ' + this.escapeHtml(label) + '</label>';
     return (
       '<div class="action-card">' +
       head('') +
       '<p class="action-card-howto">' + t.optimizerHowto + '</p>' +
       '<textarea id="optDraft" class="opt-input" rows="4" placeholder="' +
-      this.escapeHtml(t.optimizerPlaceholder) + '"></textarea>' +
+      this.escapeHtml(t.optimizerPlaceholder) + '">' + draftVal + '</textarea>' +
       '<div class="opt-controls">' +
-      '<label><input type="checkbox" id="optResolve"> ' +
-      this.escapeHtml(t.optimizerResolve) + '</label>' +
-      '<label><input type="checkbox" id="optDistil"> ' +
-      this.escapeHtml(t.optimizerDistil) + '</label>' +
-      '<label><input type="checkbox" id="optAesthetic"> ' +
-      this.escapeHtml(t.optimizerAesthetic) + '</label>' +
+      lens('optResolve', t.optimizerResolve, t.optimizerResolveHint, st?.resolve) +
+      lens('optDistil', t.optimizerDistil, t.optimizerDistilHint, st?.distil) +
+      lens('optAesthetic', t.optimizerAesthetic, t.optimizerAestheticHint, st?.aesthetic) +
       '<button class="btn-primary" id="optRunBtn" data-run="' +
       this.escapeHtml(t.optimizerRun) + '" data-running="' +
       this.escapeHtml(t.optimizerRunning) + '" onclick="runOptimizer()">' +
       t.optimizerRun + '</button>' +
       '</div>' +
-      '<div id="optError" class="opt-error" style="display:none"></div>' +
-      '<div id="optResult" class="opt-result" style="display:none">' +
+      '<div id="optError" class="opt-error" style="display:' + (hasErr ? '' : 'none') + '">' +
+      (hasErr ? this.escapeHtml(st!.error as string) : '') + '</div>' +
+      '<div id="optResult" class="opt-result" style="display:' + (hasResult ? '' : 'none') + '">' +
       '<h4 class="opt-subhead">' + t.optimizerPromptHeading + '</h4>' +
-      '<div class="opt-output"><pre id="optPrompt"></pre>' +
+      '<div class="opt-output"><pre id="optPrompt">' +
+      (st && st.prompt ? this.escapeHtml(st.prompt) : '') + '</pre>' +
       '<button class="btn-secondary btn-small" data-copy="' +
       this.escapeHtml(t.optimizerCopy) + '" data-copied="' +
       this.escapeHtml(t.optimizerCopied) + '" onclick="copyOptPrompt(this)">' +
       t.optimizerCopy + '</button></div>' +
       '<h4 class="opt-subhead">' + t.optimizerSettingsHeading + '</h4>' +
-      '<pre id="optSettings" class="opt-settings"></pre>' +
+      '<div id="optSettings" class="opt-settings">' +
+      (st && st.settings ? this.escapeHtml(st.settings) : '') + '</div>' +
       '</div>' +
       '</div>'
     );
@@ -2617,8 +2647,8 @@ export class UsageWebviewProvider {
         align-items: flex-start;
         gap: 8px;
       }
-      .opt-output pre,
-      .opt-settings {
+      /* The optimised prompt is meant to be copied verbatim — keep it monospace. */
+      .opt-output pre {
         flex: 1;
         white-space: pre-wrap;
         word-break: break-word;
@@ -2628,6 +2658,20 @@ export class UsageWebviewProvider {
         margin: 0;
         background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
         border-radius: 4px;
+      }
+      /* The settings recommendation is read, not copied — render it cleanly in
+         the UI font with a soft accent rail, not as a code block. */
+      .opt-settings {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 8px 10px;
+        margin: 0;
+        color: var(--vscode-foreground);
+        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+        border-left: 2px solid var(--vscode-textLink-foreground, var(--vscode-button-background));
+        border-radius: 0 4px 4px 0;
       }
 
       /* ⚙ Settings tab */

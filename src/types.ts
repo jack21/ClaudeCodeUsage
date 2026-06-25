@@ -230,6 +230,8 @@ export interface ExtensionConfig {
   showContext: boolean;
   // Manual context-window size override in tokens (0 = auto-detect).
   contextWindowOverride: number;
+  // First status-bar item: today's cost, or today's total token count.
+  statusBarMetric: 'cost' | 'tokens';
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.
   usageLimitTracking: boolean;
   // LLM "usage advice" feature (OpenAI-compatible endpoint, e.g. DeepSeek).

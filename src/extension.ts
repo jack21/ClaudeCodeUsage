@@ -254,6 +254,42 @@ export class ClaudeCodeUsageExtension {
    * use shows a one-time consent modal (the text is going to a model, not to
    * Claude Code's terminal).
    */
+  /** Distinct models the user actually uses — Claude reduced to family names
+   * (haiku/sonnet/opus/fable), third-party models kept as-is — so the optimizer
+   * recommends from real options instead of guessing a (possibly stale) name. */
+  private usedModelNames(): string[] {
+    const family = (m: string): string => {
+      const s = m.toLowerCase();
+      if (/fable|mythos/.test(s)) {
+        return 'fable';
+      }
+      if (/opus/.test(s)) {
+        return 'opus';
+      }
+      if (/sonnet/.test(s)) {
+        return 'sonnet';
+      }
+      if (/haiku/.test(s)) {
+        return 'haiku';
+      }
+      return m;
+    };
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of this.cache.records) {
+      const m = r?.message?.model;
+      if (!m || typeof m !== 'string') {
+        continue;
+      }
+      const f = family(m);
+      if (!seen.has(f)) {
+        seen.add(f);
+        out.push(f);
+      }
+    }
+    return out.slice(0, 8);
+  }
+
   private async runOptimizer(
     draft: string,
     options: { resolve: boolean; distil: boolean; aesthetic: boolean }
@@ -286,7 +322,7 @@ export class ClaudeCodeUsageExtension {
     }
 
     const language = I18n.getLanguageName();
-    const systemPrompt = buildOptimizerSystemPrompt(language, options);
+    const systemPrompt = buildOptimizerSystemPrompt(language, options, this.usedModelNames());
 
     try {
       const raw = await callModel(systemPrompt, text, {
@@ -315,7 +351,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -350,6 +386,7 @@ export class ClaudeCodeUsageExtension {
       showCost: s.get<boolean>('showCost'),
       showContext: s.get<boolean>('showContext'),
       contextWindowOverride: s.get<number>('contextWindowOverride'),
+      statusBarMetric: s.get<'cost' | 'tokens'>('statusBarMetric'),
       usageLimitTracking: s.get<boolean>('usageLimitTracking'),
       adviceApiKey: s.get<string>('advice.apiKey'),
       adviceApiUrl: s.get<string>('advice.apiUrl'),
@@ -376,7 +413,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();

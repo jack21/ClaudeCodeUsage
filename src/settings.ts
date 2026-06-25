@@ -99,7 +99,17 @@ export const SETTINGS: SettingDef[] = [
     default: true,
     storage: 'state',
     group: 'statusBar',
-    label: "Show today's cost",
+    label: "Show today's cost / tokens",
+  },
+  {
+    key: 'statusBarMetric',
+    type: 'enum',
+    default: 'cost',
+    storage: 'state',
+    group: 'statusBar',
+    label: 'Status-bar metric',
+    help: "What the first status-bar item shows: today's cost, or today's total token count (k/M).",
+    enumValues: ['cost', 'tokens'],
   },
   {
     key: 'showContext',

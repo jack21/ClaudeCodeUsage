@@ -7,9 +7,12 @@ export class StatusBarManager {
   private quotaItem: vscode.StatusBarItem;
   private contextItem: vscode.StatusBarItem;
   private isLoading: boolean = false;
-  // Per-item visibility, driven by the showCost / showContext settings.
+  // Per-item visibility, driven by the showCost / showContext / quota settings.
   private showCost: boolean = true;
   private showContext: boolean = true;
+  private usageLimitTracking: boolean = true;
+  // First item shows today's cost ('cost') or today's total token count ('tokens').
+  private metric: 'cost' | 'tokens' = 'cost';
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -39,22 +42,39 @@ export class StatusBarManager {
   /** Apply the showCost / showContext settings. Hiding takes effect
    * immediately; re-showing happens on the next data update (the caller
    * triggers a refresh right after a config change). */
-  setVisibility(showCost: boolean, showContext: boolean): void {
+  setVisibility(
+    showCost: boolean,
+    showContext: boolean,
+    usageLimitTracking: boolean = true,
+    metric: 'cost' | 'tokens' = 'cost'
+  ): void {
     this.showCost = showCost;
     this.showContext = showContext;
-    if (!showCost) {
-      this.statusBarItem.hide();
-    }
+    this.usageLimitTracking = usageLimitTracking;
+    this.metric = metric;
     if (!showContext) {
       this.contextItem.hide();
     }
+    // Re-apply the first item — it may need to become an icon-only entry point.
+    this.applyCostVisibility();
   }
 
-  /** Show or hide the cost item per the showCost setting. Every method that
-   * sets its text calls this, so the item reappears as soon as the setting
-   * is turned back on. */
+  /** Show / hide the first status-bar item per the showCost setting. When cost
+   * is off, the item normally hides — UNLESS the quota and context items are
+   * also off by setting, in which case there would be NO clickable way back
+   * into the dashboard. In that all-off case we keep it as an icon-only entry
+   * point. Every method that sets the item's text calls this, so it reappears
+   * (or collapses to the entry icon) as soon as a setting changes. */
   private applyCostVisibility(): void {
     if (this.showCost) {
+      this.statusBarItem.show();
+      return;
+    }
+    if (!this.showContext && !this.usageLimitTracking) {
+      // Sole remaining entry point: an icon that opens the dashboard.
+      this.statusBarItem.text = '$(graph)';
+      this.statusBarItem.tooltip = I18n.t.popup.title;
+      this.statusBarItem.backgroundColor = undefined;
       this.statusBarItem.show();
     } else {
       this.statusBarItem.hide();
@@ -100,18 +120,25 @@ export class StatusBarManager {
   }
 
   private showTodayData(todayData: UsageData, workspaceTodayData: UsageData | null): void {
-    const todayCost = I18n.formatCurrency(todayData.totalCost);
-    // Primary number = today's total cost across all projects. Secondary number
-    // = today's cost for the current workspace, so you can see this project's
-    // share next to the global total. Both reset at midnight (stable), unlike
-    // the old "current session" which vanished after 5h idle.
-    let text = `$(pulse) ${todayCost}`;
-    // Show the workspace figure whenever a workspace is open — including
-    // $0.00. Hiding it at zero made the item appear and disappear through the
-    // day, which read as a bug ("where did my number go?").
+    // Primary figure = today across all projects; secondary = today for the
+    // current workspace, so you can see this project's share next to the global
+    // total. Both reset at midnight. The metric setting switches cost ↔ tokens.
     const ws = workspaceTodayData ?? null;
-    if (ws) {
-      text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
+    const totalTokens = (d: UsageData): number =>
+      d.totalInputTokens + d.totalOutputTokens + d.totalCacheCreationTokens + d.totalCacheReadTokens;
+    let text: string;
+    if (this.metric === 'tokens') {
+      text = `$(symbol-number) ${I18n.formatTokensCompact(totalTokens(todayData))}`;
+      if (ws) {
+        text += ` $(folder) ${I18n.formatTokensCompact(totalTokens(ws))}`;
+      }
+    } else {
+      text = `$(pulse) ${I18n.formatCurrency(todayData.totalCost)}`;
+      // Show the workspace figure whenever a workspace is open — including
+      // $0.00; hiding it at zero read as a bug ("where did my number go?").
+      if (ws) {
+        text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
+      }
     }
     this.statusBarItem.text = text;
 
@@ -149,10 +176,11 @@ export class StatusBarManager {
     md.supportThemeIcons = true;
     md.supportHtml = true;
     md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
-    // A quota-style progress bar, then the figures. "~" before the window size
-    // when it was guessed (see the override setting).
+    // A quota-style progress bar (wider here so the tooltip's right edge lines
+    // up with the figures below), then the percentage. "~" before the window
+    // size when it was guessed (see the override setting).
     md.appendMarkdown(
-      `${this.progressBarSvg(pct)} &nbsp; ${pct.toFixed(1)}%\n\n`
+      `${this.progressBarSvg(pct, 40)} &nbsp; ${pct.toFixed(1)}%\n\n`
     );
     md.appendMarkdown(
       `${I18n.formatNumber(info.contextTokens)} / ${approx}${I18n.formatNumber(info.windowTokens)}\n\n`
@@ -398,8 +426,8 @@ export class StatusBarManager {
    *
    * Bar colour mirrors the status-bar warning/error thresholds (amber at
    * >=80%, red at >=95%) so the visual signal matches the indicator. */
-  private progressBarSvg(pct: number): string {
-    const TOTAL = 24;
+  private progressBarSvg(pct: number, total: number = 24): string {
+    const TOTAL = total;
     const filled = Math.max(0, Math.min(TOTAL, Math.round((pct / 100) * TOTAL)));
     const empty = TOTAL - filled;
     let color = '#4caf50';                    // green

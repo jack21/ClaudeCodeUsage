@@ -248,8 +248,16 @@ export interface OptimizerLenses {
   aesthetic: boolean; // suggest a style direction
 }
 
-/** Build the optimizer system prompt for the given language + enabled lenses. */
-export function buildOptimizerSystemPrompt(language: string, lenses: OptimizerLenses): string {
+/** Build the optimizer system prompt for the given language + enabled lenses.
+ * `availableModels` is the set of models the user actually uses (Claude ones
+ * already reduced to family names) — the recommendation is constrained to these
+ * so it never names a model the user doesn't have or a stale version a
+ * third-party model wouldn't know about. */
+export function buildOptimizerSystemPrompt(
+  language: string,
+  lenses: OptimizerLenses,
+  availableModels: string[] = []
+): string {
   const extra: string[] = [];
   if (lenses.resolve) {
     extra.push(
@@ -281,9 +289,16 @@ export function buildOptimizerSystemPrompt(language: string, lenses: OptimizerLe
     'no #headings, no backticks, no bullet characters), so it pastes cleanly into a ' +
     'terminal. Use short paragraphs or hyphen lines if structure helps. ' +
     'Then recommend run settings for THIS task as a few short lines: reasoning ' +
-    'effort (low / medium / high / max), extended thinking (on / off), and model (a cheaper ' +
-    'model for mechanical edits, the strongest for ambiguous or design-heavy work). Justify ' +
-    'each in a few words. Output EXACTLY this shape and nothing else:\n' +
+    'effort (low / medium / high / max), extended thinking (on / off), and model. ' +
+    (availableModels.length > 0
+      ? 'For the model, choose ONLY from the models the user actually uses: ' +
+        availableModels.join(', ') +
+        '. Refer to Claude models by family only (haiku / sonnet / opus / fable) — ' +
+        'never a version number. Pick the cheaper option for mechanical edits, the ' +
+        'strongest for ambiguous or design-heavy work. '
+      : 'Refer to Claude models by family only (haiku / sonnet / opus / fable), never a ' +
+        'version number; pick the cheaper for mechanical edits, the strongest for ambiguous work. ') +
+    'Justify each in a few words. Output EXACTLY this shape and nothing else:\n' +
     '===PROMPT===\n<the rewritten prompt, plain text>\n===SETTINGS===\n<the settings lines>\n' +
     `Write everything in ${language}.`
   );
