@@ -230,8 +230,8 @@ export interface ExtensionConfig {
   showContext: boolean;
   // Manual context-window size override in tokens (0 = auto-detect).
   contextWindowOverride: number;
-  // First status-bar item: today's cost, or today's total token count.
-  statusBarMetric: 'cost' | 'tokens';
+  // First status-bar item: today's cost, this month's cost, or today's total token count.
+  statusBarMetric: 'cost' | 'monthly-cost' | 'tokens';
   // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38).
   showOpusWeekly: boolean;
   // Fetch real 5-hour / weekly limit utilisation via Claude Code's OAuth session.

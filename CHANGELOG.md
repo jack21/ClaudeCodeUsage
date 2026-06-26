@@ -7,6 +7,11 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ## [2.1.0] — Unreleased
 
 ### Added
+- **Monthly cost in the status bar** — the `statusBarMetric` setting gains a
+  new `monthly-cost` option. When selected, the first status-bar item shows the
+  current calendar month's total cost ($(calendar) icon) instead of today's
+  cost. Hover tooltip mirrors the today tooltip with month-to-date token and
+  cost breakdown.
 - **Weekly Opus limit in the status bar** — opt-in `showOpusWeekly` (default
   off) appends `opus:NN%` after the 5h / weekly quota figures, for heavy Opus
   users who want an at-a-glance weekly Opus signal. Merged from
