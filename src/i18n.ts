@@ -1387,6 +1387,154 @@ const translations: Record<SupportedLanguage, Translations> = {
   },
 };
 
+// Per-setting label / help translations for the dashboard ⚙ Settings panel.
+// English lives in the settings catalog (settings.ts); these override it for the
+// non-English UIs so the descriptions follow the plugin language too. Code /
+// command tokens (token, /v1/messages, opus:NN%, k/M, git/folder/flat …) are kept
+// verbatim. Generated with DeepSeek V4 Pro and validated for completeness.
+const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: string; help: string }>>> = {
+  'de-DE': {
+    'language': { label: 'Anzeigesprache', help: 'UI-Sprache. "auto" folgt VS Code.' },
+    'decimalPlaces': { label: 'Kosten-Dezimalstellen', help: '' },
+    'compactNumbers': { label: 'Kompakte Token-Zahlen', help: 'Zeige 1.2M / 345K statt voller Zahlen.' },
+    'timezone': { label: 'Zeitzone für Daten', help: 'IANA-Zone (z.B. Asia/Hong_Kong). Leer = System.' },
+    'projectGroupingMode': { label: 'Projektgruppierung', help: 'git = nach Repo · folder = oberste Ebene · flat = jedes cwd.' },
+    'showCost': { label: 'Heutige Kosten / Token anzeigen', help: '' },
+    'statusBarMetric': { label: 'Statusleisten-Metrik', help: 'Was das erste Statusleistenelement zeigt: heutige Kosten oder die heutige Gesamt-Tokenanzahl (k/M).' },
+    'showContext': { label: 'Kontextfenster-Auslastung anzeigen (experimental)', help: 'Standardmäßig aus. Schätzt den aktuellen Sitzungskontext in %, ähnlich /context, anhand des neuesten Logeintrags. Es kann nur die Eingabeseite insgesamt anzeigen, nicht die Kategorieaufteilung von /context (diese sind Claude Code-interne Daten, die nicht auf die Festplatte geschrieben werden), daher ist es nur eine Näherung — ein "~" kennzeichnet eine geschätzte Fenstergröße.' },
+    'contextWindowOverride': { label: 'Überschreibung des Kontextfensters (Tokens)', help: '0 = automatisch vom Modell erkennen. Legen Sie Ihr echtes Fenster (z.B. 1000000) für Proxy- oder benutzerdefinierte Modelle fest, die die Autoerkennung nicht erkennt.' },
+    'usageLimitTracking': { label: '5-Stunden / Wochenkontingent anzeigen', help: '' },
+    'showOpusWeekly': { label: 'Wöchentliches Opus-Limit anzeigen', help: 'Hängen Sie die wöchentliche Opus-Obergrenze (opus:NN%) hinter die 5h / Wochenwerte an.' },
+    'workflowQuotaWarnPercent': { label: 'Warnung bei Workflow-Kontingent %', help: 'Warnt vor einem Lauf, wenn das verbleibende 5h-Kontingent darunter liegt. 0 = aus.' },
+    'dataDirectory': { label: 'Benutzerdefiniertes Datenverzeichnis', help: 'Claude-Datenverzeichnis; leer = automatisch erkennen.' },
+    'refreshInterval': { label: 'Aktualisierungsintervall (s)', help: '' },
+    'fileWatching': { label: 'Live-Dateiüberwachung', help: 'Aktualisierung ca. 1,5 s nach jeder neuen Nachricht.' },
+    'pauseDashboardRefresh': { label: 'Dashboard-Aktualisierung pausieren', help: 'Statusleiste aktualisiert weiter; Dashboard nur bei manueller Aktualisierung.' },
+    'enableContentAnalysis': { label: 'Inhaltsanalyse (Content-Registerkarte)', help: 'Deaktivieren, um die CPU-intensive Textprüfung zu überspringen.' },
+    'analysis.calibrate': { label: 'Inhaltszahlen kalibrieren', help: 'Skalieren Sie Schätzungen auf die exakten abgerechneten Token-Gesamtzahlen.' },
+    'advice.apiKey': { label: 'API-Schlüssel', help: 'Für das api-Backend. Bleibt in den VS Code-Einstellungen.' },
+    'advice.apiFormat': { label: 'API-Format', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'API-URL', help: 'Endpunkt für das api-Backend.' },
+    'advice.model': { label: 'API-Modell', help: '' },
+    'advice.reasoningEffort': { label: 'Reasoning-Aufwand (openai)', help: '' },
+    'advice.promptWindowDays': { label: 'Prompt-Beispielfenster (Tage)', help: '' },
+    'advice.userContext': { label: 'Persönlicher/Projektkontext', help: 'Optionale Hintergrundinfo; fügt einen Abschnitt "Personalisiert" hinzu.' },
+    'advice.optimizer.enabled': { label: 'Usage Optimizer aktivieren', help: 'Zeigt die Opt-in-Optimizer-Karte auf der Registerkarte "Content" an.' },
+  },
+  'zh-TW': {
+    'language': { label: '顯示語言', help: 'UI 語言。"auto" 會跟隨 VS Code。' },
+    'decimalPlaces': { label: '費用小數位數', help: '' },
+    'compactNumbers': { label: '簡潔的 Token 計數', help: '顯示 1.2M / 345K 而非完整數字。' },
+    'timezone': { label: '日期時區', help: 'IANA 時區（例如 Asia/Hong_Kong）。空白 = 系統。' },
+    'projectGroupingMode': { label: '專案分組', help: 'git = 依儲存庫 · folder = 最上層 · flat = 每個目前工作目錄。' },
+    'showCost': { label: '顯示今日費用 / Token 用量', help: '' },
+    'statusBarMetric': { label: '狀態列指標', help: '第一個狀態列項目顯示的是：今日費用或今日總 Token 數量 (k/M)。' },
+    'showContext': { label: '顯示上下文視窗填充 (experimental)', help: '預設關閉。從最新的日誌記錄估計當前工作階段上下文百分比，類似 /context。它只能顯示輸入側的總計，而不是 /context 的類別細分（這些是 Claude Code 內部資料，未寫入磁碟），因此是近似值 — "~" 標記一個猜測的視窗大小。' },
+    'contextWindowOverride': { label: '上下文視窗覆寫 (tokens)', help: '0 = 從模型自動檢測。為自動檢測無法識別的代理/自訂模型設定實際視窗（例如 1000000）。' },
+    'usageLimitTracking': { label: '顯示 5 小時 / 每週配額', help: '' },
+    'showOpusWeekly': { label: '顯示每週 Opus 限制', help: '在 5 小時 / 每週數字後附加每週 Opus 上限 (opus:NN%)。' },
+    'workflowQuotaWarnPercent': { label: '工作流程配額警告 %', help: '當剩餘 5 小時配額低於此值時，在執行前發出警告。0 = 關閉。' },
+    'dataDirectory': { label: '自訂資料目錄', help: 'Claude 資料目錄；空白 = 自動偵測。' },
+    'refreshInterval': { label: '重新整理間隔 (秒)', help: '' },
+    'fileWatching': { label: '即時檔案監控', help: '每條新訊息後約 1.5 秒重新整理。' },
+    'pauseDashboardRefresh': { label: '暫停儀表板自動重新整理', help: '狀態列仍會更新；儀表板僅手動重新整理。' },
+    'enableContentAnalysis': { label: '內容分析 (Content 分頁)', help: '停用以跳過 CPU 密集的文字掃描。' },
+    'analysis.calibrate': { label: '校準內容數據', help: '將估計值縮放至確切的計費 Token 總數。' },
+    'advice.apiKey': { label: 'API 金鑰', help: '用於 api 後端。保留在 VS Code 設定中。' },
+    'advice.apiFormat': { label: 'API 格式', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'API URL', help: 'api 後端的端點。' },
+    'advice.model': { label: 'API 模型', help: '' },
+    'advice.reasoningEffort': { label: '推論努力度 (openai)', help: '' },
+    'advice.promptWindowDays': { label: '提示取樣視窗 (天數)', help: '' },
+    'advice.userContext': { label: '個人/專案上下文', help: '可選的背景資訊；新增「Personalised」區段。' },
+    'advice.optimizer.enabled': { label: '啟用使用情況優化器', help: '在 Content 分頁上顯示自願加入的 Optimizer 卡片。' },
+  },
+  'zh-CN': {
+    'language': { label: '显示语言', help: 'UI 语言。"auto" 会跟随 VS Code。' },
+    'decimalPlaces': { label: '费用小数位数', help: '' },
+    'compactNumbers': { label: '简洁的 token 计数', help: '显示 1.2M / 345K 而非完整数字。' },
+    'timezone': { label: '日期时区', help: 'IANA 时区（例如 Asia/Hong_Kong）。空 = 系统。' },
+    'projectGroupingMode': { label: '项目分组', help: 'git = 按仓库 · folder = 顶层 · flat = 每个当前工作目录。' },
+    'showCost': { label: '显示今日费用 / token 用量', help: '' },
+    'statusBarMetric': { label: '状态栏指标', help: '第一个状态栏项目显示的内容：今日费用或今日总 token 数 (k/M)。' },
+    'showContext': { label: '显示上下文窗口填充 (experimental)', help: '默认关闭。从最新的日志记录估计当前会话上下文百分比，类似于 /context。它只能显示输入侧的总计，而不是 /context 的类别细分（这些是 Claude Code 内部信息，未写入磁盘），因此是近似值 — "~" 标记猜测的窗口大小。' },
+    'contextWindowOverride': { label: '上下文窗口覆盖 (tokens)', help: '0 = 从模型自动检测。为自动检测无法识别的代理/自定义模型设置实际窗口（例如 1000000）。' },
+    'usageLimitTracking': { label: '显示 5 小时 / 每周配额', help: '' },
+    'showOpusWeekly': { label: '显示每周 Opus 限制', help: '在 5 小时 / 每周数字后附加每周 Opus 上限 (opus:NN%)。' },
+    'workflowQuotaWarnPercent': { label: '工作流配额警告 %', help: '当剩余 5 小时配额低于此值时，运行前发出警告。0 = 关闭。' },
+    'dataDirectory': { label: '自定义数据目录', help: 'Claude 数据目录；空 = 自动检测。' },
+    'refreshInterval': { label: '刷新间隔 (秒)', help: '' },
+    'fileWatching': { label: '实时文件监控', help: '每条新消息后约 1.5 秒刷新。' },
+    'pauseDashboardRefresh': { label: '暂停仪表板自动刷新', help: '状态栏仍会更新；仪表板仅手动刷新。' },
+    'enableContentAnalysis': { label: '内容分析 (Content 选项卡)', help: '禁用以跳过 CPU 密集型文本扫描。' },
+    'analysis.calibrate': { label: '校准内容数据', help: '将估计值缩放至确切的计费 token 总数。' },
+    'advice.apiKey': { label: 'API 密钥', help: '用于 api 后端。保留在 VS Code 设置中。' },
+    'advice.apiFormat': { label: 'API 格式', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'API URL', help: 'api 后端的端点。' },
+    'advice.model': { label: 'API 模型', help: '' },
+    'advice.reasoningEffort': { label: '推理努力度 (openai)', help: '' },
+    'advice.promptWindowDays': { label: '提示采样窗口 (天数)', help: '' },
+    'advice.userContext': { label: '个人/项目上下文', help: '可选的背景信息；添加「Personalised」部分。' },
+    'advice.optimizer.enabled': { label: '启用使用优化器', help: '在「Content」选项卡上显示自愿加入的 Optimizer 卡片。' },
+  },
+  'ja': {
+    'language': { label: '表示言語', help: 'UI 言語。"auto" は VS Code に従います。' },
+    'decimalPlaces': { label: 'コストの小数点以下桁数', help: '' },
+    'compactNumbers': { label: 'トークン数を短縮表記', help: '完全な数値の代わりに 1.2M / 345K と表示します。' },
+    'timezone': { label: '日付のタイムゾーン', help: 'IANA ゾーン (例: Asia/Hong_Kong)。空 = システム。' },
+    'projectGroupingMode': { label: 'プロジェクトのグループ化', help: 'git = リポジトリごと · folder = トップレベル · flat = 各 cwd。' },
+    'showCost': { label: '今日のコスト / トークンを表示', help: '' },
+    'statusBarMetric': { label: 'ステータスバー指標', help: '最初のステータスバー項目に表示するもの：今日のコスト、または今日の総トークン数 (k/M)。' },
+    'showContext': { label: 'コンテキストウィンドウの使用率を表示 (experimental)', help: 'デフォルトはオフ。最新のログレコードから、/context のように現在のセッションのコンテキスト使用率を推定します。入力側の合計のみ表示でき、/context のカテゴリーごとの内訳は表示できません（それらはディスクに書き込まれない Claude Code 内部の情報です）。そのため近似値であり、"~" は推測されるウィンドウサイズを示します。' },
+    'contextWindowOverride': { label: 'コンテキストウィンドウの上書き (トークン)', help: '0 = モデルから自動検出。自動検出で認識できないプロキシ/カスタムモデルに対して、実際のウィンドウ（例: 1000000）を設定します。' },
+    'usageLimitTracking': { label: '5時間 / 週間クォータを表示', help: '' },
+    'showOpusWeekly': { label: '週間 Opus 制限を表示', help: '5時間 / 週間の数値の後に、週間 Opus 上限 (opus:NN%) を追加します。' },
+    'workflowQuotaWarnPercent': { label: 'ワークフロークォータ警告 %', help: '残りの 5 時間クォータがこれを下回る場合、実行前に警告します。0 = オフ。' },
+    'dataDirectory': { label: 'カスタムデータディレクトリ', help: 'Claude データディレクトリ。空 = 自動検出。' },
+    'refreshInterval': { label: '更新間隔 (秒)', help: '' },
+    'fileWatching': { label: 'ライブファイル監視', help: '各新メッセージの約 1.5 秒後に更新します。' },
+    'pauseDashboardRefresh': { label: 'ダッシュボードの自動更新を一時停止', help: 'ステータスバーは更新を続行し、ダッシュボードは手動更新のみになります。' },
+    'enableContentAnalysis': { label: 'コンテンツ分析 (Content タブ)', help: 'CPU負荷の高いテキストスキャンをスキップするには無効にします。' },
+    'analysis.calibrate': { label: 'コンテンツ数値を調整', help: '推定値を正確な課金トークン総数に合わせて拡大縮小します。' },
+    'advice.apiKey': { label: 'API キー', help: 'api バックエンド用。VS Code 設定に保存されます。' },
+    'advice.apiFormat': { label: 'API 形式', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'API URL', help: 'api バックエンドのエンドポイント。' },
+    'advice.model': { label: 'API モデル', help: '' },
+    'advice.reasoningEffort': { label: '推論努力 (openai)', help: '' },
+    'advice.promptWindowDays': { label: 'プロンプトサンプルウィンドウ (日数)', help: '' },
+    'advice.userContext': { label: '個人/プロジェクトのコンテキスト', help: 'オプションの背景情報。「Personalised」セクションが追加されます。' },
+    'advice.optimizer.enabled': { label: 'Usage Optimizer を有効にする', help: '「Content」タブにオプトインの Optimizer カードを表示します。' },
+  },
+  'ko': {
+    'language': { label: '표시 언어', help: 'UI 언어. "auto"는 VS Code를 따릅니다.' },
+    'decimalPlaces': { label: '비용 소수점 자리수', help: '' },
+    'compactNumbers': { label: '간략한 토큰 수 표시', help: '전체 숫자 대신 1.2M / 345K로 표시합니다.' },
+    'timezone': { label: '날짜 시간대', help: 'IANA 표준 시간대 (예: Asia/Hong_Kong). 비워두면 시스템.' },
+    'projectGroupingMode': { label: '프로젝트 그룹화', help: 'git = 저장소별 · folder = 최상위 · flat = 각 cwd.' },
+    'showCost': { label: '오늘의 비용 / 토큰 표시', help: '' },
+    'statusBarMetric': { label: '상태 표시줄 지표', help: '첫 번째 상태 표시줄 항목에 표시할 내용: 오늘의 비용 또는 오늘의 총 토큰 수 (k/M).' },
+    'showContext': { label: '컨텍스트 창 채우기 표시 (experimental)', help: '기본값은 꺼짐. 최신 로그 레코드를 기반으로 /context와 유사하게 현재 세션의 컨텍스트 비율을 추정합니다. 입력 측 합계만 표시할 수 있으며 /context의 카테고리별 분석은 표시할 수 없습니다 (디스크에 기록되지 않는 Claude Code 내부 정보이므로). 따라서 근사치이며 "~"는 추측된 창 크기를 나타냅니다.' },
+    'contextWindowOverride': { label: '컨텍스트 창 재정의 (토큰)', help: '0 = 모델에서 자동 감지. 자동 감지에서 인식할 수 없는 프록시/사용자 지정 모델에 실제 창(예: 1000000)을 설정하세요.' },
+    'usageLimitTracking': { label: '5시간 / 주간 할당량 표시', help: '' },
+    'showOpusWeekly': { label: '주간 Opus 제한 표시', help: '5시간 / 주간 수치 뒤에 주간 Opus 한도 (opus:NN%)를 추가합니다.' },
+    'workflowQuotaWarnPercent': { label: '워크플로우 할당량 경고 %', help: '남은 5시간 할당량이 이보다 낮을 때 실행 전에 경고합니다. 0 = 끄기.' },
+    'dataDirectory': { label: '사용자 지정 데이터 디렉터리', help: 'Claude 데이터 디렉터리; 비워두면 자동 감지.' },
+    'refreshInterval': { label: '새로 고침 간격 (초)', help: '' },
+    'fileWatching': { label: '실시간 파일 감시', help: '각 새 메시지 후 ~1.5초 후 새로 고침.' },
+    'pauseDashboardRefresh': { label: '대시보드 자동 새로 고침 일시 중지', help: '상태 표시줄은 계속 업데이트; 대시보드는 수동으로만 새로 고침.' },
+    'enableContentAnalysis': { label: '콘텐츠 분석 (Content 탭)', help: 'CPU 사용이 많은 텍스트 검사를 건너뛰려면 비활성화하세요.' },
+    'analysis.calibrate': { label: '콘텐츠 수치 보정', help: '예상치를 정확한 청구 토큰 총합에 맞게 조정합니다.' },
+    'advice.apiKey': { label: 'API 키', help: 'api 백엔드용. VS Code 설정에 보관됩니다.' },
+    'advice.apiFormat': { label: 'API 형식', help: 'anthropic = /v1/messages · openai = chat-completions.' },
+    'advice.apiUrl': { label: 'API URL', help: 'api 백엔드의 엔드포인트.' },
+    'advice.model': { label: 'API 모델', help: '' },
+    'advice.reasoningEffort': { label: '추론 노력 (openai)', help: '' },
+    'advice.promptWindowDays': { label: '프롬프트 샘플 창 (일)', help: '' },
+    'advice.userContext': { label: '개인/프로젝트 컨텍스트', help: '선택적 배경 정보; "Personalised" 섹션을 추가합니다.' },
+    'advice.optimizer.enabled': { label: '사용량 최적화 도구 활성화', help: 'Content 탭에 옵트인 Optimizer 카드를 표시합니다.' },
+  },
+};
+
 export class I18n {
   private static currentLanguage: SupportedLanguage = 'en';
   private static currentDecimalPlaces: number = 2;
@@ -1457,6 +1605,14 @@ export class I18n {
 
   static get t(): Translations {
     return translations[this.currentLanguage];
+  }
+
+  /** Localised label / help for a settings-panel entry, for the current UI
+   * language. Returns {} for English (the panel then falls back to the catalog
+   * English in settings.ts). */
+  static settingText(key: string): { label?: string; help?: string } {
+    const m = SETTINGS_I18N[this.currentLanguage];
+    return (m && m[key]) || {};
   }
 
   private static detectLanguage(): SupportedLanguage {

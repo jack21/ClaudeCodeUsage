@@ -181,13 +181,14 @@ export class StatusBarManager {
     md.supportThemeIcons = true;
     md.supportHtml = true;
     md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
-    // One HTML table: the bar sits in the right (value) column, right-aligned, so
-    // its right edge lines up with the figures' right edges below it. "~" marks a
+    // One HTML table following the tooltip convention — left column is the
+    // label / visual, right column is the value. So the bar sits on the left and
+    // its percentage on the right, lining up with the figures below. "~" marks a
     // guessed window size (see the override setting).
     const freeSpace = Math.max(0, info.windowTokens - info.contextTokens);
     const num = (n: number): string => I18n.formatNumber(n);
     let html = '<table>';
-    html += `<tr><td><b>${pct.toFixed(1)}%</b></td><td align="right">${this.progressBarSvg(pct, 30)}</td></tr>`;
+    html += `<tr><td>${this.progressBarSvg(pct, 30)}</td><td align="right"><b>${pct.toFixed(1)}%</b></td></tr>`;
     html += `<tr><td>${t.inputTokens}</td><td align="right">${num(info.inputTokens)}</td></tr>`;
     html += `<tr><td>${t.cacheRead}</td><td align="right">${num(info.cacheReadTokens)}</td></tr>`;
     html += `<tr><td>${t.cacheCreation}</td><td align="right">${num(info.cacheCreationTokens)}</td></tr>`;

@@ -298,11 +298,13 @@ export function buildOptimizerSystemPrompt(
       : 'Refer to Claude models by family only (haiku / sonnet / opus / fable), never a ' +
         'version number; pick the cheaper for mechanical edits, the strongest for ambiguous work. ') +
     'Format the settings as EXACTLY three lines, each "Label: value — reason":\n' +
-    'Effort: <low|medium|high|max> — <short reason>\n' +
+    'Effort: <low|medium|high|max|ultracode> — <short reason>\n' +
     'Thinking: <on|off> — <short reason>\n' +
     'Model: <model> — <short reason>\n' +
+    '("max" is the highest single-run effort; "ultracode" means split the task ' +
+    'across multiple sub-agents — suggest it only for large, parallelisable work.) ' +
     'Keep the labels (Effort / Thinking / Model) AND the value tokens (e.g. high, ' +
-    'on, opus) in English; write only the reason in the target language. ' +
+    'max, ultracode, on, opus) in English; write only the reason in the target language. ' +
     'Output EXACTLY this shape and nothing else:\n' +
     '===PROMPT===\n<the rewritten prompt, plain text>\n===SETTINGS===\n<the three settings lines>\n' +
     `Write the prompt and the reasons in ${language}.`

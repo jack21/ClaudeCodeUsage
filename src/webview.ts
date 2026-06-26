@@ -651,9 +651,14 @@ export class UsageWebviewProvider {
     return html;
   }
 
-  /** One row in the settings panel: label + help + the right input control. */
+  /** One row in the settings panel: label + help + the right input control. The
+   * label / help follow the plugin language (I18n.settingText), falling back to
+   * the catalog English for the English UI. */
   private renderSettingRow(it: SettingView): string {
     const esc = (s: string): string => this.escapeHtml(s);
+    const tr = I18n.settingText(it.key);
+    const label = tr.label ?? it.label;
+    const help = tr.help !== undefined ? tr.help : it.help;
     const id = 'set_' + it.key.replace(/[^a-zA-Z0-9]/g, '_');
     const onCh = (type: string): string =>
       ` onchange="setSetting('${it.key}', ${
@@ -703,14 +708,14 @@ export class UsageWebviewProvider {
         onCh('string') +
         '>';
     }
-    const help = it.help ? '<div class="set-help">' + esc(it.help) + '</div>' : '';
+    const helpHtml = help ? '<div class="set-help">' + esc(help) + '</div>' : '';
     return (
       '<div class="set-row"><div class="set-label"><label for="' +
       id +
       '">' +
-      esc(it.label) +
+      esc(label) +
       '</label>' +
-      help +
+      helpHtml +
       '</div><div class="set-control">' +
       control +
       '</div></div>'
