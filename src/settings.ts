@@ -151,6 +151,26 @@ export const SETTINGS: SettingDef[] = [
     help: 'Append the weekly Opus cap (opus:NN%) after the 5h / weekly figures.',
   },
   {
+    // Show only the 5-hour quota window; drop weekly / Opus from the status bar.
+    key: 'quotaFiveHourOnly',
+    type: 'boolean',
+    default: false,
+    storage: 'state',
+    group: 'statusBar',
+    label: 'Show only the 5-hour quota',
+    help: 'Hide the weekly (and Opus) windows; show just the 5-hour utilisation.',
+  },
+  {
+    // Append the 5h / weekly reset countdown to the status-bar quota item.
+    key: 'showResetInStatusBar',
+    type: 'boolean',
+    default: false,
+    storage: 'state',
+    group: 'statusBar',
+    label: 'Show quota reset time in status bar',
+    help: 'Append the reset countdown (e.g. "5h:50%:2.3h") to the status-bar quota item.',
+  },
+  {
     key: 'workflowQuotaWarnPercent',
     type: 'number',
     default: 50,

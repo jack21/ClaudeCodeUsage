@@ -16,6 +16,9 @@ export class StatusBarManager {
   // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38,
   // @wheelbarrel00).
   private showOpusWeekly: boolean = false;
+  // Quota display preferences.
+  private quotaFiveHourOnly: boolean = false; // show only the 5h window
+  private showResetInBar: boolean = false;    // append reset countdown to the bar
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -50,13 +53,17 @@ export class StatusBarManager {
     showContext: boolean,
     usageLimitTracking: boolean = true,
     metric: 'cost' | 'tokens' = 'cost',
-    showOpusWeekly: boolean = false
+    showOpusWeekly: boolean = false,
+    quotaFiveHourOnly: boolean = false,
+    showResetInBar: boolean = false
   ): void {
     this.showCost = showCost;
     this.showContext = showContext;
     this.usageLimitTracking = usageLimitTracking;
     this.metric = metric;
     this.showOpusWeekly = showOpusWeekly;
+    this.quotaFiveHourOnly = quotaFiveHourOnly;
+    this.showResetInBar = showResetInBar;
     if (!showContext) {
       this.contextItem.hide();
     }
@@ -215,6 +222,11 @@ export class StatusBarManager {
     // hours, even after a plan upgrade or a reset). Drop any window whose reset
     // time has passed. Adapted from PR #24 by @nickearnshaw.
     const live = this.liveWindows(usageLimits);
+    // Collapse to the 5h window only.
+    if (this.quotaFiveHourOnly && live) {
+      live.seven_day = undefined;
+      live.seven_day_opus = undefined;
+    }
     const fiveHour = live?.five_hour;
     const weekly = live?.seven_day;
     const opus = live?.seven_day_opus;
@@ -223,23 +235,29 @@ export class StatusBarManager {
       return;
     }
 
+    // Optionally append each window's reset countdown to the bar.
+    const resetSuffix = (limit: ClaudeUsageLimit): string => {
+      if (!this.showResetInBar) { return ''; }
+      const d = new Date(limit.resets_at);
+      return isNaN(d.getTime()) ? '' : `:${this.formatResetCompact(d)}`;
+    };
     const parts: string[] = [];
     let worstPct = 0;
     if (fiveHour) {
       worstPct = Math.max(worstPct, fiveHour.utilization);
-      parts.push(`5h:${Math.round(fiveHour.utilization)}%`);
+      parts.push(`5h:${Math.round(fiveHour.utilization)}%${resetSuffix(fiveHour)}`);
     }
     if (weekly) {
       worstPct = Math.max(worstPct, weekly.utilization);
-      parts.push(`wk:${Math.round(weekly.utilization)}%`);
+      parts.push(`wk:${Math.round(weekly.utilization)}%${resetSuffix(weekly)}`);
     }
     // Opt-in weekly Opus cap (PR #38, @wheelbarrel00).
     if (this.showOpusWeekly && opus) {
       worstPct = Math.max(worstPct, opus.utilization);
-      parts.push(`opus:${Math.round(opus.utilization)}%`);
+      parts.push(`opus:${Math.round(opus.utilization)}%${resetSuffix(opus)}`);
     }
 
-    this.quotaItem.text = `$(dashboard) ${parts.join(' ')}`;
+    this.quotaItem.text = `$(dashboard) ${parts.join(' | ')}`;
 
     // Stay quiet until usage actually gets high.
     if (worstPct >= 95) {
@@ -451,7 +469,7 @@ export class StatusBarManager {
     );
   }
 
-    /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
+    /** Time remaining until a reset, e.g. "2h 15m" or "3.2d". */
   private formatCountdown(target: Date): string {
     const ms = target.getTime() - Date.now();
     if (ms <= 0) {
@@ -461,9 +479,26 @@ export class StatusBarManager {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     if (hours >= 24) {
-      return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+      return `${(hours / 24).toFixed(1)}d`;
     }
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  }
+
+  /** Compact reset countdown for the status-bar quota item, e.g. "45m"/"2.3h"/"3.2d". */
+  private formatResetCompact(target: Date): string {
+    const ms = target.getTime() - Date.now();
+    if (ms <= 0) {
+      return '0m';
+    }
+    const minutes = ms / 60000;
+    if (minutes < 60) {
+      return `${Math.round(minutes)}m`;
+    }
+    const hours = minutes / 60;
+    if (hours < 24) {
+      return `${hours.toFixed(1)}h`;
+    }
+    return `${(hours / 24).toFixed(1)}d`;
   }
 
   /** Localised weekday + time of a weekly reset, in 24-hour form
