@@ -71,7 +71,7 @@ a case for the tricky edge you just fixed so it can't regress.
 (status-bar wiring, webview, commands) needs the heavier
 [`@vscode/test-electron`](https://github.com/microsoft/vscode-test) harness,
 which isn't set up yet. If you need it, raise it on
-[#25](https://github.com/jack21/ClaudeCodeUsage/issues/25) first so we keep the
+[#25](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/25) first so we keep the
 two harnesses cleanly separated.
 
 ## Releases

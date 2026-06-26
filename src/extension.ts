@@ -7,14 +7,22 @@ import { UsageWebviewProvider } from './webview';
 import { I18n } from './i18n';
 import { fetchLatestPricing } from './pricing';
 import { ClaudeApiClient } from './claudeApiClient';
-import { getUsageAdvice } from './advisor';
+import {
+  buildOptimizerSystemPrompt,
+  callModel,
+  getUsageAdvice,
+  parseOptimizerOutput
+} from './advisor';
+import { buildAdviceSummary } from './adviceSummary';
 import { getDemoBody } from './adviceDemoSample';
 import { ClaudeApiUsageResponse, ContentAnalysis, ExtensionConfig } from './types';
+import { SettingsStore } from './settings';
 
 export class ClaudeCodeUsageExtension {
   private statusBar: StatusBarManager;
   private webviewProvider: UsageWebviewProvider;
   private apiClient: ClaudeApiClient;
+  private settings: SettingsStore;
   private refreshTimer: NodeJS.Timeout | undefined;
   private fileWatcher: fs.FSWatcher | undefined;
   private watchDebounceTimer: NodeJS.Timeout | undefined;
@@ -62,8 +70,21 @@ export class ClaudeCodeUsageExtension {
     this.outputChannel = vscode.window.createOutputChannel('Claude Code Usage');
     context.subscriptions.push(this.outputChannel);
     this.statusBar = new StatusBarManager();
+    this.settings = new SettingsStore(context);
     this.webviewProvider = new UsageWebviewProvider(context);
     this.apiClient = new ClaudeApiClient(this.outputChannel);
+    // Migrate any pre-2.1 settings.json values for the keys that have moved out
+    // of the VS Code Settings UI into the dashboard-managed store. Runs once.
+    void this.settings.migrateOnce();
+    // Usage Optimizer (Phase 9c): the webview posts a draft prompt; we run it
+    // through the same model backend as the advice feature and post back a
+    // tightened prompt + a settings recommendation. Consent gate lives here.
+    this.webviewProvider.onOptimize = (draft, options) => this.runOptimizer(draft, options);
+    // Share the settings store with the dashboard's ⚙ Settings panel, and have
+    // it tell us when the user changes a setting there so we re-apply config
+    // (globalState changes don't fire onDidChangeConfiguration).
+    this.webviewProvider.settings = this.settings;
+    this.webviewProvider.onSettingsChanged = () => this.onConfigurationChanged();
 
     this.setupCommands();
     this.loadConfiguration();
@@ -112,70 +133,13 @@ export class ClaudeCodeUsageExtension {
     }
   }
 
-  /**
-   * Build the advice prompt for a scope. Includes a usage summary, the content
-   * breakdown, and a sample of the developer's actual prompts so the model can
-   * critique instruction quality.
-   * @param scope 'overall' or a project group path
-   */
-  private buildAdviceSummary(records: any[], analysis: ContentAnalysis, scope: string, scopeLabel: string): string {
-    const norm = (p: string): string => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const isOverall = scope === 'overall';
-    const scopedRecords = isOverall
-      ? records
-      : records.filter((r) => norm(r._projectPath || '').startsWith(norm(scope)));
-    const usage = ClaudeDataLoader.getAllTimeData(scopedRecords);
-    const prompts = isOverall
-      ? analysis.recentPrompts
-      : analysis.recentPrompts.filter((p) => norm(p.cwd).startsWith(norm(scope)));
-    const promptSample = prompts.slice(-80);
-
-    const lines: string[] = [];
-    lines.push(`Scope: ${isOverall ? 'overall (all projects)' : scopeLabel}`);
-    lines.push(
-      `Usage: cost $${usage.totalCost.toFixed(2)}, input ${usage.totalInputTokens}, ` +
-        `output ${usage.totalOutputTokens}, cache-write ${usage.totalCacheCreationTokens}, ` +
-        `cache-read ${usage.totalCacheReadTokens}, messages ${usage.messageCount}`
-    );
-    lines.push(`Models used: ${Object.keys(usage.modelBreakdown).join(', ') || 'n/a'}`);
-    lines.push('');
-    lines.push('Content token breakdown, all projects, last 30 days (estimated):');
-    for (const c of analysis.categories) {
-      const pct =
-        analysis.totalEstimatedTokens > 0
-          ? ((c.estimatedTokens / analysis.totalEstimatedTokens) * 100).toFixed(1)
-          : '0';
-      lines.push(`- ${c.key}: ~${c.estimatedTokens} tokens (${pct}%)`);
-    }
-    lines.push('');
-    if (promptSample.length === 0) {
-      lines.push('=== No recent user prompts captured for this scope ===');
-      lines.push(
-        'No prompt samples are available. Base your advice on the aggregate usage above and ' +
-          'on general Claude Code best practices for writing clearer, more complete and more ' +
-          'effective instructions. Also note any easy token savings the aggregates suggest.'
-      );
-    } else {
-      lines.push(`=== Sample of ${promptSample.length} recent user prompts (review these for instruction quality) ===`);
-      promptSample.forEach((p, i) => {
-        lines.push(`[Prompt ${i + 1}]`);
-        lines.push(p.text);
-        lines.push('');
-      });
-      lines.push('=== End of prompts ===');
-      lines.push('');
-      lines.push(
-        'Based primarily on the prompts above, give specific advice on how to write clearer, ' +
-          'more complete and more effective instructions for Claude Code, with concrete rewrite ' +
-          'examples drawn from the samples. Secondarily, note any easy token savings.'
-      );
-    }
-    return lines.join('\n');
-  }
-
   private async getAdvice(): Promise<void> {
     const config = this.getConfiguration();
-    if (!config.adviceApiKey || config.adviceApiKey.trim() === '') {
+    // The subscription backend needs no API key (it reuses the Claude Code
+    // OAuth session); only the 'api' backend requires a configured key.
+    const needsKey =
+      config.adviceBackend === 'api' && (!config.adviceApiKey || config.adviceApiKey.trim() === '');
+    if (needsKey) {
       const picked = await vscode.window.showWarningMessage(
         I18n.t.popup.adviceNeedsKey,
         I18n.t.popup.settings,
@@ -207,7 +171,13 @@ export class ClaudeCodeUsageExtension {
       return;
     }
 
-    const summary = this.buildAdviceSummary(records, analysis, picked.scope, picked.label);
+    const summary = buildAdviceSummary(
+      records,
+      analysis,
+      picked.scope,
+      picked.label,
+      config.advicePromptWindowDays
+    );
 
     await this.runAdviceRequest(config, picked.scope, picked.label, summary);
   }
@@ -239,10 +209,15 @@ export class ClaudeCodeUsageExtension {
       async () => {
         try {
           const advice = await getUsageAdvice({
+            backend: config.adviceBackend,
+            apiFormat: config.adviceApiFormat,
+            subscriptionModel: config.adviceSubscriptionModel,
+            getSubscriptionToken: () => this.apiClient.getAccessToken(),
             apiKey: config.adviceApiKey,
             apiUrl: config.adviceApiUrl,
             model: config.adviceModel,
             reasoningEffort: config.adviceReasoningEffort,
+            userContext: config.adviceUserContext,
             language: I18n.getLanguageName(),
             summary
           });
@@ -271,13 +246,112 @@ export class ClaudeCodeUsageExtension {
     );
   }
 
+  /**
+   * Usage Optimizer round-trip (Phase 9c). Takes the user's rough draft and the
+   * three optional lenses, asks the configured model to return a tightened
+   * paste-ready prompt plus a settings recommendation, and parses the two
+   * sections out. ONLY the pasted draft is sent — no filesystem access. First
+   * use shows a one-time consent modal (the text is going to a model, not to
+   * Claude Code's terminal).
+   */
+  /** Distinct models the user actually uses — Claude reduced to family names
+   * (haiku/sonnet/opus/fable), third-party models kept as-is — so the optimizer
+   * recommends from real options instead of guessing a (possibly stale) name. */
+  private usedModelNames(): string[] {
+    const family = (m: string): string => {
+      const s = m.toLowerCase();
+      if (/fable|mythos/.test(s)) {
+        return 'fable';
+      }
+      if (/opus/.test(s)) {
+        return 'opus';
+      }
+      if (/sonnet/.test(s)) {
+        return 'sonnet';
+      }
+      if (/haiku/.test(s)) {
+        return 'haiku';
+      }
+      return m;
+    };
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of this.cache.records) {
+      const m = r?.message?.model;
+      if (!m || typeof m !== 'string') {
+        continue;
+      }
+      const f = family(m);
+      if (!seen.has(f)) {
+        seen.add(f);
+        out.push(f);
+      }
+    }
+    return out.slice(0, 8);
+  }
+
+  private async runOptimizer(
+    draft: string,
+    options: { resolve: boolean; distil: boolean; aesthetic: boolean }
+  ): Promise<{ prompt?: string; settings?: string; error?: string }> {
+    const text = (draft || '').trim();
+    if (text === '') {
+      return { error: I18n.t.popup.noDataMessage };
+    }
+
+    // One-time consent: the draft leaves the machine for whichever model the
+    // advice backend points at. Remember the choice in globalState.
+    const consentKey = 'claudeCodeUsage.optimizerConsented';
+    if (!this.context.globalState.get<boolean>(consentKey, false)) {
+      const proceed = await vscode.window.showWarningMessage(
+        I18n.t.popup.optimizerConsent,
+        { modal: true },
+        I18n.t.popup.optimizerRun
+      );
+      if (proceed !== I18n.t.popup.optimizerRun) {
+        return { error: '' };
+      }
+      await this.context.globalState.update(consentKey, true);
+    }
+
+    const config = this.getConfiguration();
+    const needsKey =
+      config.adviceBackend === 'api' && (!config.adviceApiKey || config.adviceApiKey.trim() === '');
+    if (needsKey) {
+      return { error: I18n.t.popup.adviceNeedsKey };
+    }
+
+    const language = I18n.getLanguageName();
+    const systemPrompt = buildOptimizerSystemPrompt(language, options, this.usedModelNames());
+
+    try {
+      const raw = await callModel(systemPrompt, text, {
+        backend: config.adviceBackend,
+        apiFormat: config.adviceApiFormat,
+        subscriptionModel: config.adviceSubscriptionModel,
+        getSubscriptionToken: () => this.apiClient.getAccessToken(),
+        apiKey: config.adviceApiKey,
+        apiUrl: config.adviceApiUrl,
+        model: config.adviceModel,
+        reasoningEffort: config.adviceReasoningEffort,
+        language,
+        summary: '',
+        timeoutMs: 90_000
+      });
+      return parseOptimizerOutput(raw);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: `${I18n.t.popup.adviceFailed}: ${message}` };
+    }
+  }
+
   private loadConfiguration(): void {
     const config = this.getConfiguration();
     I18n.setLanguage(config.language as any);
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext, config.showOpusWeekly);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric, config.showOpusWeekly);
 
     // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -285,39 +359,52 @@ export class ClaudeCodeUsageExtension {
         this.onConfigurationChanged();
       }
     });
+
+    // Switching the open folder in the same window can leave the quota indicator
+    // blank (it does not always restart the extension host, and the inherited
+    // process state — e.g. the curl spawn cwd — can go stale). Force a fresh
+    // quota fetch + refresh so it reappears without needing a new window.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      this.cache.usageLimitsLastUpdate = new Date(0);
+      this.quotaColdRetryDone = false;
+      this.refreshData();
+    });
   }
 
   private getConfiguration(): ExtensionConfig {
-    const config = vscode.workspace.getConfiguration('claudeCodeUsage');
+    // All settings now flow through SettingsStore: the core trio (language,
+    // dataDirectory, advice.apiKey) still lives in VS Code config; the rest in
+    // the dashboard-managed store. Defaults come from the settings catalog.
+    const s = this.settings;
     return {
-      refreshInterval: config.get('refreshInterval', 60),
-      dataDirectory: config.get('dataDirectory', ''),
-      language: config.get('language', 'auto'),
-      decimalPlaces: config.get('decimalPlaces', 2),
-      compactNumbers: config.get('compactNumbers', false),
-      timezone: config.get('timezone', ''),
-      showCost: config.get('showCost', true),
-      showContext: config.get('showContext', true),
-      usageLimitTracking: config.get('usageLimitTracking', true),
-      showOpusWeekly: config.get('showOpusWeekly', false),
-      // apiKey is the gate for the advice feature: ONLY read the new dotted
-      // key. We deliberately do NOT fall back to the pre-2.0 flat
-      // `adviceApiKey` here — otherwise users who clear the new key in
-      // Settings would silently keep the feature enabled via the stale flat
-      // key, with no way to enter demo mode. Other config (URL / model /
-      // effort) still falls back, since they only affect *how* requests are
-      // sent, not whether they are sent.
-      adviceApiKey: config.get<string>('advice.apiKey', ''),
-      adviceApiUrl:
-        config.get<string>('advice.apiUrl') ||
-        config.get<string>('adviceApiUrl', 'https://api.deepseek.com/chat/completions'),
-      adviceModel: config.get<string>('advice.model') || config.get<string>('adviceModel', 'deepseek-v4-pro'),
-      adviceReasoningEffort:
-        config.get<string>('advice.reasoningEffort') ?? config.get<string>('adviceReasoningEffort', 'max'),
-      enableContentAnalysis: config.get('enableContentAnalysis', true),
-      projectGroupingMode: config.get('projectGroupingMode', 'git') as 'git' | 'folder' | 'flat',
-      fileWatching: config.get('fileWatching', true),
-      pauseDashboardRefresh: config.get('pauseDashboardRefresh', false)
+      refreshInterval: s.get<number>('refreshInterval'),
+      dataDirectory: s.get<string>('dataDirectory'),
+      language: s.get<string>('language'),
+      decimalPlaces: s.get<number>('decimalPlaces'),
+      compactNumbers: s.get<boolean>('compactNumbers'),
+      timezone: s.get<string>('timezone'),
+      showCost: s.get<boolean>('showCost'),
+      showContext: s.get<boolean>('showContext'),
+      contextWindowOverride: s.get<number>('contextWindowOverride'),
+      statusBarMetric: s.get<'cost' | 'tokens'>('statusBarMetric'),
+      showOpusWeekly: s.get<boolean>('showOpusWeekly'),
+      usageLimitTracking: s.get<boolean>('usageLimitTracking'),
+      adviceApiKey: s.get<string>('advice.apiKey'),
+      adviceApiUrl: s.get<string>('advice.apiUrl'),
+      adviceModel: s.get<string>('advice.model'),
+      adviceReasoningEffort: s.get<string>('advice.reasoningEffort'),
+      adviceUserContext: s.get<string>('advice.userContext'),
+      // Subscription backend is not shipped this version (Anthropic 403s the
+      // OAuth-token direct call) — advice/optimizer are API-only. The dormant
+      // subscription transport remains in advisor.ts.
+      adviceBackend: 'api',
+      adviceApiFormat: s.get<'anthropic' | 'openai'>('advice.apiFormat'),
+      adviceSubscriptionModel: 'claude-haiku-4-5',
+      advicePromptWindowDays: s.get<number>('advice.promptWindowDays'),
+      enableContentAnalysis: s.get<boolean>('enableContentAnalysis'),
+      projectGroupingMode: s.get<'git' | 'folder' | 'flat'>('projectGroupingMode'),
+      fileWatching: s.get<boolean>('fileWatching'),
+      pauseDashboardRefresh: s.get<boolean>('pauseDashboardRefresh')
     };
   }
 
@@ -327,7 +414,7 @@ export class ClaudeCodeUsageExtension {
     I18n.setDecimalPlaces(config.decimalPlaces);
     I18n.setCompactNumbers(config.compactNumbers);
     I18n.setTimezone(config.timezone);
-    this.statusBar.setVisibility(config.showCost, config.showContext, config.showOpusWeekly);
+    this.statusBar.setVisibility(config.showCost, config.showContext, config.usageLimitTracking, config.statusBarMetric, config.showOpusWeekly);
 
     // Restart auto-refresh with new interval
     this.startAutoRefresh();
@@ -513,12 +600,14 @@ export class ClaudeCodeUsageExtension {
       // retry-storm: repeated /usage hits are what trigger the 429 cool-down.
       this.maybeFetchUsageLimits(config).then((limits) => {
         this.statusBar.updateQuota(limits);
+        this.webviewProvider.updateQuota(limits);
         if (!limits && !this.cache.usageLimits && !this.quotaColdRetryDone) {
           this.quotaColdRetryDone = true;
           setTimeout(() => {
             this.maybeFetchUsageLimits(this.getConfiguration()).then((retry) => {
               if (retry) {
                 this.statusBar.updateQuota(retry);
+                this.webviewProvider.updateQuota(retry);
               }
             });
           }, 8000);
@@ -554,7 +643,8 @@ export class ClaudeCodeUsageExtension {
         this.statusBar.updateContext(
           ClaudeDataLoader.getCurrentContextInfo(
             this.cache.records,
-            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+            config.contextWindowOverride
           )
         );
         return;
@@ -573,6 +663,7 @@ export class ClaudeCodeUsageExtension {
 
       const loaded = await ClaudeDataLoader.loadUsageRecords(dataDirectory, {
         analyzeContent: config.enableContentAnalysis,
+        windowDays: config.advicePromptWindowDays,
         log: (line) =>
           this.outputChannel.appendLine(
             `[${new Date().toLocaleTimeString(undefined, { hour12: false })}] ${line}`
@@ -612,13 +703,16 @@ export class ClaudeCodeUsageExtension {
       const sessionBreakdown = ClaudeDataLoader.getSessionBreakdown(records);
       const projectBreakdown = ClaudeDataLoader.getProjectBreakdown(records, undefined, config.projectGroupingMode);
       const branchBreakdown = ClaudeDataLoader.getBranchBreakdown(records);
+      const workflowBreakdown = ClaudeDataLoader.getWorkflowBreakdown(records);
 
       // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
       // above; passing undefined leaves the quota item untouched here.
       this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
-      this.statusBar.updateContext(ClaudeDataLoader.getCurrentContextInfo(records, workspacePath));
+      this.statusBar.updateContext(
+        ClaudeDataLoader.getCurrentContextInfo(records, workspacePath, config.contextWindowOverride)
+      );
       if (updateWebview) {
-        this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown);
+        this.webviewProvider.updateData(sessionData, todayData, monthData, allTimeData, dailyDataForMonth, dailyDataForAllTime, hourlyDataForToday, undefined, dataDirectory, records, sessionBreakdown, projectBreakdown, contentAnalysis, branchBreakdown, workflowBreakdown);
       }
 
     } catch (error) {

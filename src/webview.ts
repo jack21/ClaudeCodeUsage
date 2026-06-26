@@ -1,7 +1,21 @@
 import * as vscode from 'vscode';
+import { ClaudeDataLoader } from './dataLoader';
 import { I18n } from './i18n';
 import { getModelRatesPerMillion } from './pricing';
-import { BranchUsage, ContentAnalysis, ProjectGroup, ProjectUsage, SessionData, SessionUsage, UsageData } from './types';
+import { SETTINGS, SettingsStore, SettingView } from './settings';
+import {
+  AttributionScope,
+  BranchUsage,
+  ClaudeApiUsageResponse,
+  ContentAnalysis,
+  ProjectGroup,
+  ProjectUsage,
+  SessionData,
+  SessionUsage,
+  UsageAttribution,
+  UsageData,
+  WorkflowUsage,
+} from './types';
 
 export class UsageWebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -22,8 +36,42 @@ export class UsageWebviewProvider {
   private projectBreakdown: ProjectGroup[] = [];
   private contentAnalysis: ContentAnalysis | null = null;
   private branchBreakdown: BranchUsage[] = [];
+  private workflowBreakdown: WorkflowUsage[] = [];
+  // Real quota utilisation (pushed asynchronously) for the workflow quota
+  // guard banner; dismissal lasts for the lifetime of this window.
+  private usageLimits: ClaudeApiUsageResponse | null = null;
+  private quotaWarnDismissed: boolean = false;
+  // Set by extension.ts: runs the Usage Optimizer round-trip (model lives there
+  // with the config + OAuth client). Returns the optimised prompt + settings
+  // recommendation, or an error string.
+  public onOptimize?: (
+    draft: string,
+    options: { resolve: boolean; distil: boolean; aesthetic: boolean }
+  ) => Promise<{ prompt?: string; settings?: string; error?: string }>;
+  // Shared settings store + a callback to let extension.ts re-apply config when
+  // the user edits a setting in the dashboard's ⚙ Settings tab. Both are set by
+  // extension.ts right after construction.
+  public settings?: SettingsStore;
+  public onSettingsChanged?: () => void;
+  // Last Usage Optimizer interaction (draft + lens choices + result). Persisted
+  // here so an auto-refresh re-render of the webview doesn't wipe a result the
+  // user is still reading — renderOptimizerCard restores it from this.
+  private optimizerState: {
+    draft: string;
+    resolve: boolean;
+    distil: boolean;
+    aesthetic: boolean;
+    prompt?: string;
+    settings?: string;
+    error?: string;
+  } | null = null;
 
   constructor(private context: vscode.ExtensionContext) {}
+
+  /** Read a moved/core setting through the shared store, with a fallback. */
+  private setting<T>(key: string, fallback: T): T {
+    return this.settings ? this.settings.get<T>(key) : fallback;
+  }
 
   private escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -42,6 +90,9 @@ export class UsageWebviewProvider {
 
     this.panel.onDidDispose(() => {
       this.panel = undefined;
+      // Force a fresh render into the next panel (the lastHtml guard must not
+      // suppress the first paint after the panel was closed and reopened).
+      this.lastHtml = '';
     });
 
     this.panel.webview.onDidReceiveMessage(async (message) => {
@@ -59,15 +110,81 @@ export class UsageWebviewProvider {
           vscode.commands.executeCommand('claudeCodeUsage.getAdvice');
           break;
         case 'setPauseDashboardRefresh':
-          // Persist the in-dashboard toggle so it survives reload and stays in
-          // sync with VS Code Settings.
-          await vscode.workspace
-            .getConfiguration('claudeCodeUsage')
-            .update('pauseDashboardRefresh', !!message.value, vscode.ConfigurationTarget.Global);
+          // Persist the in-dashboard toggle so it survives reload. Lives in the
+          // dashboard-managed store now (no longer in VS Code Settings).
+          await this.settings?.set('pauseDashboardRefresh', !!message.value);
           break;
         case 'tabChanged':
           this.currentTab = message.tab;
           break;
+        case 'updateSetting':
+          if (this.settings && typeof message.key === 'string') {
+            await this.settings.set(message.key, message.value);
+            // Re-apply config (status bar, refresh cadence, language…) and
+            // re-render. globalState changes don't fire onDidChangeConfiguration.
+            this.onSettingsChanged?.();
+          }
+          break;
+        case 'resetSetting':
+          if (this.settings && typeof message.key === 'string') {
+            await this.settings.reset(message.key);
+            this.onSettingsChanged?.();
+          }
+          break;
+        case 'resetAllSettings':
+          if (this.settings) {
+            for (const d of SETTINGS) {
+              await this.settings.reset(d.key);
+            }
+            this.onSettingsChanged?.();
+          }
+          break;
+        case 'dismissQuotaWarn':
+          this.quotaWarnDismissed = true;
+          this.updateWebview();
+          break;
+        case 'optimizePrompt': {
+          if (!this.panel) {
+            break;
+          }
+          const draft = String(message.draft || '');
+          const opts = {
+            resolve: !!message.resolve,
+            distil: !!message.distil,
+            aesthetic: !!message.aesthetic,
+          };
+          // Persist the inputs immediately so a refresh mid-request keeps them.
+          this.optimizerState = { draft, ...opts };
+          let result: { prompt?: string; settings?: string; error?: string };
+          if (this.onOptimize) {
+            result = await this.onOptimize(draft, opts);
+          } else {
+            result = { error: 'Optimizer is not available.' };
+          }
+          // Persist the result too, so re-rendering the webview (auto-refresh)
+          // restores it instead of wiping a prompt the user is still reading.
+          this.optimizerState = { draft, ...opts, ...result };
+          if (this.panel) {
+            this.panel.webview.postMessage({ command: 'optimizeResult', ...result });
+          }
+          break;
+        }
+        case 'getAttribution': {
+          // Recompute the attribution panel for a new scope (Day / Week /
+          // Month / one session / one project) and push the rendered HTML.
+          if (this.panel && message.scope) {
+            const attr = ClaudeDataLoader.getUsageAttribution(
+              this.allRecords,
+              this.contentAnalysis,
+              message.scope as AttributionScope
+            );
+            this.panel.webview.postMessage({
+              command: 'attributionResponse',
+              html: this.renderAttributionPanel(attr),
+            });
+          }
+          break;
+        }
         case 'getHourlyData':
           const dateString = message.date;
           if (dateString && this.panel) {
@@ -118,7 +235,8 @@ export class UsageWebviewProvider {
     sessionBreakdown: SessionUsage[] = [],
     projectBreakdown: ProjectGroup[] = [],
     contentAnalysis: ContentAnalysis | null = null,
-    branchBreakdown: BranchUsage[] = []
+    branchBreakdown: BranchUsage[] = [],
+    workflowBreakdown: WorkflowUsage[] = []
   ): void {
     this.currentSessionData = sessionData;
     this.todayData = todayData;
@@ -137,6 +255,7 @@ export class UsageWebviewProvider {
     this.projectBreakdown = projectBreakdown;
     this.contentAnalysis = contentAnalysis;
     this.branchBreakdown = branchBreakdown;
+    this.workflowBreakdown = workflowBreakdown;
 
     if (this.panel) {
       this.updateWebview();
@@ -150,10 +269,65 @@ export class UsageWebviewProvider {
     }
   }
 
+  /** Receive quota utilisation (decoupled from local data; see extension.ts). */
+  updateQuota(usageLimits: ClaudeApiUsageResponse | null): void {
+    if (!usageLimits) {
+      return;
+    }
+    const changed = JSON.stringify(usageLimits) !== JSON.stringify(this.usageLimits);
+    this.usageLimits = usageLimits;
+    // Re-render only on change so the cheap quota poll doesn't redraw the
+    // dashboard (and reset scroll position) every tick.
+    if (changed && this.panel && !this.isLoading) {
+      this.updateWebview();
+    }
+  }
+
+  /** Quota-guard banner: warns before starting a workflow run on a nearly
+   * exhausted 5-hour window. Threshold via workflowQuotaWarnPercent (0 = off);
+   * dismissible per window-session. Status bar stays untouched. */
+  private renderQuotaBanner(): string {
+    if (this.quotaWarnDismissed) {
+      return '';
+    }
+    const warnPercent = this.setting<number>('workflowQuotaWarnPercent', 50);
+    const fiveHour = this.usageLimits?.five_hour;
+    if (!warnPercent || warnPercent <= 0 || !fiveHour || typeof fiveHour.utilization !== 'number') {
+      return '';
+    }
+    // An already-reset window means a fresh quota — never warn on stale data.
+    const resetsAt = Date.parse(fiveHour.resets_at);
+    if (!isNaN(resetsAt) && resetsAt <= Date.now()) {
+      return '';
+    }
+    const remaining = Math.max(0, Math.round(100 - fiveHour.utilization));
+    if (remaining >= warnPercent) {
+      return '';
+    }
+    const text = I18n.t.popup.quotaWarnBanner.replace('{remaining}', String(remaining));
+    return (
+      '<div class="quota-banner">' +
+      '<span class="quota-banner-text">⚠ ' + this.escapeHtml(text) + '</span>' +
+      '<button class="quota-banner-dismiss" title="' + this.escapeHtml(I18n.t.popup.dismiss) +
+      '" onclick="dismissQuotaWarn()">✕</button>' +
+      '</div>'
+    );
+  }
+
+  // Last HTML pushed to the webview. Assigning panel.webview.html triggers a
+  // full reload (re-parse + re-run the inline script + reset scroll), which is
+  // the heaviest recurring cost during active sessions. Skip it when the render
+  // is byte-identical — nothing visible would change anyway.
+  private lastHtml: string = '';
+
   private updateWebview(): void {
     if (!this.panel) return;
-
-    this.panel.webview.html = this.getWebviewContent();
+    const html = this.getWebviewContent();
+    if (html === this.lastHtml) {
+      return;
+    }
+    this.lastHtml = html;
+    this.panel.webview.html = html;
   }
 
   private getWebviewContent(): string {
@@ -257,6 +431,8 @@ export class UsageWebviewProvider {
     const projects = I18n.t.popup.projects;
     const contentTab = I18n.t.popup.contentAnalysis;
     const branchesTab = I18n.t.popup.branches;
+    const workflowsTab = I18n.t.popup.workflows;
+    const settingsTab = I18n.t.popup.settingsTab;
 
     const todayActive = this.currentTab === 'today' ? 'active' : '';
     const monthActive = this.currentTab === 'month' ? 'active' : '';
@@ -265,6 +441,8 @@ export class UsageWebviewProvider {
     const projectsActive = this.currentTab === 'projects' ? 'active' : '';
     const contentActive = this.currentTab === 'content' ? 'active' : '';
     const branchesActive = this.currentTab === 'branches' ? 'active' : '';
+    const workflowsActive = this.currentTab === 'workflows' ? 'active' : '';
+    const settingsActive = this.currentTab === 'settings' ? 'active' : '';
 
     // The Content tab is hidden when content analysis is disabled via
     // claudeCodeUsage.enableContentAnalysis (the analyser returned null).
@@ -291,36 +469,27 @@ export class UsageWebviewProvider {
       this.getStyles() +
       `</style>
       </head>
-      <body class="${
-        vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
-          ? 'auto-off'
-          : ''
-      }">
+      <body class="${this.setting<boolean>('pauseDashboardRefresh', false) ? 'auto-off' : ''}">
         <div class="container">
           <header>
             <h1>` +
       title +
       `</h1>
             <div class="actions">
-              <label class="auto-refresh-switch" title="${this.escapeHtml(I18n.t.popup.autoRefresh)}">
-                <span class="auto-refresh-label">${I18n.t.popup.autoRefresh}</span>
-                <span class="switch">
-                  <input type="checkbox" id="autoRefreshCheckbox" ${
-                    vscode.workspace.getConfiguration('claudeCodeUsage').get('pauseDashboardRefresh', false)
-                      ? ''
-                      : 'checked'
-                  } onchange="toggleAutoRefresh()">
-                  <span class="slider"></span>
-                </span>
-              </label>
-              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now">↻ ` +
+              <button onclick="refresh()" id="refreshNowBtn" class="btn-secondary btn-refresh-now" title="${this.escapeHtml(
+                I18n.t.popup.refresh
+              )}">↻ ` +
       refresh +
       `</button>
-              <button onclick="openSettings()" class="btn-secondary">` +
+              <button onclick="showTab('content')" class="btn-secondary">✨ ` +
+      I18n.t.popup.adviceCardTitle +
+      `</button>
+              <button onclick="showTab('settings')" class="btn-secondary">⚙ ` +
       settings +
       `</button>
             </div>
           </header>` +
+      this.renderQuotaBanner() +
       `
           <div class="tabs">
             <button id="tab-today" class="tab ` +
@@ -355,6 +524,16 @@ export class UsageWebviewProvider {
       branchesActive +
       `" onclick="showTab('branches')">` +
       branchesTab +
+      `</button>
+            <button id="tab-workflows" class="tab ` +
+      workflowsActive +
+      `" onclick="showTab('workflows')">` +
+      workflowsTab +
+      `</button>
+            <button id="tab-settings" class="tab ` +
+      settingsActive +
+      `" onclick="showTab('settings')">` +
+      settingsTab +
       `</button>
           </div>
 
@@ -409,6 +588,22 @@ export class UsageWebviewProvider {
       this.renderBranchData() +
       `
           </div>
+
+          <div id="workflows" class="tab-content ` +
+      workflowsActive +
+      `">
+            ` +
+      this.renderWorkflowData() +
+      `
+          </div>
+
+          <div id="settings" class="tab-content ` +
+      settingsActive +
+      `">
+            ` +
+      this.renderSettingsPanel() +
+      `
+          </div>
         </div>
         <script>` +
       this.getScript() +
@@ -419,12 +614,120 @@ export class UsageWebviewProvider {
     );
   }
 
+  /**
+   * The ⚙ Settings tab: every setting, grouped, editable in place. Core
+   * settings (language / dataDirectory / advice.apiKey) still write to VS Code
+   * config; the rest write to the dashboard-managed store. Setting labels/help
+   * are English (technical); group headers + chrome are localised.
+   */
+  private renderSettingsPanel(): string {
+    const t = I18n.t.popup;
+    const snap: SettingView[] = this.settings ? this.settings.snapshot() : [];
+    const groups: { key: string; label: string }[] = [
+      { key: 'general', label: t.settingsGroupGeneral },
+      { key: 'statusBar', label: t.settingsGroupStatusBar },
+      { key: 'data', label: t.settingsGroupData },
+      { key: 'advice', label: t.settingsGroupAdvice },
+    ];
+    let html = '<div class="settings-panel">';
+    html += '<p class="table-hint">' + t.settingsIntro + '</p>';
+    html +=
+      '<div class="settings-toolbar">' +
+      '<button class="btn-secondary btn-small" onclick="resetAllSettings()">' +
+      t.settingsResetAll +
+      '</button></div>';
+    for (const g of groups) {
+      const items = snap.filter((s) => s.group === g.key);
+      if (items.length === 0) {
+        continue;
+      }
+      html += '<div class="settings-group"><h3>' + this.escapeHtml(g.label) + '</h3>';
+      for (const it of items) {
+        html += this.renderSettingRow(it);
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /** One row in the settings panel: label + help + the right input control. The
+   * label / help follow the plugin language (I18n.settingText), falling back to
+   * the catalog English for the English UI. */
+  private renderSettingRow(it: SettingView): string {
+    const esc = (s: string): string => this.escapeHtml(s);
+    const tr = I18n.settingText(it.key);
+    const label = tr.label ?? it.label;
+    const help = tr.help !== undefined ? tr.help : it.help;
+    const id = 'set_' + it.key.replace(/[^a-zA-Z0-9]/g, '_');
+    const onCh = (type: string): string =>
+      ` onchange="setSetting('${it.key}', ${
+        type === 'boolean' ? 'this.checked' : 'this.value'
+      }, '${type}')"`;
+    let control = '';
+    if (it.type === 'boolean') {
+      control =
+        '<label class="set-switch"><input type="checkbox" id="' +
+        id +
+        '"' +
+        (it.value ? ' checked' : '') +
+        onCh('boolean') +
+        '><span class="set-slider"></span></label>';
+    } else if (it.type === 'enum') {
+      const opts = (it.enumValues || [])
+        .map((v, i) => {
+          const label = (it.enumLabels && it.enumLabels[i]) || (v === '' ? '(default)' : v);
+          const sel = String(it.value) === v ? ' selected' : '';
+          return '<option value="' + esc(v) + '"' + sel + '>' + esc(label) + '</option>';
+        })
+        .join('');
+      control = '<select id="' + id + '"' + onCh('string') + '>' + opts + '</select>';
+    } else if (it.type === 'number') {
+      control =
+        '<input type="number" id="' +
+        id +
+        '" value="' +
+        esc(String(it.value)) +
+        '"' +
+        (it.min !== undefined ? ' min="' + it.min + '"' : '') +
+        (it.max !== undefined ? ' max="' + it.max + '"' : '') +
+        onCh('number') +
+        '>';
+    } else if (it.multiline) {
+      control =
+        '<textarea id="' + id + '" rows="2"' + onCh('string') + '>' + esc(String(it.value)) + '</textarea>';
+    } else {
+      control =
+        '<input type="' +
+        (it.secret ? 'password' : 'text') +
+        '" id="' +
+        id +
+        '" value="' +
+        esc(String(it.value)) +
+        '"' +
+        onCh('string') +
+        '>';
+    }
+    const helpHtml = help ? '<div class="set-help">' + esc(help) + '</div>' : '';
+    return (
+      '<div class="set-row"><div class="set-label"><label for="' +
+      id +
+      '">' +
+      esc(label) +
+      '</label>' +
+      helpHtml +
+      '</div><div class="set-control">' +
+      control +
+      '</div></div>'
+    );
+  }
+
   private renderTodayData(): string {
     if (!this.todayData) {
       return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
     }
 
-    const todaySummary = this.renderUsageData(this.todayData);
+    const todaySummary = this.renderUsageData(this.todayData) + this.renderTodayInsights();
 
     let hourlyBreakdown = '';
     if (this.hourlyDataForToday.length > 0) {
@@ -916,6 +1219,10 @@ export class UsageWebviewProvider {
 
     const t = I18n.t.popup;
 
+    // Thinking share per session is only available while content analysis is
+    // enabled; the column collapses to "-" otherwise (estimate, see hint).
+    const thinkingMap = this.contentAnalysis ? this.contentAnalysis.thinkingBySession : null;
+
     let rows = '';
     this.sessionBreakdown.forEach((s) => {
       const d = s.data;
@@ -923,12 +1230,24 @@ export class UsageWebviewProvider {
       // short session id so same-project rows stay distinguishable either way.
       const fullName = s.title || s.sessionId;
       const displayName = fullName.length > 40 ? fullName.slice(0, 40) + '…' : fullName;
+      const ts = thinkingMap ? thinkingMap[s.sessionId] : undefined;
+      const thinkingShare = ts && ts.assistantTotal > 0 ? ts.thinking / ts.assistantTotal : null;
+      // Calibrated absolute (Phase 8): thinking share × the session's EXACT
+      // output tokens = a billing-anchored "real thinking tokens" figure.
+      const realThinkingTokens =
+        thinkingShare !== null ? Math.round(thinkingShare * d.totalOutputTokens) : null;
+      // Tooltip: calibrated token figure + (for heavy sessions) the effort hint.
+      const thinkingTitle = [
+        realThinkingTokens !== null ? '~' + I18n.formatNumber(realThinkingTokens) + ' ' + t.thinkingTokensCalibrated : '',
+        thinkingShare !== null && thinkingShare > 0.6 ? t.effortHint : '',
+      ].filter((x) => x).join(' · ');
       rows +=
         '<tr class="sort-row"' +
         ' data-sort-time="' + s.startTime.getTime() + '"' +
         ' data-sort-session="' + this.escapeHtml(fullName.toLowerCase()) + '"' +
         ' data-sort-project="' + this.escapeHtml((s.projectName || '').toLowerCase()) + '"' +
         ' data-sort-context="' + s.peakContextTokens + '"' +
+        ' data-sort-thinking="' + (thinkingShare ?? -1) + '"' +
         ' data-sort-duration="' + (s.endTime.getTime() - s.startTime.getTime()) + '"' +
         this.usageSortAttrs(d) +
         '>' +
@@ -945,6 +1264,9 @@ export class UsageWebviewProvider {
         '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(s.peakContextTokens) + '</td>' +
+        '<td class="number-cell"' + (thinkingTitle ? ' title="' + this.escapeHtml(thinkingTitle) + '"' : '') + '>' +
+        (thinkingShare !== null ? this.formatPercent(thinkingShare) + (thinkingShare > 0.6 ? ' ⚠' : '') : '-') +
+        '</td>' +
         '<td class="number-cell">' + I18n.formatNumber(d.messageCount) + '</td>' +
         '<td class="number-cell">' + this.escapeHtml(this.formatDuration(s.startTime, s.endTime)) + '</td>' +
         '</tr>';
@@ -969,12 +1291,14 @@ export class UsageWebviewProvider {
       th('cachecreate', t.cacheCreation) +
       th('cacheread', t.cacheRead) +
       th('context', t.peakContext) +
+      th('thinking', t.thinkingShare) +
       th('messages', t.messages) +
       th('duration', t.duration) +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '</div>' +
+      '<p class="table-hint">' + t.thinkingShare + ': ' + t.estimatedNote + '</p>' +
       '</div>'
     );
   }
@@ -1208,18 +1532,590 @@ export class UsageWebviewProvider {
   }
 
   /**
+   * "Usage tracking" card for the Today tab: today's notable usage
+   * characteristics (≥5% only), in the same horizontal-bar style as the
+   * content analysis. Only exact, cost-weighted shares are shown — the
+   * text-length thinking estimate is deliberately excluded here (it lives on
+   * the Sessions tab, clearly marked as an estimate). Hidden on light days.
+   */
+  private renderTodayInsights(): string {
+    const t = I18n.t.popup;
+    const rows: string[] = [];
+    const barRow = (label: string, share: number, colorClass: string, tooltip: string): string =>
+      '<div class="cbar-row" title="' + this.escapeHtml(tooltip) + '">' +
+      '<div class="cbar-label">' + this.escapeHtml(label) + '</div>' +
+      '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' +
+      (share * 100).toFixed(1) + '%;"></div></div>' +
+      '<div class="cbar-pct">' + this.formatPercent(share) + '</div>' +
+      '</div>';
+
+    // Today's usage characteristics, ≥5% only (full sentence in the tooltip).
+    // All cost-weighted from exact usage — no estimates in this card.
+    if (this.allRecords && this.allRecords.length > 0) {
+      const attr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'day' });
+      if (attr.totalCost > 0) {
+        const add = (share: number, short: string, sentence: string, hint: string, color: string): void => {
+          if (share < 0.05) {
+            return;
+          }
+          const tooltip = sentence.replace('{pct}', String(Math.round(share * 100))) + ' — ' + hint;
+          rows.push(barRow(short, share, color, tooltip));
+        };
+        const c = attr.characteristics;
+        add(c.largeContext, t.attrLargeContextShort, t.attrLargeContext, t.attrLargeContextHint, 'cf-1');
+        add(c.longSessions, t.attrLongSessionsShort, t.attrLongSessions, t.attrLongSessionsHint, 'cf-2');
+        add(c.subagentHeavy, t.attrSubagentHeavyShort, t.attrSubagentHeavy, t.attrSubagentHeavyHint, 'cf-3');
+        add(c.workflows, t.attrWorkflowsShort, t.attrWorkflows, t.attrWorkflowsHint, 'cf-5');
+        if (attr.skills.length > 0) {
+          add(attr.skills[0].share, attr.skills[0].key, t.attrSkillChar.replace('{name}', attr.skills[0].key), t.attrSkillCharHint, 'cf-1');
+        }
+      }
+    }
+
+    if (rows.length === 0) {
+      return '';
+    }
+    return (
+      '<div class="daily-breakdown">' +
+      '<div class="section-header"><h3>' + t.attribution + '</h3>' +
+      '<span class="section-header-right"><span class="cbar-total">→ ' +
+      this.escapeHtml(t.attrTodayPointer) + '</span></span></div>' +
+      '<div class="cbar-list">' + rows.join('') + '</div>' +
+      '</div>'
+    );
+  }
+
+  /** Cache hit rate of input-side tokens: cacheRead / (input + cacheWrite + cacheRead). */
+  private cacheHitRate(d: UsageData): number | null {
+    const denominator = d.totalInputTokens + d.totalCacheCreationTokens + d.totalCacheReadTokens;
+    return denominator > 0 ? d.totalCacheReadTokens / denominator : null;
+  }
+
+  private formatPercent(value: number | null): string {
+    return value === null ? '-' : (value * 100).toFixed(value >= 0.1 ? 0 : 1) + '%';
+  }
+
+  /** Compact model label: "claude-sonnet-4-5-20250929[1m]" → "sonnet-4-5". */
+  private shortModelName(model: string): string {
+    return model
+      .replace(/^claude-/, '')
+      .replace(/\[1m\]$/, '')
+      .replace(/-20\d{6}$/, '');
+  }
+
+  /** Distinct models in a usage aggregate, most expensive first, shortened. */
+  private modelList(d: UsageData): { short: string; full: string } {
+    const sorted = Object.entries(d.modelBreakdown)
+      .sort(([, a], [, b]) => b.cost - a.cost)
+      .map(([model]) => model);
+    return {
+      short: sorted.map((m) => this.shortModelName(m)).join(', '),
+      full: sorted.join(', '),
+    };
+  }
+
+  /**
+   * "Workflows" tab: one row per dynamic-workflow run (ultracode dispatch),
+   * expandable to its per-agent breakdown. The cache hit rate is the headline
+   * diagnostic — it tells whether the provider reuses the prompt cache across
+   * a workflow's agents (see the hint line / V2.1-WORKFLOW-SPEC §Phase 2).
+   */
+  private renderWorkflowData(): string {
+    if (!this.workflowBreakdown || this.workflowBreakdown.length === 0) {
+      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+    }
+
+    const t = I18n.t.popup;
+
+    // Summary strip: workflow count + cost this calendar month, and that
+    // cost's share of the month's total spend.
+    const now = new Date();
+    const thisMonth = this.workflowBreakdown.filter(
+      (w) => w.endTime.getFullYear() === now.getFullYear() && w.endTime.getMonth() === now.getMonth()
+    );
+    const monthWorkflowCost = thisMonth.reduce(
+      (sum, w) => sum + w.data.totalCost + (w.orchestration ? w.orchestration.totalCost : 0),
+      0
+    );
+    const monthTotalCost = this.monthData ? this.monthData.totalCost : 0;
+    const monthShare = monthTotalCost > 0 ? monthWorkflowCost / monthTotalCost : null;
+    const summaryStrip =
+      '<p class="table-hint">' +
+      t.workflowsThisMonth + ': ' + thisMonth.length +
+      ' · ' + I18n.formatCurrency(monthWorkflowCost) +
+      (monthShare !== null ? ' · ' + this.formatPercent(monthShare) + ' ' + t.workflowCostShare : '') +
+      '</p>';
+
+    let rows = '';
+    this.workflowBreakdown.forEach((w, idx) => {
+      const groupId = 'wf' + idx;
+      // Headline row = sub-agents + main-session orchestration (Phase 7c), so a
+      // native-Claude run whose Opus/Fable work lived in the main thread shows
+      // its true cost and models; the drill-down splits the two back out.
+      const d = this.mergeUsage(w.data, w.orchestration);
+      const models = this.modelList(d);
+      // Badge: "workflow" (a wf_ run dir) vs "subagents (ad-hoc)" (a plain
+      // Task-tool fan-out). Effort level isn't in the logs — see the hint line.
+      const badge = w.isAdHoc
+        ? ' <span class="git-badge">' + t.adhocBadge + '</span>'
+        : ' <span class="git-badge">' + t.workflowModeBadge + '</span>';
+      rows +=
+        '<tr class="sort-row project-group-row" data-group="' + groupId + '"' +
+        ' data-sort-time="' + w.startTime.getTime() + '"' +
+        ' data-sort-name="' + this.escapeHtml(w.name.toLowerCase()) + '"' +
+        ' data-sort-project="' + this.escapeHtml((w.projectName || '').toLowerCase()) + '"' +
+        ' data-sort-model="' + this.escapeHtml(models.short.toLowerCase()) + '"' +
+        ' data-sort-agents="' + w.agentCount + '"' +
+        ' data-sort-cachehit="' + (this.cacheHitRate(d) ?? -1) + '"' +
+        ' data-sort-duration="' + (w.endTime.getTime() - w.startTime.getTime()) + '"' +
+        this.usageSortAttrs(d) +
+        '>' +
+        '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(w.startTime)) + '</td>' +
+        '<td class="name-cell" title="' + this.escapeHtml(w.workflowId) + '">' +
+        '<span class="group-toggle" onclick="toggleProjectGroup(\'' + groupId + '\')">▶</span> ' +
+        this.escapeHtml(w.name) + badge +
+        '</td>' +
+        '<td>' + this.escapeHtml(w.projectName) + '</td>' +
+        '<td title="' + this.escapeHtml(models.full) + '">' + this.escapeHtml(models.short) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(w.agentCount) + '</td>' +
+        '<td class="cost-cell">' + I18n.formatCurrency(d.totalCost) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalInputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalOutputTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheCreationTokens) + '</td>' +
+        '<td class="number-cell">' + I18n.formatNumber(d.totalCacheReadTokens) + '</td>' +
+        '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(d)) + '</td>' +
+        '<td class="number-cell">' + this.escapeHtml(this.formatDuration(w.startTime, w.endTime)) + '</td>' +
+        '</tr>';
+
+      // Orchestration drill-down row (Phase 7c): the main-session spend that
+      // bracketed this run — usually where the expensive native-Claude models
+      // are. Rendered as a pinned child row that splits out of the headline.
+      if (w.orchestration) {
+        const o = w.orchestration;
+        const oModels = this.modelList(o);
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td class="date-cell"></td>' +
+          '<td class="name-cell project-child-cell">⚙ ' + this.escapeHtml(t.orchestration) + '</td>' +
+          '<td></td>' +
+          '<td title="' + this.escapeHtml(oModels.full) + '">' + this.escapeHtml(oModels.short) + '</td>' +
+          '<td></td>' +
+          '<td class="cost-cell">' + I18n.formatCurrency(o.totalCost) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalInputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalOutputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalCacheCreationTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(o.totalCacheReadTokens) + '</td>' +
+          '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(o)) + '</td>' +
+          '<td class="number-cell"></td>' +
+          '</tr>';
+      }
+
+      // Workflow agents often share a long boilerplate preamble; hoist the
+      // common prefix into one pinned row so each agent row shows only what
+      // differs. Tooltips keep the full task text.
+      const tasks = w.agents.map((a) => a.task).filter((task): task is string => !!task);
+      let commonPrefix = '';
+      if (tasks.length >= 2) {
+        commonPrefix = tasks.reduce((prefix, task) => {
+          let i = 0;
+          const max = Math.min(prefix.length, task.length);
+          while (i < max && prefix[i] === task[i]) {
+            i++;
+          }
+          return prefix.slice(0, i);
+        });
+        // Cut back to a word boundary; only worth hoisting when substantial.
+        const boundary = commonPrefix.lastIndexOf(' ');
+        if (boundary > 0) {
+          commonPrefix = commonPrefix.slice(0, boundary);
+        }
+        if (commonPrefix.length < 30) {
+          commonPrefix = '';
+        }
+      }
+      if (commonPrefix) {
+        const display = commonPrefix.length > 160 ? commonPrefix.slice(0, 160) + '…' : commonPrefix;
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td colspan="12" class="wf-common-task" title="' + this.escapeHtml(commonPrefix) + '">' +
+          '📌 ' + this.escapeHtml(t.commonTaskPrefix) + ': ' + this.escapeHtml(display) +
+          '</td>' +
+          '</tr>';
+      }
+
+      w.agents.forEach((agent) => {
+        const ad = agent.data;
+        const agentModels = this.modelList(ad);
+        const shortId = agent.agentId.replace(/^agent-/, '').slice(0, 12);
+        // Label the agent by the part of its task that differs from the
+        // hoisted common prefix; the opaque hex id moves to the second line.
+        let diff = agent.task || '';
+        if (commonPrefix && diff.startsWith(commonPrefix)) {
+          diff = diff.slice(commonPrefix.length).replace(/^[\s,.;:·—-]+/, '');
+        }
+        const taskLabel = diff ? (diff.length > 70 ? diff.slice(0, 70) + '…' : diff) : shortId;
+        const nameCell = agent.task
+          ? '<div class="project-name">' + this.escapeHtml(taskLabel) + '</div>' +
+            '<div class="project-path">' + this.escapeHtml(shortId) + '</div>'
+          : this.escapeHtml(shortId);
+        rows +=
+          '<tr class="sort-child project-child-row" data-group="' + groupId + '" style="display:none;">' +
+          '<td class="date-cell">' + this.escapeHtml(this.formatDateTime(agent.startTime)) + '</td>' +
+          '<td class="name-cell project-child-cell" title="' +
+          this.escapeHtml(agent.task ? agent.task + ' (' + agent.agentId + ')' : agent.agentId) +
+          '">' +
+          nameCell +
+          '</td>' +
+          '<td></td>' +
+          '<td title="' + this.escapeHtml(agentModels.full) + '">' + this.escapeHtml(agentModels.short) + '</td>' +
+          '<td class="cost-cell">' + I18n.formatCurrency(ad.totalCost) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalInputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalOutputTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalCacheCreationTokens) + '</td>' +
+          '<td class="number-cell">' + I18n.formatNumber(ad.totalCacheReadTokens) + '</td>' +
+          '<td class="number-cell">' + this.formatPercent(this.cacheHitRate(ad)) + '</td>' +
+          '<td class="number-cell">' + this.escapeHtml(this.formatDuration(agent.startTime, agent.endTime)) + '</td>' +
+          '</tr>';
+      });
+    });
+
+    const th = (key: string, label: string): string =>
+      '<th class="sortable" data-sortkey="' + key + '">' + label + '</th>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<h3>' + t.workflowBreakdown + '</h3>' +
+      summaryStrip +
+      '<p class="table-hint">' + t.sortHint + '</p>' +
+      '<div class="daily-table-container">' +
+      '<table class="daily-table sortable-table">' +
+      '<thead><tr>' +
+      th('time', t.startTime) +
+      th('name', t.workflowName) +
+      th('project', t.project) +
+      th('model', t.model) +
+      th('agents', t.agents) +
+      th('cost', t.cost) +
+      th('input', t.inputTokens) +
+      th('output', t.outputTokens) +
+      th('cachecreate', t.cacheCreation) +
+      th('cacheread', t.cacheRead) +
+      th('cachehit', t.cacheHitRate) +
+      th('duration', t.duration) +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>' +
+      '<p class="table-hint">' + t.workflowModeHint + '</p>' +
+      '<p class="table-hint">' + t.workflowNativeHint + '</p>' +
+      '<p class="table-hint">' + t.workflowCacheHint + '</p>' +
+      '</div>'
+    );
+  }
+
+  /** Sum two UsageData (run sub-agents + main-session orchestration), merging
+   * the per-model breakdowns. Used for the Workflows headline row (Phase 7c). */
+  private mergeUsage(a: UsageData, b?: UsageData): UsageData {
+    if (!b) {
+      return a;
+    }
+    const merged: UsageData = {
+      totalInputTokens: a.totalInputTokens + b.totalInputTokens,
+      totalOutputTokens: a.totalOutputTokens + b.totalOutputTokens,
+      totalCacheCreationTokens: a.totalCacheCreationTokens + b.totalCacheCreationTokens,
+      totalCacheReadTokens: a.totalCacheReadTokens + b.totalCacheReadTokens,
+      totalCost: a.totalCost + b.totalCost,
+      costBreakdown: {
+        input: a.costBreakdown.input + b.costBreakdown.input,
+        output: a.costBreakdown.output + b.costBreakdown.output,
+        cacheWrite: a.costBreakdown.cacheWrite + b.costBreakdown.cacheWrite,
+        cacheRead: a.costBreakdown.cacheRead + b.costBreakdown.cacheRead,
+      },
+      messageCount: a.messageCount + b.messageCount,
+      modelBreakdown: {},
+    };
+    for (const src of [a.modelBreakdown, b.modelBreakdown]) {
+      for (const [m, md] of Object.entries(src)) {
+        const e = merged.modelBreakdown[m] || {
+          inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, cost: 0, count: 0,
+        };
+        e.inputTokens += md.inputTokens;
+        e.outputTokens += md.outputTokens;
+        e.cacheCreationTokens += md.cacheCreationTokens;
+        e.cacheReadTokens += md.cacheReadTokens;
+        e.cost += md.cost;
+        e.count += md.count;
+        merged.modelBreakdown[m] = e;
+      }
+    }
+    return merged;
+  }
+
+  /** Inner panel of the usage-attribution section: disclaimer, the
+   * characteristic lines (independent signals, not a breakdown) and the
+   * Skills / Subagents / Plugins / Models tables. Re-rendered per scope. */
+  private renderAttributionPanel(attr: UsageAttribution): string {
+    const t = I18n.t.popup;
+    if (attr.totalCost <= 0) {
+      return '<p class="table-hint">' + t.noDataMessage + '</p>';
+    }
+    const pct = (share: number): string => String(Math.round(share * 100));
+
+    let html = '<p class="table-hint">' + t.attrDisclaimer + '</p>';
+
+    const charLine = (share: number, template: string, hint: string, name?: string): string => {
+      if (share < 0.01) {
+        return '';
+      }
+      let text = template.replace('{pct}', pct(share));
+      if (name !== undefined) {
+        text = text.replace('{name}', name);
+      }
+      return (
+        '<div class="attr-char">' + this.escapeHtml(text) +
+        '<div class="attr-hint">' + this.escapeHtml(hint) + '</div></div>'
+      );
+    };
+    const c = attr.characteristics;
+    html += charLine(c.largeContext, t.attrLargeContext, t.attrLargeContextHint);
+    html += charLine(c.longSessions, t.attrLongSessions, t.attrLongSessionsHint);
+    html += charLine(c.subagentHeavy, t.attrSubagentHeavy, t.attrSubagentHeavyHint);
+    html += charLine(c.workflows, t.attrWorkflows, t.attrWorkflowsHint);
+    // Official parity: the top skill / plugin get their own characteristic
+    // line once they contribute a noticeable share.
+    if (attr.skills.length > 0 && attr.skills[0].share >= 0.1) {
+      html += charLine(attr.skills[0].share, t.attrSkillChar, t.attrSkillCharHint, attr.skills[0].key);
+    }
+    if (attr.plugins.length > 0 && attr.plugins[0].share >= 0.1) {
+      html += charLine(attr.plugins[0].share, t.attrPluginChar, t.attrPluginCharHint, attr.plugins[0].key);
+    }
+
+    // Sub-tables in the same horizontal-bar style as the content analysis
+    // (bar width relative to the group's max; percentage is of scope usage).
+    const group = (
+      title: string,
+      entries: { key: string; share: number; count: number; estTokens?: number }[],
+      colorClass: string
+    ): string => {
+      if (entries.length === 0) {
+        return '';
+      }
+      const top = entries.slice(0, 8);
+      const maxShare = Math.max(...top.map((e) => e.share), 0.0001);
+      let rows = '';
+      top.forEach((e) => {
+        const tooltip =
+          e.key + ' · ' + t.count + ': ' + I18n.formatNumber(e.count) +
+          (e.estTokens !== undefined ? ' · ' + t.estTokens + ': ~' + I18n.formatNumber(e.estTokens) : '');
+        rows +=
+          '<div class="cbar-row" title="' + this.escapeHtml(tooltip) + '">' +
+          '<div class="cbar-label">' + this.escapeHtml(e.key) + '</div>' +
+          '<div class="cbar-track"><div class="cbar-fill ' + colorClass + '" style="width: ' +
+          ((e.share / maxShare) * 100).toFixed(1) + '%;"></div></div>' +
+          '<div class="cbar-val">×' + I18n.formatNumber(e.count) + '</div>' +
+          '<div class="cbar-pct">' + this.formatPercent(e.share) + '</div>' +
+          '</div>';
+      });
+      return '<h4 class="cbar-subhead">' + this.escapeHtml(title) + '</h4><div class="cbar-list">' + rows + '</div>';
+    };
+    html +=
+      group(t.attrSkills, attr.skills, 'cf-1') +
+      group(t.attrSubagents, attr.subagents, 'cf-2') +
+      group(t.attrPlugins, attr.plugins, 'cf-3') +
+      (attr.models.length > 1 ? group(t.attrModels, attr.models, 'cf-5') : '');
+    return html;
+  }
+
+  /** Usage-attribution section for the Content tab: scope selector (Day /
+   * Week / Month / one session / one project) + the panel, default Week. */
+  private renderAttributionSection(): string {
+    const t = I18n.t.popup;
+    if (!this.allRecords || this.allRecords.length === 0) {
+      return '';
+    }
+    const weekAttr = ClaudeDataLoader.getUsageAttribution(this.allRecords, this.contentAnalysis, { kind: 'week' });
+
+    const sessionOptions = this.sessionBreakdown
+      .slice(0, 30)
+      .map((s) => {
+        const label = (s.title || s.sessionId).slice(0, 50);
+        return '<option value="' + this.escapeHtml(s.sessionId) + '">' + this.escapeHtml(label) + '</option>';
+      })
+      .join('');
+    const projectOptions = this.projectBreakdown
+      .map(
+        (g) =>
+          '<option value="' + this.escapeHtml(g.groupPath) + '">' + this.escapeHtml(g.groupName) + '</option>'
+      )
+      .join('');
+
+    const tab = (kind: string, label: string, active: boolean): string =>
+      '<button class="attr-tab' + (active ? ' active' : '') + '" data-kind="' + kind +
+      '" onclick="attrSetScope(\'' + kind + '\')">' + label + '</button>';
+
+    return (
+      '<div class="daily-breakdown">' +
+      '<div class="section-header"><h3>' + t.attribution + '</h3>' +
+      '<span class="section-header-right attr-controls">' +
+      '<select id="attrTargetSession" onchange="requestAttribution()" style="display:none">' + sessionOptions + '</select>' +
+      '<select id="attrTargetProject" onchange="requestAttribution()" style="display:none">' + projectOptions + '</select>' +
+      tab('day', t.scopeDay, false) +
+      tab('week', t.scopeWeek, true) +
+      tab('month', t.scopeMonth, false) +
+      tab('session', t.sessionTitle, false) +
+      tab('project', t.project, false) +
+      '</span></div>' +
+      '<div id="attrPanel">' + this.renderAttributionPanel(weekAttr) + '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Prominent "AI advice" card at the top of the Content tab (Phase 9a). The
+   * advice button used to live in the content-analysis header; this gives it a
+   * proper home with a one-line explanation of what gets sent.
+   */
+  private renderAdviceCard(): string {
+    const t = I18n.t.popup;
+    return (
+      '<div class="action-card">' +
+      '<div class="action-card-head">' +
+      '<span class="action-icon">✨</span>' +
+      '<div class="action-card-titles">' +
+      '<h3>' + t.adviceCardTitle + '</h3>' +
+      '<p class="action-card-desc">' + t.adviceCardDesc + '</p>' +
+      '</div>' +
+      '<button class="btn-primary" onclick="getAdvice()">' + t.getAdvice + '</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Usage Optimizer card (Phase 9c). Default OFF — until the user opts in via
+   * settings it shows only a description + an "enable" button. When enabled it
+   * exposes a textarea + toggles; the round-trip runs in extension.ts via the
+   * onOptimize hook (consent modal lives there). The result skeleton is baked
+   * in (hidden) so the webview JS only fills text — no labels passed to JS.
+   */
+  private renderOptimizerCard(): string {
+    const t = I18n.t.popup;
+    const enabled = this.setting<boolean>('advice.optimizer.enabled', false);
+    // Shared header: icon badge + title (with an "experimental" pill) + purpose.
+    const head = (action: string): string =>
+      '<div class="action-card-head">' +
+      '<span class="action-icon">🛠</span>' +
+      '<div class="action-card-titles">' +
+      '<h3>' + t.optimizerTitle +
+      ' <span class="exp-pill">' + t.experimentalBadge + '</span></h3>' +
+      '<p class="action-card-desc">' + t.optimizerDesc + '</p>' +
+      '</div>' +
+      action +
+      '</div>';
+
+    if (!enabled) {
+      return (
+        '<div class="action-card">' +
+        head(
+          '<button class="btn-secondary btn-small" onclick="showTab(\'settings\')">' +
+            t.optimizerEnableBtn +
+            '</button>'
+        ) +
+        '</div>'
+      );
+    }
+    // Restore the last interaction so an auto-refresh re-render doesn't wipe it.
+    const st = this.optimizerState;
+    const ck = (b?: boolean): string => (b ? ' checked' : '');
+    const draftVal = st ? this.escapeHtml(st.draft) : '';
+    const hasResult = !!(st && (st.prompt || st.settings));
+    const hasErr = !!(st && st.error);
+    const lens = (id: string, label: string, hint: string, on?: boolean): string =>
+      '<label title="' + this.escapeHtml(hint) + '"><input type="checkbox" id="' + id + '"' +
+      ck(on) + '> ' + this.escapeHtml(label) + '</label>';
+    return (
+      '<div class="action-card">' +
+      head('') +
+      '<p class="action-card-howto">' + t.optimizerHowto + '</p>' +
+      '<textarea id="optDraft" class="opt-input" rows="4" placeholder="' +
+      this.escapeHtml(t.optimizerPlaceholder) + '">' + draftVal + '</textarea>' +
+      '<div class="opt-controls">' +
+      lens('optResolve', t.optimizerResolve, t.optimizerResolveHint, st?.resolve) +
+      lens('optDistil', t.optimizerDistil, t.optimizerDistilHint, st?.distil) +
+      lens('optAesthetic', t.optimizerAesthetic, t.optimizerAestheticHint, st?.aesthetic) +
+      '<button class="btn-primary" id="optRunBtn" data-run="' +
+      this.escapeHtml(t.optimizerRun) + '" data-running="' +
+      this.escapeHtml(t.optimizerRunning) + '" onclick="runOptimizer()">' +
+      t.optimizerRun + '</button>' +
+      '</div>' +
+      '<div id="optError" class="opt-error" style="display:' + (hasErr ? '' : 'none') + '">' +
+      (hasErr ? this.escapeHtml(st!.error as string) : '') + '</div>' +
+      '<div id="optResult" class="opt-result" style="display:' + (hasResult ? '' : 'none') + '">' +
+      '<h4 class="opt-subhead">' + t.optimizerPromptHeading + '</h4>' +
+      '<div class="opt-output"><pre id="optPrompt">' +
+      (st && st.prompt ? this.escapeHtml(st.prompt) : '') + '</pre>' +
+      '<button class="opt-copy" data-copy="' + this.escapeHtml(t.optimizerCopy) +
+      '" data-copied="' + this.escapeHtml(t.optimizerCopied) +
+      '" title="' + this.escapeHtml(t.optimizerCopy) + '" onclick="copyOptPrompt(this)">' +
+      '<span class="opt-copy-ico">⧉</span><span class="opt-copy-lbl">' +
+      this.escapeHtml(t.optimizerCopy) + '</span></button></div>' +
+      '<h4 class="opt-subhead">' + t.optimizerSettingsHeading + '</h4>' +
+      '<div id="optSettings" class="opt-settings" data-raw="' +
+      (st && st.settings ? this.escapeHtml(st.settings) : '') + '">' +
+      (st && st.settings ? this.escapeHtml(st.settings) : '') + '</div>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  /**
    * "Content" tab: an estimated breakdown of which conversation content consumes
    * tokens (your prompts vs. tool results vs. assistant output), to help spot
    * habits worth optimising. Token figures are estimated from text length.
    */
   private renderContentData(): string {
     const t = I18n.t.popup;
+    const topCards = this.renderAdviceCard() + this.renderOptimizerCard();
     const analysis = this.contentAnalysis;
     if (!analysis || analysis.categories.length === 0 || analysis.totalEstimatedTokens === 0) {
-      return '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>';
+      return topCards + (this.renderAttributionSection() ||
+        '<div class="no-data"><p>' + I18n.t.popup.noDataMessage + '</p></div>');
     }
 
-    const total = analysis.totalEstimatedTokens;
+    // Calibration (Phase 8): scale the text-length category estimates to the
+    // EXACT billed totals — assistant-side categories to real output tokens,
+    // input-side to real (input + cache-creation). Within-side relative shares
+    // stay as estimated; the cross-side ratio (e.g. tool-results vs assistant
+    // output) is corrected to billing reality. Toggle: analysis.calibrate.
+    const calibrateOn = this.setting<boolean>('analysis.calibrate', true);
+    const cal = calibrateOn && analysis.calibration ? analysis.calibration : null;
+    const ASSISTANT_CATS = new Set(['assistantText', 'assistantThinking', 'toolCalls']);
+    const INPUT_CATS = new Set(['userPrompts', 'toolResults']);
+    let estAssistant = 0;
+    let estInput = 0;
+    analysis.categories.forEach((c) => {
+      if (ASSISTANT_CATS.has(c.key)) {
+        estAssistant += c.estimatedTokens;
+      } else if (INPUT_CATS.has(c.key)) {
+        estInput += c.estimatedTokens;
+      }
+    });
+    const factorFor = (key: string): number => {
+      if (!cal) {
+        return 1;
+      }
+      if (ASSISTANT_CATS.has(key)) {
+        return estAssistant > 0 ? cal.realOutputTokens / estAssistant : 1;
+      }
+      if (INPUT_CATS.has(key)) {
+        return estInput > 0 ? cal.realInputSideTokens / estInput : 1;
+      }
+      return 1;
+    };
+    const tokensFor = (key: string, estTokens: number): number => Math.round(estTokens * factorFor(key));
+    const total = cal
+      ? analysis.categories.reduce((sum, c) => sum + tokensFor(c.key, c.estimatedTokens), 0)
+      : analysis.totalEstimatedTokens;
 
     const catLabel = (key: string): string => {
       switch (key) {
@@ -1258,30 +2154,39 @@ export class UsageWebviewProvider {
       );
     };
 
-    const maxCat = Math.max(...analysis.categories.map((c) => c.estimatedTokens), 1);
+    const catTokens = analysis.categories.map((c) => tokensFor(c.key, c.estimatedTokens));
+    const maxCat = Math.max(...catTokens, 1);
     let catRows = '';
-    analysis.categories.forEach((c) => {
-      catRows += barRow(catLabel(c.key), c.estimatedTokens, maxCat, catColor[c.key] || 'cf-1');
+    analysis.categories.forEach((c, i) => {
+      catRows += barRow(catLabel(c.key), catTokens[i], maxCat, catColor[c.key] || 'cf-1');
     });
 
     let toolSection = '';
     if (analysis.toolResultBreakdown.length > 0) {
-      const maxTool = Math.max(...analysis.toolResultBreakdown.map((s) => s.estimatedTokens), 1);
+      // Tool results are input-side; scale by the same factor as toolResults.
+      const toolTokens = analysis.toolResultBreakdown.map((s) => tokensFor('toolResults', s.estimatedTokens));
+      const maxTool = Math.max(...toolTokens, 1);
       let toolRows = '';
-      analysis.toolResultBreakdown.forEach((s) => {
-        toolRows += barRow(s.key, s.estimatedTokens, maxTool, 'cf-4');
+      analysis.toolResultBreakdown.forEach((s, i) => {
+        toolRows += barRow(s.key, toolTokens[i], maxTool, 'cf-4');
       });
       toolSection = '<h4 class="cbar-subhead">' + t.byTool + '</h4><div class="cbar-list">' + toolRows + '</div>';
     }
 
+    // Calibrated figures are exact-anchored; estimates are text-length only.
+    const totalLabel = cal ? t.calibratedTokens : t.estTokens;
+    const totalPrefix = cal ? '' : '~';
+    const noteLine = cal ? t.calibratedNote : t.estimatedNote;
+
     return (
+      topCards +
+      this.renderAttributionSection() +
       '<div class="daily-breakdown">' +
       '<div class="section-header"><h3>' + t.contentAnalysis + '</h3>' +
       '<span class="section-header-right">' +
-      '<span class="cbar-total">' + t.estTokens + ': ~' + I18n.formatNumber(total) + '</span>' +
-      '<button class="btn-secondary btn-small" onclick="getAdvice()">✨ ' + t.getAdvice + '</button>' +
+      '<span class="cbar-total">' + totalLabel + ': ' + totalPrefix + I18n.formatNumber(total) + '</span>' +
       '</span></div>' +
-      '<p class="table-hint">' + t.last30days + ' · ' + t.estimatedNote + '</p>' +
+      '<p class="table-hint">' + t.last30days + ' · ' + noteLine + '</p>' +
       '<div class="cbar-list">' + catRows + '</div>' +
       toolSection +
       '</div>'
@@ -1622,6 +2527,295 @@ export class UsageWebviewProvider {
 
       .btn-secondary:hover {
         background: var(--vscode-button-secondaryHoverBackground);
+      }
+
+      .btn-primary {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      /* AI advice + Usage Optimizer "action cards" lead the Content tab. They
+         share one treatment — an accent rail + an icon badge — so they read as
+         the two tools, distinct from the data panels below, while staying quiet
+         and on-theme. The rail is the single signature element. */
+      .action-card {
+        position: relative;
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.25));
+        border-radius: 8px;
+        padding: 13px 16px 13px 18px;
+        margin-bottom: 14px;
+        background: var(--vscode-editor-background);
+      }
+      .action-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: var(--vscode-textLink-foreground, var(--vscode-button-background));
+      }
+      .action-card-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .action-icon {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        border-radius: 8px;
+        background: var(--vscode-badge-background);
+      }
+      .action-card-titles {
+        flex: 1;
+        min-width: 0;
+      }
+      .action-card-titles h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .action-card-desc {
+        margin: 3px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--vscode-descriptionForeground);
+      }
+      .action-card-howto {
+        margin: 12px 0 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--vscode-descriptionForeground);
+      }
+      .action-card-head .btn-primary,
+      .action-card-head .btn-secondary {
+        flex: 0 0 auto;
+        align-self: center;
+        white-space: nowrap;
+      }
+      .exp-pill {
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        color: var(--vscode-descriptionForeground);
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.4));
+      }
+      .opt-input {
+        width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 12px;
+        padding: 6px 8px;
+        margin: 4px 0 8px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+      }
+      .opt-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .opt-controls label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        cursor: pointer;
+      }
+      .opt-controls #optRunBtn {
+        margin-left: auto;
+      }
+      .opt-error {
+        color: var(--vscode-errorForeground);
+        font-size: 12px;
+        margin: 4px 0;
+      }
+      .opt-subhead {
+        margin: 10px 0 4px;
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .opt-output {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      /* The optimised prompt is meant to be copied verbatim — keep it monospace. */
+      .opt-output pre {
+        flex: 1;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 12px;
+        padding: 8px;
+        margin: 0;
+        background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
+        border-radius: 4px;
+      }
+      /* Floating "copy" button on the optimised-prompt block. */
+      .opt-output { position: relative; }
+      .opt-copy {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        padding: 3px 8px;
+        border: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.35));
+        border-radius: 5px;
+        color: var(--vscode-descriptionForeground);
+        background: var(--vscode-editor-background);
+        cursor: pointer;
+        opacity: 0.85;
+      }
+      .opt-copy:hover {
+        opacity: 1;
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder, var(--vscode-button-background));
+      }
+      .opt-copy.copied {
+        color: var(--vscode-testing-iconPassed, #2ea043);
+        border-color: var(--vscode-testing-iconPassed, #2ea043);
+      }
+      .opt-copy-ico { font-size: 12px; line-height: 1; }
+      /* The settings recommendation is read, not copied — render each line as a
+         "Label  [value chip]  reason" row so the key choice stands out. */
+      .opt-settings {
+        font-size: 12px;
+        padding: 8px 10px;
+        margin: 0;
+        color: var(--vscode-foreground);
+        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+        border-left: 2px solid var(--vscode-textLink-foreground, var(--vscode-button-background));
+        border-radius: 0 4px 4px 0;
+      }
+      .opt-set-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+        padding: 3px 0;
+      }
+      .opt-set-row + .opt-set-row {
+        border-top: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.12));
+      }
+      .opt-set-key {
+        flex: 0 0 auto;
+        min-width: 64px;
+        color: var(--vscode-descriptionForeground);
+      }
+      .opt-set-val {
+        flex: 0 0 auto;
+        font-weight: 600;
+        padding: 1px 8px;
+        border-radius: 999px;
+        color: var(--vscode-button-foreground);
+        background: var(--vscode-button-background);
+      }
+      .opt-set-rest {
+        flex: 1 1 auto;
+        min-width: 120px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      /* ⚙ Settings tab */
+      .settings-panel { max-width: 780px; }
+      .settings-toolbar { margin: 4px 0 14px; }
+      .settings-group { margin-bottom: 18px; }
+      .settings-group h3 {
+        margin: 0 0 8px;
+        padding-bottom: 4px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.2));
+      }
+      .set-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 7px 0;
+      }
+      .set-label { flex: 1; min-width: 0; }
+      .set-label label { font-size: 13px; }
+      .set-help {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin-top: 2px;
+      }
+      .set-control { flex: 0 0 auto; display: flex; align-items: center; }
+      .set-control input[type="text"],
+      .set-control input[type="password"],
+      .set-control input[type="number"],
+      .set-control select,
+      .set-control textarea {
+        font-family: inherit;
+        font-size: 12px;
+        padding: 4px 6px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+        min-width: 230px;
+      }
+      .set-control input[type="number"] { min-width: 96px; width: 96px; }
+      .set-control textarea { resize: vertical; min-width: 260px; }
+      .set-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+      .set-switch input { opacity: 0; width: 0; height: 0; }
+      .set-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, rgba(127, 127, 127, 0.4));
+        border-radius: 22px;
+        transition: 0.15s;
+      }
+      .set-slider:before {
+        content: "";
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background: var(--vscode-descriptionForeground);
+        border-radius: 50%;
+        transition: 0.15s;
+      }
+      .set-switch input:checked + .set-slider {
+        background: var(--vscode-testing-iconPassed, #2ea043);
+      }
+      .set-switch input:checked + .set-slider:before {
+        transform: translateX(18px);
+        background: #fff;
       }
 
       /* Refresh-Now button is only relevant when auto-refresh is OFF — hide
@@ -2271,6 +3465,78 @@ export class UsageWebviewProvider {
         margin: 0 0 8px 0;
       }
 
+      .quota-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 0 0 12px 0;
+        padding: 8px 10px;
+        border: 1px solid var(--vscode-inputValidation-warningBorder, #d8a200);
+        background: var(--vscode-inputValidation-warningBackground, rgba(216, 162, 0, 0.15));
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .quota-banner-text {
+        flex: 1;
+      }
+      .quota-banner-dismiss {
+        flex: none;
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0 2px;
+      }
+
+      .attr-controls {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .attr-controls select {
+        background: var(--vscode-dropdown-background);
+        color: var(--vscode-dropdown-foreground);
+        border: 1px solid var(--vscode-dropdown-border, transparent);
+        border-radius: 3px;
+        padding: 2px 6px;
+        font-size: 11px;
+        max-width: 260px;
+      }
+      .attr-tab {
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 4px;
+        padding: 3px 9px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .attr-tab.active {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border-color: var(--vscode-focusBorder);
+      }
+      .attr-char {
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .attr-hint {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        margin-top: 2px;
+      }
+      .wf-common-task {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.06));
+        white-space: normal;
+        line-height: 1.5;
+      }
+
       th.sortable {
         cursor: pointer;
         user-select: none;
@@ -2540,13 +3806,6 @@ function refresh() {
   vscode.postMessage({ command: 'refresh' });
 }
 
-function toggleAutoRefresh() {
-  var checkbox = document.getElementById('autoRefreshCheckbox');
-  var nowOff = !checkbox.checked;
-  document.body.classList.toggle('auto-off', nowOff);
-  vscode.postMessage({ command: 'setPauseDashboardRefresh', value: nowOff });
-}
-
 function openSettings() {
   console.log("[DEBUG] openSettings called");
   vscode.postMessage({ command: 'openSettings' });
@@ -2560,6 +3819,141 @@ function refreshPricing() {
 function getAdvice() {
   console.log("[DEBUG] getAdvice called");
   vscode.postMessage({ command: 'getAdvice' });
+}
+
+function setSetting(key, value, type) {
+  if (type === 'number') {
+    var n = Number(value);
+    if (!isFinite(n)) { return; }
+    value = n;
+  }
+  vscode.postMessage({ command: 'updateSetting', key: key, value: value });
+}
+
+function resetAllSettings() {
+  vscode.postMessage({ command: 'resetAllSettings' });
+}
+
+function runOptimizer() {
+  var ta = document.getElementById('optDraft');
+  var btn = document.getElementById('optRunBtn');
+  if (!ta || !ta.value.trim()) { return; }
+  var err = document.getElementById('optError');
+  var res = document.getElementById('optResult');
+  if (err) { err.style.display = 'none'; }
+  if (res) { res.style.display = 'none'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = btn.getAttribute('data-running') || '…';
+  }
+  vscode.postMessage({
+    command: 'optimizePrompt',
+    draft: ta.value,
+    resolve: !!(document.getElementById('optResolve') || {}).checked,
+    distil: !!(document.getElementById('optDistil') || {}).checked,
+    aesthetic: !!(document.getElementById('optAesthetic') || {}).checked,
+  });
+}
+
+function showOptimizeResult(msg) {
+  var btn = document.getElementById('optRunBtn');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = btn.getAttribute('data-run') || 'Optimize';
+  }
+  var err = document.getElementById('optError');
+  var res = document.getElementById('optResult');
+  if (msg.error) {
+    if (err) { err.textContent = msg.error; err.style.display = ''; }
+    return;
+  }
+  var promptEl = document.getElementById('optPrompt');
+  var settingsEl = document.getElementById('optSettings');
+  if (promptEl) { promptEl.textContent = msg.prompt || ''; }
+  if (settingsEl) {
+    settingsEl.setAttribute('data-raw', msg.settings || '');
+    formatOptSettings();
+  }
+  if (res) { res.style.display = ''; }
+}
+
+function copyOptPrompt(btn) {
+  var promptEl = document.getElementById('optPrompt');
+  if (!promptEl) { return; }
+  var text = promptEl.textContent || '';
+  var lbl = btn ? btn.querySelector('.opt-copy-lbl') : null;
+  var done = function() {
+    if (!btn) { return; }
+    btn.classList.add('copied');
+    if (lbl) { lbl.textContent = btn.getAttribute('data-copied') || 'Copied'; }
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      if (lbl) { lbl.textContent = btn.getAttribute('data-copy') || 'Copy'; }
+    }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, done);
+  } else {
+    promptEl.focus();
+    done();
+  }
+}
+
+// Render the optimiser's "Recommended run settings" with the key value of each
+// line (high / on / opus …) highlighted as a chip. Parses "Label: value — reason"
+// from the raw text stashed in data-raw (so re-runs don't double-format).
+function optEscHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function formatOptSettings() {
+  var el = document.getElementById('optSettings');
+  if (!el) { return; }
+  var raw = el.getAttribute('data-raw');
+  if (raw === null) { raw = el.textContent || ''; el.setAttribute('data-raw', raw); }
+  var lines = raw.split('\\n').filter(function(l) { return l.trim() !== ''; });
+  if (!lines.length) { el.innerHTML = ''; return; }
+  el.innerHTML = lines.map(function(line) {
+    var clean = line.replace(/^[\\s\\-*•]+/, '');
+    var m = clean.match(/^([^:：]{1,28})[:：]\\s*([^\\s—()（]+)\\s*[—-]?\\s*(.*)$/);
+    if (m) {
+      var rest = m[3] && m[3].trim() ? '<span class="opt-set-rest">' + optEscHtml(m[3].trim()) + '</span>' : '';
+      return '<div class="opt-set-row"><span class="opt-set-key">' + optEscHtml(m[1].trim()) +
+        '</span><span class="opt-set-val">' + optEscHtml(m[2].trim()) + '</span>' + rest + '</div>';
+    }
+    return '<div class="opt-set-row">' + optEscHtml(clean) + '</div>';
+  }).join('');
+}
+
+function dismissQuotaWarn() {
+  vscode.postMessage({ command: 'dismissQuotaWarn' });
+}
+
+function attrSetScope(kind) {
+  document.querySelectorAll('.attr-tab').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-kind') === kind);
+  });
+  var sessSel = document.getElementById('attrTargetSession');
+  var projSel = document.getElementById('attrTargetProject');
+  if (sessSel) { sessSel.style.display = kind === 'session' ? '' : 'none'; }
+  if (projSel) { projSel.style.display = kind === 'project' ? '' : 'none'; }
+  requestAttribution();
+}
+
+function requestAttribution() {
+  var active = document.querySelector('.attr-tab.active');
+  if (!active) { return; }
+  var kind = active.getAttribute('data-kind');
+  var scope = { kind: kind };
+  if (kind === 'session') {
+    var sessSel = document.getElementById('attrTargetSession');
+    if (!sessSel || !sessSel.value) { return; }
+    scope.sessionId = sessSel.value;
+  } else if (kind === 'project') {
+    var projSel = document.getElementById('attrTargetProject');
+    if (!projSel || !projSel.value) { return; }
+    scope.projectPath = projSel.value;
+  }
+  vscode.postMessage({ command: 'getAttribution', scope: scope });
 }
 
 function toggleProjectGroup(groupId) {
@@ -2877,6 +4271,9 @@ window.refreshPricing = refreshPricing;
 window.getAdvice = getAdvice;
 window.toggleProjectGroup = toggleProjectGroup;
 window.sortTable = sortTable;
+window.dismissQuotaWarn = dismissQuotaWarn;
+window.attrSetScope = attrSetScope;
+window.requestAttribution = requestAttribution;
 window.showTab = showTab;
 window.toggleHourlyDetail = toggleHourlyDetail;
 window.toggleMonthlyDetail = toggleMonthlyDetail;
@@ -2888,7 +4285,6 @@ window.closeAllMonthlyDetails = closeAllMonthlyDetails;
 // Handle messages from extension
 window.addEventListener('message', function(event) {
   const message = event.data;
-  console.log("[DEBUG] Received message from extension:", message);
 
   if (message.command === 'hourlyDataResponse') {
     const container = document.getElementById('hourly-detail-' + message.date);
@@ -2911,12 +4307,24 @@ window.addEventListener('message', function(event) {
       bindChartTabEvents(container);
     }
   }
+
+  if (message.command === 'attributionResponse') {
+    const attrPanel = document.getElementById('attrPanel');
+    if (attrPanel && typeof message.html === 'string') {
+      attrPanel.innerHTML = message.html;
+    }
+  }
+
+  if (message.command === 'optimizeResult') {
+    showOptimizeResult(message);
+  }
 });
+
+// Format any optimiser settings restored into the DOM by a re-render.
+formatOptSettings();
 
 // Global event delegation for chart tabs and chart bars
 document.addEventListener('click', function(event) {
-  console.log("[DEBUG] Document click event:", event.target);
-
   // Handle sortable table header clicks
   var sortableTh = event.target.closest ? event.target.closest('th.sortable') : null;
   if (sortableTh) {

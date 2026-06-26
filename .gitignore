@@ -13,3 +13,16 @@ secrets.json
 
 # Personal, per-maintainer Claude Code notes (the shared CLAUDE.md is committed).
 CLAUDE.local.md
+
+# Locally generated AI-advice reports — contain the maintainer's own prompt
+# samples. Curated excerpts may be hand-copied into the README, but the raw
+# reports must never be committed.
+docs/claude-advice-*.md
+
+# Local-only planning / architecture / dev-reference docs. The maintainer
+# iterates on these privately; at this stage they are NOT shipped to the repo.
+# (Re-track later by removing these lines if a doc should become public.)
+/ARCHITECTURE.md
+/ARCHITECTURE-zh-CN.md
+docs/V2.1-*
+docs/V2.2-*

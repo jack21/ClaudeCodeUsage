@@ -1,25 +1,162 @@
 # Changelog
 
 All notable changes to this fork compared to upstream
-[`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage) (last
+[`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [Unreleased]
+## [2.1.0] — Unreleased
 
 ### Added
-- **`claudeCodeUsage.showOpusWeekly` setting** — opt-in (default off) that
-  appends the weekly Opus limit (`opus:NN%`) to the status-bar quota item,
-  after the 5-hour and weekly figures. Only shown when the account has a live
-  weekly-Opus window.
+- **Weekly Opus limit in the status bar** — opt-in `showOpusWeekly` (default
+  off) appends `opus:NN%` after the 5h / weekly quota figures, for heavy Opus
+  users who want an at-a-glance weekly Opus signal. Merged from
+  [PR #38](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/38)
+  (@wheelbarrel00); re-applied here on the dashboard-managed settings.
+- **Settings in the dashboard** — a new ⚙ Settings tab edits every option in
+  place (grouped: General, Status bar, Data & refresh, AI advice & Optimizer),
+  applied immediately. To keep VS Code's own Settings UI uncluttered, only
+  three settings stay declared there (so they still sync via Settings Sync):
+  `language`, `dataDirectory`, `advice.apiKey`. The rest now live in the
+  extension's own storage and are managed from the dashboard. A one-time
+  migration copies any existing `settings.json` values into the new store on
+  first launch, so upgrades keep your configuration. (Setting labels/help are
+  English; group headers and chrome are localised in all six languages.)
+- **Workflows tab** — one row per multi-agent run: true dynamic-workflow
+  runs (wf_ dirs) **and ad-hoc sub-agent batches** (≥2 Task-tool agents in
+  one session, tagged "subagents" — what ultracode produces when the
+  dynamic-workflow feature isn't engaged, e.g. via proxy routing). Columns:
+  start time, name (script-derived or session title), project, **models
+  used**, agent count, cost, token split, **cache hit rate** and duration;
+  expands to a per-agent breakdown where each agent is labelled by **the
+  task it was dispatched** (shared boilerplate hoisted into one pinned row,
+  agent rows show only what differs; full text in tooltips). The cache
+  hit rate is the headline diagnostic: native-Claude workflows reuse the
+  prompt cache across agents (observed ~75%), a provider without cross-agent
+  caching shows ~0% — i.e. the same workflow costs disproportionately more.
+  A summary strip shows this month's workflow count, cost and cost share.
+- **Sub-agent attribution in the loader** — records from `subagents/` logs
+  now carry the workflow id, agent id and agent type (from
+  `agent-*.meta.json`), resolved from the file path so worktree-isolated
+  agents attribute correctly.
+- **Thinking share** — estimated thinking-token share per session (new
+  sortable Sessions column, ⚠ + `/effort` hint above 60%) and a one-line
+  summary on the Today tab. Estimated from text length, like the rest of
+  the content analysis.
+- **Workflow quota guard** — a dismissible dashboard banner when the
+  remaining 5-hour quota drops below `workflowQuotaWarnPercent` (default
+  50%, 0 disables): interrupted workflow runs lose their prompt cache and
+  re-run ~40% more expensive. The status bar stays untouched.
+- **Usage attribution panel** ("What's contributing to your usage?") —
+  modelled on the official `/usage` screen but multi-provider and with five
+  scopes (Day / Week / Month / per-session / per-project, vs. Day/Week
+  officially). Characteristic lines (independent signals, not a breakdown):
+  share of usage at >150k context, from 8h+ active sessions, from
+  subagent-heavy sessions, from workflow runs, plus the top skill and top
+  plugin once they exceed 10%. Tables: Skills, Subagents (by agent type),
+  Plugins, Models. Skill shares follow the official methodology — the
+  session's usage at/after the skill's invocation counts toward it (shares
+  overlap by design); trivial commands like /model and /clear are excluded.
+  Full panel in the Content tab; a compact strip (≥5% lines only) on the
+  Today tab.
+
+- **AI advice transport** — speaks the **Anthropic** `/v1/messages` shape by
+  default (`advice.apiFormat`), with the OpenAI chat-completions shape kept for
+  DeepSeek and other compatible proxies. Timeout / retry / curl-fallback
+  hardening across both. *(A keyless "subscription" backend — reuse the Claude
+  Code OAuth session to call the API with no key — was prototyped and verified
+  working via curl, but is NOT shipped: Anthropic returns 403 "Request not
+  allowed" for that use of the OAuth token, so it's too fragile/inappropriate
+  for a public extension. The transport stays dormant in advisor.ts to
+  re-enable if direct calls become permitted.)*
+- **AI advice fed with the new signals** — the advice prompt now includes
+  the multi-agent runs (per-run cost, agent fan-out, cache hit rate per
+  provider), the estimated thinking share and the usage-attribution panel
+  (characteristics + top skills/subagents/plugins/models), so the model can
+  give targeted advice instead of generic tips. New optional setting
+  `claudeCodeUsage.advice.userContext`: free-text background about you/the
+  project; when set, the advice ends with a "Personalised for this project"
+  section calibrated against it. New `advice.promptWindowDays` (default 30)
+  sets how many days of your own prompts and content the analysis samples.
+- **AI advice card** at the top of the Content tab — the "Get AI advice"
+  button now lives in a labelled card that says, in one line, what gets sent,
+  instead of being tucked into the analysis header.
+- **Usage Optimizer** (opt-in, `advice.optimizer.enabled`, default off) — a
+  card on the Content tab where you paste a rough request and get back ONE
+  tightened, paste-ready prompt plus a recommended reasoning effort / thinking
+  / model for that task. Three optional lenses: flag ambiguous references,
+  condense long pasted material, suggest a style direction. Runs through the
+  same backend as AI advice; **only the text you paste is sent** (never your
+  files or Claude Code's terminal), behind a one-time consent prompt.
 - **Context-window indicator** in the status bar — shows the current
   session's context fill as a percentage (like `/context`), estimated from
   the latest log record (`input + cache read + cache write` tokens vs the
   model's window; `[1m]` long-context variants use 1M). Amber at 80%, red at
-  95%; hidden after 5 h of inactivity. Toggle with
-  `claudeCodeUsage.showContext`.
+  95%. **Experimental, off by default** (`claudeCodeUsage.showContext`) — it can
+  only show the input-side total, not `/context`'s category breakdown (those are
+  Claude Code internals not on disk). A `~` marks a guessed window size;
+  `contextWindowOverride` pins the real size for proxied/custom models. Reads
+  the main-thread record (a running sub-agent no longer hijacks it) and stays
+  visible across an overnight gap (24 h staleness guard). The tooltip shows a
+  quota-style bar + the input-side composition.
+  (Built on [PR #31](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/31), @ScherbakovAl.)
 - **`claudeCodeUsage.showCost` setting** — hide the status-bar cost item for
   those who only want the quota / context indicators (the dashboard still
-  shows all cost figures).
+  shows all cost figures). (PR #31, @ScherbakovAl.)
+- **Authoritative skill / plugin attribution** — the Usage tracking panel now
+  weights skills and plugins by the exact usage Claude Code stamps on each line
+  (`attributionSkill` / `attributionPlugin`, ≥ CC 2.1) instead of the
+  `<command-name>` heuristic, which it keeps only as a fallback for older logs.
+- **Workflow main-session orchestration** — each run's drill-down now shows the
+  main-thread spend that bracketed it (same session, within the run's window),
+  so a native-Claude run whose expensive Opus/Fable orchestration lived in the
+  main thread finally shows its true cost and models, not just the cheap
+  sub-agent files. Heuristic (timestamp-bracketing, capped to focused windows).
+- **Clearer run badges** — "workflow" (a dynamic-workflow run dir) vs
+  "subagents (ad-hoc)" (a plain Task-tool fan-out), with a hint that the effort
+  level itself is not recorded in the logs.
+- **Per-model context-window sizes** in the status-bar context indicator
+  (Opus 4.6+/Sonnet 4.6+/Fable 5 = 1M, Haiku/older Claude = 200K, DeepSeek =
+  128K), and its tooltip is now a `/context`-style breakdown (fresh input /
+  cache read / cache write / free space) with a tightened note. The Today
+  "Usage tracking" card now shows only exact cost-weighted shares — the
+  text-length thinking estimate was dropped from it (it remains on the
+  Sessions tab, marked as an estimate). The Workflows tab gained a note
+  explaining that native-Claude ultracode whose orchestration stays in the
+  main session shows up in Sessions / Usage tracking rather than as a row.
+- **Calibrated content analysis** — the Content tab can now anchor its
+  per-category token figures to the *exact* billed totals (`analysis.calibrate`,
+  default on): relative shares still come from text length, but the absolute
+  numbers are scaled so assistant categories sum to real output tokens and
+  user/tool-result categories to real input + cache-write tokens. This corrects
+  a large undercount the text-length estimate had on the input side (cache
+  creation is invisible to character counts). Sessions' Thinking column gains a
+  calibrated "real thinking tokens" figure in its tooltip.
+
+### Changed
+- **Header trimmed** — the apple-style auto-refresh toggle moved into the ⚙
+  Settings tab (a manual ↻ refresh still appears top-right when auto-refresh is
+  paused). Two shortcut buttons remain: ✨ AI advice and ⚙ Settings, each
+  jumping to its tab. The gear icon sits on the header button; the tab label
+  drops it.
+- **Usage Optimizer output is plain text** — the rewritten prompt is now
+  returned without Markdown (no bold/headings/backticks/bullets) so it pastes
+  cleanly into a terminal. Copy clearer, task-framed help; marked experimental.
+- **AI advice + Optimizer cards redesigned** as a cohesive "action card"
+  treatment (accent rail + icon badge), distinct from the data panels.
+
+### Fixed
+- **"Get AI Usage Advice" hanging or failing with `terminated`** — the
+  request now has a 120 s timeout with a clear error, one retry, and a
+  fallback to the system `curl` (the same transport of last resort the quota
+  client uses); the prompt-sample payload is capped (40 prompts × 1500 chars).
+- **Advice prompt samples polluted by agent traffic** — sub-agent logs,
+  meta/sidechain lines and agent-framework scaffolding text are no longer
+  harvested as "user prompts" for the advice feature.
+- **Quota indicator blanked after switching folders in the same window** — the
+  curl fallback now pins its working directory to the home dir (an inherited,
+  now-invalid cwd made `spawn` fail with ENOENT), and a workspace-folders-change
+  listener forces a fresh fetch — so the quota survives a folder switch without
+  needing a new window.
 
 ## [2.0.2] — 2026-06-09
 
@@ -42,7 +179,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Quota indicator stale / stuck after reset** — an expired window now shows
   0% (rolled forward to the new period) and is refetched, instead of lingering
   on a stale value or vanishing. Adapted from
-  [PR #24](https://github.com/jack21/ClaudeCodeUsage/pull/24) by
+  [PR #24](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/24) by
   [@nickearnshaw](https://github.com/nickearnshaw).
 - **Quota "only comes back after I restart VS Code"** — an expired in-memory
   OAuth token now triggers a re-read of `~/.claude/.credentials.json` (which
@@ -52,7 +189,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **Usage not showing the first time you open VS Code** — the status bar now
   shows a loading state immediately and the quota fetch is non-blocking, so
   local cost figures appear at once and the quota follows.
-  ([#26](https://github.com/jack21/ClaudeCodeUsage/issues/26))
+  ([#26](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/issues/26))
 - **"This project" figure undercounted / disappeared** — per-conversation
   attribution now keys off the session's home project directory instead of the
   per-record working directory (which wanders mid-session), and the figure is
@@ -71,16 +208,16 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - Drill-down charts: removed a double scrollbar; date labels parse the date
   textually (UTC parsing shifted labels a day in negative-UTC timezones).
 - `launch.json` `preLaunchTask` fixed so F5 works in a single-root checkout
-  ([PR #22](https://github.com/jack21/ClaudeCodeUsage/pull/22), @nickearnshaw).
+  ([PR #22](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/22), @nickearnshaw).
 
 ### Docs / project
 - Refreshed all language READMEs to v2 (en / zh-TW / ja / ko concise; zh-CN
   full translation); fixed the `CHANGELOG.md` link casing.
 - Added `CONTRIBUTING.md`, a PR template, and issue templates; documented
   `cleanupPeriodDays` for history retention
-  ([PR #21](https://github.com/jack21/ClaudeCodeUsage/pull/21), @nickearnshaw).
+  ([PR #21](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/21), @nickearnshaw).
 - Loading-spinner / re-entrancy guard for the webview
-  ([PR #20](https://github.com/jack21/ClaudeCodeUsage/pull/20), @nickearnshaw).
+  ([PR #20](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/20), @nickearnshaw).
 - Updated `CLAUDE.md` to the v2 architecture and release process.
 
 ---
@@ -170,7 +307,7 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 - **5-hour and weekly limit utilisation** + reset times fetched via Claude
   Code's own OAuth session at `~/.claude/.credentials.json` →
   `api.anthropic.com/api/oauth/usage`. Zero configuration. _Approach adapted
-  from upstream [PR #9](https://github.com/jack21/ClaudeCodeUsage/pull/9) by
+  from upstream [PR #9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9) by
   [@Dobidop](https://github.com/Dobidop)._
 - Dedicated, quieter status-bar item shows `5h:N% wk:N%`; warns yellow at
   ≥80%, red at ≥95%.
@@ -306,11 +443,11 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 
 ### Acknowledgements
 
-Based on [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
+Based on [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
 MIT-licensed. Significant inspiration / patches from upstream
 PRs:
 
-- [#9](https://github.com/jack21/ClaudeCodeUsage/pull/9) — Real 5-hour and
+- [#9](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage/pull/9) — Real 5-hour and
   weekly usage limit tracking via the Anthropic OAuth API, by
   [@Dobidop](https://github.com/Dobidop). The OAuth approach in this fork is
   adapted from that PR.
@@ -323,7 +460,7 @@ Many code changes in this fork were drafted with assistance from
 
 ## Pre-2.0 history (upstream 1.0.x)
 
-Released under [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage)
+Released under [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage)
 before the 2.0 fork.
 
 ## [1.0.8] — 2025-11-28

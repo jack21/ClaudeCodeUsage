@@ -7,10 +7,14 @@ export class StatusBarManager {
   private quotaItem: vscode.StatusBarItem;
   private contextItem: vscode.StatusBarItem;
   private isLoading: boolean = false;
-  // Per-item visibility, driven by the showCost / showContext settings.
+  // Per-item visibility, driven by the showCost / showContext / quota settings.
   private showCost: boolean = true;
   private showContext: boolean = true;
-  // When true, append the weekly Opus limit (opus:NN%) to the quota item.
+  private usageLimitTracking: boolean = true;
+  // First item shows today's cost ('cost') or today's total token count ('tokens').
+  private metric: 'cost' | 'tokens' = 'cost';
+  // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38,
+  // @wheelbarrel00).
   private showOpusWeekly: boolean = false;
 
   constructor() {
@@ -41,23 +45,41 @@ export class StatusBarManager {
   /** Apply the showCost / showContext settings. Hiding takes effect
    * immediately; re-showing happens on the next data update (the caller
    * triggers a refresh right after a config change). */
-  setVisibility(showCost: boolean, showContext: boolean, showOpusWeekly: boolean = false): void {
+  setVisibility(
+    showCost: boolean,
+    showContext: boolean,
+    usageLimitTracking: boolean = true,
+    metric: 'cost' | 'tokens' = 'cost',
+    showOpusWeekly: boolean = false
+  ): void {
     this.showCost = showCost;
     this.showContext = showContext;
+    this.usageLimitTracking = usageLimitTracking;
+    this.metric = metric;
     this.showOpusWeekly = showOpusWeekly;
-    if (!showCost) {
-      this.statusBarItem.hide();
-    }
     if (!showContext) {
       this.contextItem.hide();
     }
+    // Re-apply the first item — it may need to become an icon-only entry point.
+    this.applyCostVisibility();
   }
 
-  /** Show or hide the cost item per the showCost setting. Every method that
-   * sets its text calls this, so the item reappears as soon as the setting
-   * is turned back on. */
+  /** Show / hide the first status-bar item per the showCost setting. When cost
+   * is off, the item normally hides — UNLESS the quota and context items are
+   * also off by setting, in which case there would be NO clickable way back
+   * into the dashboard. In that all-off case we keep it as an icon-only entry
+   * point. Every method that sets the item's text calls this, so it reappears
+   * (or collapses to the entry icon) as soon as a setting changes. */
   private applyCostVisibility(): void {
     if (this.showCost) {
+      this.statusBarItem.show();
+      return;
+    }
+    if (!this.showContext && !this.usageLimitTracking) {
+      // Sole remaining entry point: an icon that opens the dashboard.
+      this.statusBarItem.text = '$(graph)';
+      this.statusBarItem.tooltip = I18n.t.popup.title;
+      this.statusBarItem.backgroundColor = undefined;
       this.statusBarItem.show();
     } else {
       this.statusBarItem.hide();
@@ -103,18 +125,25 @@ export class StatusBarManager {
   }
 
   private showTodayData(todayData: UsageData, workspaceTodayData: UsageData | null): void {
-    const todayCost = I18n.formatCurrency(todayData.totalCost);
-    // Primary number = today's total cost across all projects. Secondary number
-    // = today's cost for the current workspace, so you can see this project's
-    // share next to the global total. Both reset at midnight (stable), unlike
-    // the old "current session" which vanished after 5h idle.
-    let text = `$(pulse) ${todayCost}`;
-    // Show the workspace figure whenever a workspace is open — including
-    // $0.00. Hiding it at zero made the item appear and disappear through the
-    // day, which read as a bug ("where did my number go?").
+    // Primary figure = today across all projects; secondary = today for the
+    // current workspace, so you can see this project's share next to the global
+    // total. Both reset at midnight. The metric setting switches cost ↔ tokens.
     const ws = workspaceTodayData ?? null;
-    if (ws) {
-      text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
+    const totalTokens = (d: UsageData): number =>
+      d.totalInputTokens + d.totalOutputTokens + d.totalCacheCreationTokens + d.totalCacheReadTokens;
+    let text: string;
+    if (this.metric === 'tokens') {
+      text = `$(symbol-number) ${I18n.formatTokensCompact(totalTokens(todayData))}`;
+      if (ws) {
+        text += ` $(folder) ${I18n.formatTokensCompact(totalTokens(ws))}`;
+      }
+    } else {
+      text = `$(pulse) ${I18n.formatCurrency(todayData.totalCost)}`;
+      // Show the workspace figure whenever a workspace is open — including
+      // $0.00; hiding it at zero read as a bug ("where did my number go?").
+      if (ws) {
+        text += ` $(folder) ${I18n.formatCurrency(ws.totalCost)}`;
+      }
     }
     this.statusBarItem.text = text;
 
@@ -134,7 +163,9 @@ export class StatusBarManager {
       return;
     }
     const pct = Math.min(100, (info.contextTokens / info.windowTokens) * 100);
-    this.contextItem.text = `$(layers) ${Math.round(pct)}%`;
+    // "~" marks an estimated (guessed) window size so the % doesn't read as exact.
+    const approx = info.estimated ? '~' : '';
+    this.contextItem.text = `$(layers) ${approx}${Math.round(pct)}%`;
 
     // Same thresholds as the quota item: amber at 80%, red at 95%.
     if (pct >= 95) {
@@ -148,13 +179,24 @@ export class StatusBarManager {
     const t = I18n.t.popup;
     const md = new vscode.MarkdownString();
     md.supportThemeIcons = true;
+    md.supportHtml = true;
     md.appendMarkdown(`**${t.contextWindow}** — ${info.model}\n\n`);
-    md.appendMarkdown(
-      `$(layers) ${I18n.formatNumber(info.contextTokens)} / ${I18n.formatNumber(info.windowTokens)} ` +
-        `(${pct.toFixed(1)}%)\n\n`
-    );
-    md.appendMarkdown(t.contextCostHint.split('\n').map((l) => `*${l}*`).join('  \n'));
-    md.appendMarkdown(`\n\n*${t.contextHint}*`);
+    // One HTML table following the tooltip convention — left column is the
+    // label / visual, right column is the value. So the bar sits on the left and
+    // its percentage on the right, lining up with the figures below. "~" marks a
+    // guessed window size (see the override setting).
+    const freeSpace = Math.max(0, info.windowTokens - info.contextTokens);
+    const num = (n: number): string => I18n.formatNumber(n);
+    let html = '<table>';
+    html += `<tr><td>${this.progressBarSvg(pct, 30)}</td><td align="right"><b>${pct.toFixed(1)}%</b></td></tr>`;
+    html += `<tr><td>${t.inputTokens}</td><td align="right">${num(info.inputTokens)}</td></tr>`;
+    html += `<tr><td>${t.cacheRead}</td><td align="right">${num(info.cacheReadTokens)}</td></tr>`;
+    html += `<tr><td>${t.cacheCreation}</td><td align="right">${num(info.cacheCreationTokens)}</td></tr>`;
+    html += `<tr><td>${t.contextLeft}</td><td align="right">${num(freeSpace)} / ${approx}${num(info.windowTokens)}</td></tr>`;
+    html += '</table>';
+    md.appendMarkdown(html + '\n\n');
+    // Two short, actionable lines (the rest of the explanation lives in Settings).
+    md.appendMarkdown(`*${t.contextHint}*  \n*${t.contextHintCompact}*`);
     this.contextItem.tooltip = md;
     this.contextItem.show();
   }
@@ -191,6 +233,7 @@ export class StatusBarManager {
       worstPct = Math.max(worstPct, weekly.utilization);
       parts.push(`wk:${Math.round(weekly.utilization)}%`);
     }
+    // Opt-in weekly Opus cap (PR #38, @wheelbarrel00).
     if (this.showOpusWeekly && opus) {
       worstPct = Math.max(worstPct, opus.utilization);
       parts.push(`opus:${Math.round(opus.utilization)}%`);
@@ -392,8 +435,8 @@ export class StatusBarManager {
    *
    * Bar colour mirrors the status-bar warning/error thresholds (amber at
    * >=80%, red at >=95%) so the visual signal matches the indicator. */
-  private progressBarSvg(pct: number): string {
-    const TOTAL = 24;
+  private progressBarSvg(pct: number, total: number = 24): string {
+    const TOTAL = total;
     const filled = Math.max(0, Math.min(TOTAL, Math.round((pct / 100) * TOTAL)));
     const empty = TOTAL - filled;
     let color = '#4caf50';                    // green

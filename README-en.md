@@ -53,7 +53,6 @@ Open Settings (`Ctrl+,`) and search for **`Claude Code Usage`**. All settings ar
 - `language` — UI language (`auto` / `en` / `zh-TW` / `zh-CN` / `ja` / `ko`).
 - `timezone` — IANA timezone for date display (e.g. `Asia/Hong_Kong`).
 - `usageLimitTracking` — show the real 5h / weekly quota indicator.
-- `showOpusWeekly` — also append the weekly Opus limit (`opus:NN%`) after the 5h / weekly figures (off by default).
 - `showCost` / `showContext` — toggle the cost item and the context-window fill indicator (like `/context`) in the status bar.
 - Each of these status-bar items is opt-out — set `usageLimitTracking`, `showCost`, or `showContext` to `false` to hide just that one.
 - `advice.apiKey` — API key for the AI advice feature (OpenAI-compatible).
@@ -73,7 +72,7 @@ See the [full settings table in the main README](README.md#configuration).
 
 ## Credits
 
-Forked from [`jack21/ClaudeCodeUsage`](https://github.com/jack21/ClaudeCodeUsage). MIT-licensed. Community contributions credited in [CHANGELOG.md](CHANGELOG.md). Many code changes drafted with [Claude Code](https://claude.com/claude-code).
+Forked from [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage). MIT-licensed. Community contributions credited in [CHANGELOG.md](CHANGELOG.md). Many code changes drafted with [Claude Code](https://claude.com/claude-code).
 
 **Issues, PRs and ideas are warmly welcomed** — that's how the project grows.
 

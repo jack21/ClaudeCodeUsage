@@ -6,6 +6,8 @@ import * as path from 'path';
 // Removed zod dependency - using native validation instead
 import { calculateCostBreakdown } from './pricing';
 import {
+  AttributionEntry,
+  AttributionScope,
   BranchUsage,
   ClaudeUsageRecord,
   ContentAnalysis,
@@ -15,7 +17,11 @@ import {
   ProjectUsage,
   SessionData,
   SessionUsage,
+  SkillUse,
+  ThinkingShare,
+  UsageAttribution,
   UsageData,
+  WorkflowUsage,
 } from './types';
 
 // Constants
@@ -111,11 +117,54 @@ interface AnalysisAcc {
   seenUuids: Set<string>;
   cutoffMs: number;
   prompts: { cwd: string; text: string }[];
+  // Estimated thinking vs. total assistant-output tokens, per session and per
+  // local day ("YYYY-MM-DD") — feeds the thinking-share column / Today line.
+  thinkingBySession: Record<string, ThinkingShare>;
+  thinkingByDay: Record<string, ThinkingShare>;
+  // Skill / slash-command invocations (capped) + tool_use_id → skillUses index
+  // so the matching tool result's size can be attributed to the skill.
+  skillUses: SkillUse[];
+  skillByToolId: Record<string, number>;
 }
 
 // cutoffMs: ignore log lines older than this (0 = no cutoff).
 function newAnalysisAcc(cutoffMs: number): AnalysisAcc {
-  return { cat: {}, tools: {}, toolIdToName: {}, seenUuids: new Set<string>(), cutoffMs, prompts: [] };
+  return {
+    cat: {},
+    tools: {},
+    toolIdToName: {},
+    seenUuids: new Set<string>(),
+    cutoffMs,
+    prompts: [],
+    thinkingBySession: {},
+    thinkingByDay: {},
+    skillUses: [],
+    skillByToolId: {},
+  };
+}
+
+const MAX_SKILL_USES = 5000;
+
+// Session-management slash commands: invoking them says nothing about what
+// the usage was for, but the at-or-after attribution rule would credit them
+// with everything that follows. Real skills (from the Skill tool) and
+// substantive commands like /code-review are never filtered.
+const TRIVIAL_COMMANDS = new Set([
+  '/model', '/clear', '/compact', '/help', '/config', '/status', '/cost',
+  '/doctor', '/login', '/logout', '/exit', '/resume', '/usage',
+  '/usage-credits', '/extra-usage', '/context', '/memory', '/goal',
+  '/todos', '/release-notes', '/fast', '/effort', '/permissions', '/hooks',
+  '/mcp', '/agents', '/export', '/rewind', '/init', '/add-dir', '/ide',
+]);
+
+// Local "YYYY-MM-DD" key for a log line's timestamp ('' when unparsable).
+function localDayKey(timestamp: unknown): string {
+  const ts = typeof timestamp === 'string' ? new Date(timestamp) : null;
+  if (!ts || isNaN(ts.getTime())) {
+    return '';
+  }
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}`;
 }
 
 // Collect an actual user prompt (capped + truncated) for the AI-advice feature.
@@ -124,10 +173,40 @@ function collectPrompt(acc: AnalysisAcc, cwd: string, text: string): void {
   if (trimmed.length < 4) {
     return;
   }
+  // Agent-framework scaffolding is not something the user typed: interrupt
+  // notices and kebab-case XML-ish wrappers (<command-name>, <system-reminder>,
+  // <local-command-stdout>, …). Plain HTML a user pastes (<div>, <p>) survives.
+  if (/^\[Request interrupted/i.test(trimmed) || /^<[a-z][a-z0-9]*(-[a-z0-9]+)+[\s>/]/i.test(trimmed)) {
+    return;
+  }
   acc.prompts.push({ cwd, text: trimmed.slice(0, 2500) });
   if (acc.prompts.length > 600) {
     acc.prompts.shift();
   }
+}
+
+// Detect a slash-command echo (<command-name>/foo</command-name>…) and record
+// it as a skill use; the echo block's size approximates the injected prompt.
+function collectCommandUse(acc: AnalysisAcc, text: string, sessionId: string, timestamp: unknown): void {
+  if (acc.skillUses.length >= MAX_SKILL_USES || !text.startsWith('<command-name>')) {
+    return;
+  }
+  const m = text.match(/^<command-name>([^<]{1,80})<\/command-name>/);
+  if (!m) {
+    return;
+  }
+  const name = m[1].trim();
+  if (TRIVIAL_COMMANDS.has(name.toLowerCase())) {
+    return;
+  }
+  const ts = typeof timestamp === 'string' ? Date.parse(timestamp) : NaN;
+  acc.skillUses.push({
+    name,
+    sessionId,
+    day: localDayKey(timestamp),
+    ts: isNaN(ts) ? 0 : ts,
+    estTokens: estimateTokens(text),
+  });
 }
 
 // Rough token estimate from text length (CJK characters are denser than ASCII).
@@ -181,7 +260,11 @@ function addToBucket(map: Record<string, AnalysisBucket>, key: string, text: str
 }
 
 // Accumulate one raw log line into the content analysis.
-function analyzeLine(parsed: any, acc: AnalysisAcc): void {
+// isSubagentFile: lines from sub-agent / workflow logs still count toward the
+// token-consumption buckets, but their "user" lines are agent-framework task
+// dispatches — never harvest them as prompt samples for the AI-advice feature.
+// sessionId: parent session of the source file (for the thinking-share maps).
+function analyzeLine(parsed: any, acc: AnalysisAcc, isSubagentFile = false, sessionId = ''): void {
   if (!parsed || typeof parsed !== 'object') {
     return;
   }
@@ -209,29 +292,78 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
   const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : '';
 
   if (role === 'assistant') {
+    // Thinking share: estimated thinking tokens vs. all assistant output
+    // (text + thinking + tool-call JSON), per session and per local day.
+    const trackThinking = (thinkingTokens: number, totalTokens: number): void => {
+      if (totalTokens <= 0) {
+        return;
+      }
+      const add = (map: Record<string, ThinkingShare>, key: string): void => {
+        if (!key) {
+          return;
+        }
+        if (!map[key]) {
+          map[key] = { thinking: 0, assistantTotal: 0 };
+        }
+        map[key].thinking += thinkingTokens;
+        map[key].assistantTotal += totalTokens;
+      };
+      add(acc.thinkingBySession, sessionId);
+      add(acc.thinkingByDay, localDayKey(parsed.timestamp));
+    };
     if (Array.isArray(content)) {
+      let thinkingTokens = 0;
+      let totalTokens = 0;
       for (const block of content) {
         if (!block || typeof block !== 'object') {
           continue;
         }
         if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'assistantText', block.text);
+          totalTokens += estimateTokens(block.text);
         } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
           addToBucket(acc.cat, 'assistantThinking', block.thinking);
+          const est = estimateTokens(block.thinking);
+          thinkingTokens += est;
+          totalTokens += est;
         } else if (block.type === 'tool_use') {
           if (typeof block.id === 'string' && typeof block.name === 'string') {
             acc.toolIdToName[block.id] = block.name;
+            // Skill invocations: remember the tool_use_id so the matching
+            // tool result's size can be attributed to the skill.
+            const skillName = (block.input as { skill?: unknown } | undefined)?.skill;
+            if (block.name === 'Skill' && typeof skillName === 'string' && acc.skillUses.length < MAX_SKILL_USES) {
+              acc.skillByToolId[block.id] = acc.skillUses.length;
+              const skillTs = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) : NaN;
+              acc.skillUses.push({
+                name: skillName,
+                sessionId,
+                day: localDayKey(parsed.timestamp),
+                ts: isNaN(skillTs) ? 0 : skillTs,
+                estTokens: 0,
+              });
+            }
           }
-          addToBucket(acc.cat, 'toolCalls', JSON.stringify(block.input || {}));
+          const inputJson = JSON.stringify(block.input || {});
+          addToBucket(acc.cat, 'toolCalls', inputJson);
+          totalTokens += estimateTokens(inputJson);
         }
       }
+      trackThinking(thinkingTokens, totalTokens);
     } else if (typeof content === 'string') {
       addToBucket(acc.cat, 'assistantText', content);
+      trackThinking(0, estimateTokens(content));
     }
   } else if (role === 'user') {
+    // Prompt samples must be genuine top-level user messages: nothing from
+    // sub-agent logs, meta lines (command echoes) or sidechain dispatches.
+    const allowPromptSample = !isSubagentFile && !parsed.isMeta && !parsed.isSidechain;
     if (typeof content === 'string') {
       addToBucket(acc.cat, 'userPrompts', content);
-      collectPrompt(acc, cwd, content);
+      collectCommandUse(acc, content, sessionId, parsed.timestamp);
+      if (allowPromptSample) {
+        collectPrompt(acc, cwd, content);
+      }
     } else if (Array.isArray(content)) {
       for (const block of content) {
         if (!block || typeof block !== 'object') {
@@ -241,9 +373,18 @@ function analyzeLine(parsed: any, acc: AnalysisAcc): void {
           const text = blockText(block.content);
           addToBucket(acc.cat, 'toolResults', text);
           addToBucket(acc.tools, acc.toolIdToName[block.tool_use_id] || 'unknown', text);
+          // The injected skill prompt comes back as the Skill tool's result —
+          // its size is the best available estimate of the skill's footprint.
+          const skillIdx = acc.skillByToolId[block.tool_use_id];
+          if (skillIdx !== undefined && acc.skillUses[skillIdx]) {
+            acc.skillUses[skillIdx].estTokens += estimateTokens(text);
+          }
         } else if (block.type === 'text' && typeof block.text === 'string') {
           addToBucket(acc.cat, 'userPrompts', block.text);
-          collectPrompt(acc, cwd, block.text);
+          collectCommandUse(acc, block.text, sessionId, parsed.timestamp);
+          if (allowPromptSample) {
+            collectPrompt(acc, cwd, block.text);
+          }
         }
       }
     }
@@ -262,6 +403,9 @@ function finalizeAnalysis(acc: AnalysisAcc): ContentAnalysis {
     toolResultBreakdown: toSlices(acc.tools),
     totalEstimatedTokens: categories.reduce((sum, c) => sum + c.estimatedTokens, 0),
     recentPrompts: acc.prompts.slice(-300),
+    thinkingBySession: acc.thinkingBySession,
+    thinkingByDay: acc.thinkingByDay,
+    skillUses: acc.skillUses,
   };
 }
 
@@ -325,9 +469,13 @@ export class ClaudeDataLoader {
 
   static async loadUsageRecords(
     dataDirectory?: string,
-    options?: { analyzeContent?: boolean; log?: (line: string) => void }
+    options?: { analyzeContent?: boolean; windowDays?: number; log?: (line: string) => void }
   ): Promise<{ records: ClaudeUsageRecord[]; contentAnalysis: ContentAnalysis | null }> {
     const analyzeContent = options?.analyzeContent !== false; // default true
+    // How many days back the content analysis (and its prompt sample) looks.
+    // Configurable via advice.promptWindowDays; defaults to 30.
+    const windowDays = Math.min(365, Math.max(1, Math.round(options?.windowDays ?? 30)));
+    const windowMs = windowDays * 24 * 60 * 60 * 1000;
     const log = options?.log;
     try {
       const claudePaths = dataDirectory ? [dataDirectory] : this.getClaudePaths();
@@ -354,9 +502,14 @@ export class ClaudeDataLoader {
       // wrote `summary`. A custom title always wins over an AI one.
       const aiTitleBySession: Record<string, string> = {};
       const customTitleBySession: Record<string, string> = {};
-      // Content analysis (last 30 days) is optional — skipped when the user
-      // disables it via claudeCodeUsage.enableContentAnalysis.
-      const analysis = analyzeContent ? newAnalysisAcc(Date.now() - 30 * 24 * 60 * 60 * 1000) : null;
+      // Content analysis (last `windowDays` days, default 30) is optional —
+      // skipped when the user disables it via claudeCodeUsage.enableContentAnalysis.
+      const analysis = analyzeContent ? newAnalysisAcc(Date.now() - windowMs) : null;
+      // Per-refresh caches for sub-agent attribution lookups: agent type from
+      // agent-*.meta.json (keyed by meta path) and workflow display name from
+      // the session's workflows/scripts dir (keyed by workflow id).
+      const agentTypeCache = new Map<string, string>();
+      const workflowNameCache = new Map<string, string>();
       let fileIndex = 0;
       // Diagnostic counters so the "Show Diagnostic Logs" command can explain
       // how many records were seen / rejected / deduped without speculation.
@@ -388,6 +541,28 @@ export class ClaudeDataLoader {
           // user prompts from them (their "user" lines are agent-framework
           // task dispatches, not something the user typed).
           const isSubagentFile = /[\\/]subagents[\\/]/.test(file);
+          // Sub-agent attribution, derived from the file path — NOT from cwd:
+          // worktree-isolated agents have a cwd pointing at a temporary git
+          // worktree (see docs/V2.1-WORKFLOW-SPEC.md §2.2).
+          let agentInfo: {
+            agentId: string;
+            agentType: string;
+            workflowId?: string;
+            workflowName?: string;
+            task?: string;
+          } | null = null;
+          if (isSubagentFile) {
+            const agentId = path.basename(file, '.jsonl');
+            const agentType = await this.readAgentType(file, agentTypeCache);
+            const wfMatch = file.match(/[\\/]subagents[\\/]workflows[\\/](wf_[^\\/]+)[\\/]/);
+            if (wfMatch) {
+              const workflowId = wfMatch[1];
+              const workflowName = await this.resolveWorkflowName(file, workflowId, workflowNameCache);
+              agentInfo = { agentId, agentType, workflowId, workflowName };
+            } else {
+              agentInfo = { agentId, agentType };
+            }
+          }
 
           for (const line of lines) {
             stats.linesScanned += 1;
@@ -396,7 +571,7 @@ export class ClaudeDataLoader {
 
               // Feed every line into the content analysis (not only usage records).
               if (analysis) {
-                analyzeLine(parsed, analysis);
+                analyzeLine(parsed, analysis, isSubagentFile, sessionInfo.sessionId);
               }
 
               // Conversation title lines. Keep the last seen of each kind —
@@ -409,6 +584,33 @@ export class ClaudeDataLoader {
               } else if (lineAny.type === 'summary' && typeof lineAny.summary === 'string') {
                 // Legacy location (older Claude Code versions).
                 aiTitleBySession[sessionInfo.sessionId] = lineAny.summary;
+              }
+
+              // A sub-agent log's first user message is the task that was
+              // dispatched to the agent — capture it (truncated) as the
+              // agent's display label for the Workflows drill-down.
+              if (agentInfo && agentInfo.task === undefined) {
+                const role =
+                  (lineAny.message as { role?: unknown } | undefined)?.role ?? lineAny.type;
+                if (role === 'user') {
+                  const content = (lineAny.message as { content?: unknown } | undefined)?.content;
+                  const text =
+                    typeof content === 'string'
+                      ? content
+                      : Array.isArray(content)
+                        ? content
+                            .filter(
+                              (b: { type?: unknown; text?: unknown }) =>
+                                b?.type === 'text' && typeof b.text === 'string'
+                            )
+                            .map((b: { text: string }) => b.text)
+                            .join(' ')
+                        : '';
+                  const trimmed = text.replace(/\s+/g, ' ').trim();
+                  if (trimmed.length > 0) {
+                    agentInfo.task = trimmed.slice(0, 200);
+                  }
+                }
               }
 
               // Genuine user prompts become synthetic zero-usage records so
@@ -481,6 +683,20 @@ export class ClaudeDataLoader {
               }
               const gitBranch = (parsed as { gitBranch?: unknown }).gitBranch;
               record._gitBranch = typeof gitBranch === 'string' && gitBranch.trim() !== '' ? gitBranch : undefined;
+              // Authoritative skill/plugin attribution: Claude Code ≥2.1 stamps
+              // these on the assistant usage line itself (far better than the
+              // <command-name> heuristic). See ARCHITECTURE "Log-format facts".
+              const attrSkill = (parsed as { attributionSkill?: unknown }).attributionSkill;
+              const attrPlugin = (parsed as { attributionPlugin?: unknown }).attributionPlugin;
+              record._skill = typeof attrSkill === 'string' && attrSkill.trim() !== '' ? attrSkill : undefined;
+              record._plugin = typeof attrPlugin === 'string' && attrPlugin.trim() !== '' ? attrPlugin : undefined;
+              if (agentInfo) {
+                record._agentId = agentInfo.agentId;
+                record._agentType = agentInfo.agentType;
+                record._workflowId = agentInfo.workflowId;
+                record._workflowName = agentInfo.workflowName;
+                record._agentTask = agentInfo.task;
+              }
 
               if (uniqueHash && processedHashes.has(uniqueHash)) {
                 // Duplicate — keep whichever record has more tokens. This
@@ -563,7 +779,31 @@ export class ClaudeDataLoader {
         );
         log(`loader: models seen: ${modelsSummary}`);
       }
-      return { records, contentAnalysis: analysis ? finalizeAnalysis(analysis) : null };
+      const contentAnalysis = analysis ? finalizeAnalysis(analysis) : null;
+      if (contentAnalysis) {
+        // Calibration anchors (Phase 8): exact billed token totals over the
+        // analysis window (same cutoff the analyzer used), so the text-length
+        // category estimates can be scaled to billing reality.
+        const calibrationCutoff = Date.now() - windowMs;
+        let realOutputTokens = 0;
+        let realInputSideTokens = 0;
+        for (const r of records) {
+          if (r._isUserPrompt) {
+            continue;
+          }
+          const t = Date.parse(r.timestamp);
+          if (isNaN(t) || t < calibrationCutoff) {
+            continue;
+          }
+          const u = r.message.usage;
+          realOutputTokens += u.output_tokens || 0;
+          realInputSideTokens += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+        }
+        if (realOutputTokens > 0 || realInputSideTokens > 0) {
+          contentAnalysis.calibration = { realOutputTokens, realInputSideTokens };
+        }
+      }
+      return { records, contentAnalysis };
     } catch (error) {
       console.error('Error loading usage records:', error);
       return { records: [], contentAnalysis: null };
@@ -872,8 +1112,13 @@ export class ClaudeDataLoader {
    * Mirrors what Claude Code's /context shows, estimated from the logs: after
    * /clear or a compaction the figure only corrects on the next message.
    * Same workspace scoping and 5-hour recency rule as getCurrentSessionData.
+   * (Merged from PR #31, @ScherbakovAl.)
    */
-  static getCurrentContextInfo(records: ClaudeUsageRecord[], workspacePath?: string): ContextWindowInfo | null {
+  static getCurrentContextInfo(
+    records: ClaudeUsageRecord[],
+    workspacePath?: string,
+    windowOverride: number = 0
+  ): ContextWindowInfo | null {
     let pool = records;
     if (workspacePath) {
       const scoped = this.filterByWorkspace(records, workspacePath);
@@ -881,36 +1126,77 @@ export class ClaudeDataLoader {
         pool = scoped;
       }
     }
+    // Main thread only: sub-agent / workflow records carry _agentId / _workflowId
+    // and would otherwise hijack "current context" with a sub-agent's own (often
+    // smaller) window while a workflow runs. Fall back to the full pool only if
+    // there are no main-thread records at all.
+    const mainThread = pool.filter((r) => !r._agentId && !r._workflowId);
+    const base = mainThread.length > 0 ? mainThread : pool;
     // Only real assistant requests carry context information — synthetic
     // user-prompt markers and API-error records have zero usage.
-    pool = pool.filter((r) => this.recordContextTokens(r) > 0);
-    if (pool.length === 0) {
+    const withCtx = base.filter((r) => this.recordContextTokens(r) > 0);
+    if (withCtx.length === 0) {
       return null;
     }
 
-    let latest = pool[0];
-    for (const r of pool) {
+    let latest = withCtx[0];
+    for (const r of withCtx) {
       if (new Date(r.timestamp).getTime() > new Date(latest.timestamp).getTime()) {
         latest = r;
       }
     }
-    if (Date.now() - new Date(latest.timestamp).getTime() > 5 * 60 * 60 * 1000) {
+    // Show the most-recent session's context on startup too (opening a window
+    // in the morning shouldn't blank it). Hide only once it is genuinely stale.
+    if (Date.now() - new Date(latest.timestamp).getTime() > 24 * 60 * 60 * 1000) {
       return null;
     }
 
     const model = latest.message.model || '';
+    const usage = latest.message.usage;
+    const win = this.contextWindowFor(model, windowOverride);
     return {
       contextTokens: this.recordContextTokens(latest),
-      windowTokens: this.contextWindowFor(model),
+      windowTokens: win.tokens,
+      estimated: win.estimated,
       model,
+      inputTokens: usage.input_tokens || 0,
+      cacheReadTokens: usage.cache_read_input_tokens || 0,
+      cacheCreationTokens: usage.cache_creation_input_tokens || 0,
     };
   }
 
-  /** Model context-window size in tokens. A "[1m]" suffix marks the
-   * long-context variant (same marker pricing.ts strips); everything else
-   * Claude Code runs today has a 200K window. */
-  private static contextWindowFor(model: string): number {
-    return /\[1m\]/i.test(model) ? 1000000 : 200000;
+  /** Model context-window size in tokens, plus whether it's a guess. Current
+   * Claude (Opus 4.6+, Sonnet 4.6+, Fable/Mythos 5) is 1M; Haiku and older
+   * Claude are 200K; a "[1m]" suffix forces 1M (the marker pricing.ts strips).
+   * A user override (>0) wins outright and is treated as exact. Unrecognised /
+   * proxied models fall back to 200K and are flagged `estimated` so the UI can
+   * mark the percentage as approximate. Verified vs the catalog 2026-06-13. */
+  private static contextWindowFor(
+    model: string,
+    override: number = 0
+  ): { tokens: number; estimated: boolean } {
+    if (override && override > 0) {
+      return { tokens: override, estimated: false };
+    }
+    const m = (model || '').toLowerCase();
+    if (/\[1m\]/.test(m)) {
+      return { tokens: 1_000_000, estimated: false };
+    }
+    if (/fable|mythos/.test(m)) {
+      return { tokens: 1_000_000, estimated: false };
+    }
+    // Opus 4.6+ and Sonnet 4.6+ are 1M; earlier 4.x and 3.x are 200K.
+    if (/opus-4-(?:[6-9]|\d\d)\b/.test(m) || /sonnet-4-(?:[6-9]|\d\d)\b/.test(m)) {
+      return { tokens: 1_000_000, estimated: false };
+    }
+    if (/haiku/.test(m) || /opus|sonnet/.test(m)) {
+      return { tokens: 200_000, estimated: false };
+    }
+    if (/deepseek/.test(m)) {
+      return { tokens: 128_000, estimated: false };
+    }
+    // Unknown / proxied model — conservative default, flagged as a guess.
+    return { tokens: 200_000, estimated: true };
   }
 
   static getTodayData(records: ClaudeUsageRecord[]): UsageData {
@@ -1020,6 +1306,462 @@ export class ClaudeDataLoader {
       .filter((s) => s.data.messageCount > 0 || s.data.totalCost > 0)
       .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())
       .slice(0, limit);
+  }
+
+  /** Agent type from the sibling agent-*.meta.json ("unknown" when absent). */
+  private static async readAgentType(jsonlPath: string, cache: Map<string, string>): Promise<string> {
+    const metaPath = jsonlPath.replace(/\.jsonl$/i, '.meta.json');
+    const cached = cache.get(metaPath);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let agentType = 'unknown';
+    try {
+      const parsed = JSON.parse(await readFile(metaPath, 'utf-8')) as { agentType?: unknown };
+      if (typeof parsed.agentType === 'string' && parsed.agentType.trim() !== '') {
+        agentType = parsed.agentType.trim();
+      }
+    } catch {
+      // Missing or malformed meta file — journal.jsonl has none, for example.
+    }
+    cache.set(metaPath, agentType);
+    return agentType;
+  }
+
+  /**
+   * Human-readable workflow name, derived from the generated script file
+   * `<session-dir>/workflows/scripts/<name>-wf_<id>.js`. Falls back to the
+   * workflow id when no script matches (the wf_*.json shape is not a stable
+   * API, so the script filename is the dependable source).
+   */
+  private static async resolveWorkflowName(
+    agentFilePath: string,
+    workflowId: string,
+    cache: Map<string, string>
+  ): Promise<string> {
+    const cached = cache.get(workflowId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let name = workflowId;
+    const m = agentFilePath.match(/^(.*)[\\/]subagents[\\/]workflows[\\/]/);
+    if (m) {
+      const scriptsDir = path.join(m[1], 'workflows', 'scripts');
+      try {
+        const entries = await fs.promises.readdir(scriptsDir);
+        const suffix = `-${workflowId}.js`;
+        const hit = entries.find((e) => e.endsWith(suffix));
+        if (hit) {
+          name = hit.slice(0, -suffix.length);
+        }
+      } catch {
+        // No scripts directory — keep the id.
+      }
+    }
+    cache.set(workflowId, name);
+    return name;
+  }
+
+  /**
+   * Group sub-agent records into multi-agent runs and aggregate usage per
+   * run, with a per-agent breakdown for drill-down. Covers both true
+   * dynamic-workflow runs (wf_<id>) and ad-hoc batches — ≥2 generic
+   * Task-tool agents in one session without a wf_ dir (what ultracode
+   * produces when the dynamic-workflow feature isn't engaged, e.g. with
+   * proxy/DeepSeek routing). Sorted by most recent activity first.
+   * @param records All loaded usage records
+   * @param limit Maximum number of runs to return (default 50)
+   */
+  static getWorkflowBreakdown(records: ClaudeUsageRecord[], limit: number = 50): WorkflowUsage[] {
+    const recordsByWorkflow: Record<string, ClaudeUsageRecord[]> = {};
+    const adHocAgentsBySession: Record<string, Set<string>> = {};
+    for (const record of records) {
+      if (!record._workflowId) {
+        // Generic sub-agent records become ad-hoc batches, one per session.
+        if (record._agentId) {
+          const sessionId = record._sessionId || 'unknown';
+          const batchId = 'adhoc:' + sessionId;
+          if (!recordsByWorkflow[batchId]) {
+            recordsByWorkflow[batchId] = [];
+            adHocAgentsBySession[batchId] = new Set<string>();
+          }
+          recordsByWorkflow[batchId].push(record);
+          adHocAgentsBySession[batchId].add(record._agentId);
+        }
+        continue;
+      }
+      if (!recordsByWorkflow[record._workflowId]) {
+        recordsByWorkflow[record._workflowId] = [];
+      }
+      recordsByWorkflow[record._workflowId].push(record);
+    }
+    // A single stray agent is not a batch — drop those pseudo-groups.
+    for (const [batchId, agentIds] of Object.entries(adHocAgentsBySession)) {
+      if (agentIds.size < 2) {
+        delete recordsByWorkflow[batchId];
+      }
+    }
+
+    const timeRange = (rs: ClaudeUsageRecord[]): { start: Date; end: Date } => {
+      const timestamps = rs.map((r) => new Date(r.timestamp).getTime()).filter((t) => !isNaN(t));
+      return {
+        start: timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date(0),
+        end: timestamps.length > 0 ? new Date(Math.max(...timestamps)) : new Date(0),
+      };
+    };
+
+    const workflows: WorkflowUsage[] = Object.entries(recordsByWorkflow).map(([workflowId, wfRecords]) => {
+      const recordsByAgent: Record<string, ClaudeUsageRecord[]> = {};
+      for (const r of wfRecords) {
+        const agentId = r._agentId || 'unknown';
+        if (!recordsByAgent[agentId]) {
+          recordsByAgent[agentId] = [];
+        }
+        recordsByAgent[agentId].push(r);
+      }
+      const agents = Object.entries(recordsByAgent)
+        .map(([agentId, agentRecords]) => {
+          const range = timeRange(agentRecords);
+          return {
+            agentId,
+            task: agentRecords.find((r) => r._agentTask)?._agentTask,
+            data: this.calculateUsageData(agentRecords),
+            startTime: range.start,
+            endTime: range.end,
+          };
+        })
+        .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+      const first = wfRecords[0];
+      const range = timeRange(wfRecords);
+      const isAdHoc = workflowId.startsWith('adhoc:');
+      // Ad-hoc batches have no script-derived name; the session title is the
+      // best available description of what the run was for.
+      const name = isAdHoc
+        ? first._sessionTitle || (first._sessionId || workflowId).slice(0, 8)
+        : first._workflowName || workflowId;
+      return {
+        workflowId,
+        name,
+        isAdHoc: isAdHoc || undefined,
+        sessionId: first._sessionId || 'unknown',
+        projectPath: first._projectPath || '',
+        projectName: first._projectName || 'unknown',
+        startTime: range.start,
+        endTime: range.end,
+        agentCount: agents.length,
+        data: this.calculateUsageData(wfRecords),
+        agents,
+      };
+    });
+
+    // Phase 7c — main-session orchestration cost. For each run, find the
+    // session's *main-thread* records (not under subagents/) that fall inside
+    // the run's time window. This surfaces the expensive native-Claude
+    // orchestration that lives in the main session, not the agent files.
+    // To avoid double-counting when two runs of the same session overlap, a
+    // record is attributed only if exactly one run's window contains it.
+    const mainBySession: Record<string, ClaudeUsageRecord[]> = {};
+    for (const r of records) {
+      if (r._agentId || r._workflowId || r._isUserPrompt) {
+        continue;
+      }
+      const sid = r._sessionId || 'unknown';
+      (mainBySession[sid] ||= []).push(r);
+    }
+    const windowsBySession: Record<string, { start: number; end: number }[]> = {};
+    for (const wf of workflows) {
+      (windowsBySession[wf.sessionId] ||= []).push({
+        start: wf.startTime.getTime(),
+        end: wf.endTime.getTime(),
+      });
+    }
+    // Real runs are a focused burst (minutes to ~1 h). An ad-hoc "batch" that
+    // groups a session's agents across days would otherwise claim *all* the
+    // session's main-thread work as orchestration — meaningless. Cap the window.
+    const MAX_ORCH_WINDOW_MS = 3 * 60 * 60 * 1000;
+    for (const wf of workflows) {
+      const mains = mainBySession[wf.sessionId];
+      if (!mains || mains.length === 0) {
+        continue;
+      }
+      const windows = windowsBySession[wf.sessionId];
+      const start = wf.startTime.getTime();
+      const end = wf.endTime.getTime();
+      if (end - start > MAX_ORCH_WINDOW_MS) {
+        continue;
+      }
+      const orchestrationRecords = mains.filter((r) => {
+        const t = new Date(r.timestamp).getTime();
+        if (isNaN(t) || t < start || t > end) {
+          return false;
+        }
+        // Drop if another run of this session also contains t (ambiguous).
+        const containing = windows.filter((w) => t >= w.start && t <= w.end).length;
+        return containing === 1;
+      });
+      if (orchestrationRecords.length > 0) {
+        const orch = this.calculateUsageData(orchestrationRecords);
+        if (orch.totalCost > 0) {
+          wf.orchestration = orch;
+        }
+      }
+    }
+
+    return workflows.sort((a, b) => b.endTime.getTime() - a.endTime.getTime()).slice(0, limit);
+  }
+
+  /** Estimated cost of one record, with the same skip rules calculateUsageData
+   * applies (synthetic markers, error records, zero-token placeholders → 0). */
+  private static recordCost(record: ClaudeUsageRecord): number {
+    if (record._isUserPrompt || !record.message.usage || !record.message.model) {
+      return 0;
+    }
+    if (record.message.model === '<synthetic>' || record.isApiErrorMessage) {
+      return 0;
+    }
+    if (this.tokenSum(record) === 0) {
+      return 0;
+    }
+    const parts = calculateCostBreakdown(record.message.usage, record.message.model);
+    return parts.input + parts.output + parts.cacheWrite + parts.cacheRead;
+  }
+
+  /**
+   * "What's contributing to your usage?" — modelled on the official /usage
+   * screen, but covering every model/provider in the logs and five scopes
+   * (day / week / month / one session / one project). Characteristics are
+   * independent signals weighted by estimated cost, NOT a breakdown; the
+   * skills/plugins tables are weighted by estimated tokens (text length).
+   */
+  static getUsageAttribution(
+    records: ClaudeUsageRecord[],
+    analysis: ContentAnalysis | null,
+    scope: AttributionScope
+  ): UsageAttribution {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const minTs =
+      scope.kind === 'day' ? startOfDay
+      : scope.kind === 'week' ? now.getTime() - 7 * 24 * 60 * 60 * 1000
+      : scope.kind === 'month' ? now.getTime() - 30 * 24 * 60 * 60 * 1000
+      : 0;
+    const normScope = scope.projectPath ? this.normalizePath(scope.projectPath) : '';
+
+    const scoped = records.filter((r) => {
+      if (r._isUserPrompt) {
+        return false;
+      }
+      if (scope.kind === 'session') {
+        return r._sessionId === scope.sessionId;
+      }
+      if (scope.kind === 'project') {
+        return this.normalizePath(r._projectPath || '').startsWith(normScope);
+      }
+      const t = Date.parse(r.timestamp);
+      return !isNaN(t) && t >= minTs;
+    });
+
+    // Skill / plugin activation points. A skill's usage share is the weight
+    // of all scoped records in the same session at or after its (earliest)
+    // invocation — the official /usage methodology ("usage that came from
+    // this skill"); shares overlap by design. Plugins use the earliest
+    // invocation among their skills, so a plugin never double-counts itself.
+    type SkillStart = { key: string; ts: number; isPlugin: boolean };
+    const startsBySession: Record<string, SkillStart[]> = {};
+    const skillMeta: Record<string, { count: number; estTokens: number }> = {};
+    const pluginMeta: Record<string, { count: number; estTokens: number }> = {};
+    const skillW: Record<string, number> = {};
+    const pluginW: Record<string, number> = {};
+    if (analysis && analysis.skillUses.length > 0) {
+      let uses = analysis.skillUses;
+      if (scope.kind === 'session') {
+        uses = uses.filter((u) => u.sessionId === scope.sessionId);
+      } else if (scope.kind === 'project') {
+        const sessionIds = new Set(scoped.map((r) => r._sessionId));
+        uses = uses.filter((u) => sessionIds.has(u.sessionId));
+      } else {
+        // "YYYY-MM-DD" compares correctly as a string.
+        const minDay = localDayKey(new Date(minTs).toISOString());
+        uses = uses.filter((u) => u.day >= minDay);
+      }
+      // key → session → earliest invocation ts (skills and plugins separately)
+      const skillEarliest: Record<string, Record<string, number>> = {};
+      const pluginEarliest: Record<string, Record<string, number>> = {};
+      const note = (
+        key: string,
+        u: SkillUse,
+        meta: Record<string, { count: number; estTokens: number }>,
+        earliest: Record<string, Record<string, number>>
+      ): void => {
+        if (!meta[key]) {
+          meta[key] = { count: 0, estTokens: 0 };
+        }
+        meta[key].count += 1;
+        meta[key].estTokens += u.estTokens;
+        if (!earliest[key]) {
+          earliest[key] = {};
+        }
+        const prev = earliest[key][u.sessionId];
+        if (prev === undefined || u.ts < prev) {
+          earliest[key][u.sessionId] = u.ts;
+        }
+      };
+      for (const u of uses) {
+        note(u.name, u, skillMeta, skillEarliest);
+        const colon = u.name.indexOf(':');
+        if (colon > 0) {
+          note(u.name.slice(0, colon), u, pluginMeta, pluginEarliest);
+        }
+      }
+      const pushStarts = (earliest: Record<string, Record<string, number>>, isPlugin: boolean): void => {
+        for (const [key, sessions] of Object.entries(earliest)) {
+          for (const [sessionId, ts] of Object.entries(sessions)) {
+            if (!startsBySession[sessionId]) {
+              startsBySession[sessionId] = [];
+            }
+            startsBySession[sessionId].push({ key, ts, isPlugin });
+          }
+        }
+      };
+      pushStarts(skillEarliest, false);
+      pushStarts(pluginEarliest, true);
+    }
+
+    // One pass: total weight, characteristic weights, per-session aggregates
+    // (for the long-session / subagent-heavy signals), the model split and
+    // the skill/plugin activation weights.
+    let totalCost = 0;
+    let totalTokens = 0;
+    let largeContextW = 0;
+    let workflowW = 0;
+    const bySession: Record<string, { weight: number; subagentWeight: number; hours: Set<number> }> = {};
+    const byAgentType: Record<string, { weight: number; count: number }> = {};
+    const byModel: Record<string, { weight: number; count: number }> = {};
+    // Authoritative skill/plugin attribution from the log fields (Phase 7a):
+    // exact cost-weight + token-sum of the lines Claude Code stamped. Preferred
+    // over the <command-name> heuristic whenever any record carries the fields.
+    const skillExactW: Record<string, { weight: number; count: number; tokens: number }> = {};
+    const pluginExactW: Record<string, { weight: number; count: number; tokens: number }> = {};
+    for (const r of scoped) {
+      const w = this.recordCost(r);
+      if (w <= 0) {
+        continue;
+      }
+      totalCost += w;
+      totalTokens += this.tokenSum(r);
+      if (r._skill) {
+        if (!skillExactW[r._skill]) {
+          skillExactW[r._skill] = { weight: 0, count: 0, tokens: 0 };
+        }
+        skillExactW[r._skill].weight += w;
+        skillExactW[r._skill].count += 1;
+        skillExactW[r._skill].tokens += this.tokenSum(r);
+      }
+      if (r._plugin) {
+        if (!pluginExactW[r._plugin]) {
+          pluginExactW[r._plugin] = { weight: 0, count: 0, tokens: 0 };
+        }
+        pluginExactW[r._plugin].weight += w;
+        pluginExactW[r._plugin].count += 1;
+        pluginExactW[r._plugin].tokens += this.tokenSum(r);
+      }
+      if (this.recordContextTokens(r) > 150_000) {
+        largeContextW += w;
+      }
+      if (r._workflowId) {
+        workflowW += w;
+      }
+      const sessionId = r._sessionId || 'unknown';
+      if (!bySession[sessionId]) {
+        bySession[sessionId] = { weight: 0, subagentWeight: 0, hours: new Set<number>() };
+      }
+      const sess = bySession[sessionId];
+      sess.weight += w;
+      if (r._agentId) {
+        sess.subagentWeight += w;
+        const agentType = r._agentType || 'unknown';
+        if (!byAgentType[agentType]) {
+          byAgentType[agentType] = { weight: 0, count: 0 };
+        }
+        byAgentType[agentType].weight += w;
+        byAgentType[agentType].count += 1;
+      }
+      const t = Date.parse(r.timestamp);
+      if (!isNaN(t)) {
+        sess.hours.add(Math.floor(t / 3_600_000));
+        // Usage at or after a skill/plugin invocation counts toward it.
+        const starts = startsBySession[sessionId];
+        if (starts) {
+          for (const start of starts) {
+            if (t >= start.ts) {
+              const target = start.isPlugin ? pluginW : skillW;
+              target[start.key] = (target[start.key] || 0) + w;
+            }
+          }
+        }
+      }
+      const model = r.message.model as string;
+      if (!byModel[model]) {
+        byModel[model] = { weight: 0, count: 0 };
+      }
+      byModel[model].weight += w;
+      byModel[model].count += 1;
+    }
+
+    let longSessionW = 0;
+    let subagentHeavyW = 0;
+    for (const sess of Object.values(bySession)) {
+      if (sess.hours.size >= 8) {
+        longSessionW += sess.weight;
+      }
+      if (sess.subagentWeight > sess.weight * 0.5) {
+        subagentHeavyW += sess.weight;
+      }
+    }
+
+    const shareOfCost = (w: number): number => (totalCost > 0 ? w / totalCost : 0);
+    const toEntries = (map: Record<string, { weight: number; count: number }>): AttributionEntry[] =>
+      Object.entries(map)
+        .map(([key, v]) => ({ key, share: shareOfCost(v.weight), count: v.count }))
+        .sort((a, b) => b.share - a.share);
+
+    // Skills / plugins: prefer the authoritative log-field attribution (exact
+    // cost-weight of the stamped lines); fall back to the <command-name> +
+    // at/after-invocation heuristic only when no record carried the fields
+    // (older Claude Code logs). Picking one source per scope avoids double count.
+    const exactEntries = (
+      map: Record<string, { weight: number; count: number; tokens: number }>
+    ): AttributionEntry[] =>
+      Object.entries(map)
+        .map(([key, m]) => ({ key, share: shareOfCost(m.weight), count: m.count, estTokens: m.tokens }))
+        .sort((a, b) => b.share - a.share || b.count - a.count);
+    const heuristicEntries = (
+      weights: Record<string, number>,
+      meta: Record<string, { count: number; estTokens: number }>
+    ): AttributionEntry[] =>
+      Object.entries(meta)
+        .map(([key, m]) => ({ key, share: shareOfCost(weights[key] || 0), count: m.count, estTokens: m.estTokens }))
+        .sort((a, b) => b.share - a.share || b.count - a.count);
+    const skills =
+      Object.keys(skillExactW).length > 0 ? exactEntries(skillExactW) : heuristicEntries(skillW, skillMeta);
+    const plugins =
+      Object.keys(pluginExactW).length > 0 ? exactEntries(pluginExactW) : heuristicEntries(pluginW, pluginMeta);
+
+    return {
+      totalCost,
+      totalTokens,
+      characteristics: {
+        largeContext: shareOfCost(largeContextW),
+        longSessions: shareOfCost(longSessionW),
+        subagentHeavy: shareOfCost(subagentHeavyW),
+        workflows: shareOfCost(workflowW),
+      },
+      skills,
+      subagents: toEntries(byAgentType),
+      plugins,
+      models: toEntries(byModel),
+    };
   }
 
   /** Normalise a path for case-insensitive comparison and grouping. */
@@ -1216,7 +1958,7 @@ export class ClaudeDataLoader {
     const byKey: Record<string, ClaudeUsageRecord[]> = {};
     for (const record of records) {
       const branch = record._gitBranch && record._gitBranch.trim() !== '' ? record._gitBranch : '-';
-      const key = (record._projectName || 'unknown') + ' ' + branch;
+      const key = (record._projectName || 'unknown') + '\u0000' + branch;
       if (!byKey[key]) {
         byKey[key] = [];
       }
