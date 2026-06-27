@@ -36,9 +36,9 @@ version-resolver:
   major:
     labels: ['breaking', 'major']
   minor:
-    labels: ['feature', 'enhancement', 'minor']
+    labels: ['minor']    # was ['feature', 'enhancement', 'minor']
   patch:
-    labels: ['fix', 'bug', 'docs', 'ci', 'chore', 'dependencies', 'patch']
+    labels: ['feature', 'enhancement', 'fix', 'bug', 'docs', 'ci', 'chore', 'dependencies', 'patch']
   default: patch
 
 # Apply a label from the branch name or a conventional-commit-style title prefix.
