@@ -7,6 +7,18 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
 ## [2.1.0] — Unreleased
 
 ### Added
+- **Sessions: resume / copy / delete** — each session row can copy its id, copy
+  its project path, resume it (in the
+  official Claude Code extension, or a terminal for cross-project sessions), or
+  delete it (to the trash, after a confirm); plus a Current project / All filter.
+- **Quota display options** — `quotaFiveHourOnly` (5-hour window only) and
+  `showResetInStatusBar` (append the reset countdown, e.g. `5h:50%:2.3h`) in the
+  ⚙ Settings tab; to hide cost, set `statusBarMetric` to `tokens`.
+- **Sturdier quota** — the last `/usage` result is cached to disk and shown
+  instantly on startup; on a 429 the fetch backs off instead of hammering the
+  endpoint.
+- **Wider dashboard** (up to 1600 px) with indented sub-project rows; status-bar
+  setting changes apply without a full dashboard reload.
 - **Weekly Opus limit in the status bar** — opt-in `showOpusWeekly` (default
   off) appends `opus:NN%` after the 5h / weekly quota figures, for heavy Opus
   users who want an at-a-glance weekly Opus signal. Merged from
