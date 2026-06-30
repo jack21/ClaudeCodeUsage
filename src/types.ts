@@ -282,7 +282,7 @@ export interface ModelPricing {
   cache_read_input_token_cost?: number;
 }
 
-export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko';
+export type SupportedLanguage = 'en' | "de-DE" | 'zh-TW' | 'zh-CN' | 'ja' | 'ko' | 'pt-BR';
 
 // One multi-agent run. Two kinds (verified on disk 2026-06-12):
 //  - a dynamic-workflow run (wf_<id> dir; trigger word "ultracode"), or
