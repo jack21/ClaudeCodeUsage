@@ -132,6 +132,17 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   creation is invisible to character counts). Sessions' Thinking column gains a
   calibrated "real thinking tokens" figure in its tooltip.
 
+### Fixed
+- **Model pricing accuracy** — several models had missing or stale pricing:
+  `glm-5.1`, `glm-5.2` (were falling back to glm-4.6 rates), `minimax-m3`
+  (used Sonnet default), `mimo-v2.5-pro` (used Sonnet default),
+  `kimi-k2.7-code` (input/output correct via family inference, cache wrong),
+  `qwen3.5-flash`, `qwen3.5-plus` (used qwen-plus rates),
+  `hy3-preview` (used Sonnet default), `step-3.7-flash`, `step-3.5-flash`
+  (used Sonnet default). Added correct official/exchange rates for each;
+  registered family-inference branches for minimax, mimo, hy3 and step-
+  so unknown future models from these providers also get sensible defaults.
+
 ### Changed
 - **Header trimmed** — the apple-style auto-refresh toggle moved into the ⚙
   Settings tab (a manual ↻ refresh still appears top-right when auto-refresh is
