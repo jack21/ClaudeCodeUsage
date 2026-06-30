@@ -27,6 +27,10 @@ export class ClaudeCodeUsageExtension {
   private fileWatcher: fs.FSWatcher | undefined;
   private watchDebounceTimer: NodeJS.Timeout | undefined;
   private watchedDir: string | null = null;
+  // Watches ~/.claude/.credentials.json so an account switch is reflected
+  // promptly instead of after a full quota TTL (#45).
+  private credsWatcher: fs.FSWatcher | undefined;
+  private credsDebounceTimer: NodeJS.Timeout | undefined;
   private cache: {
     records: any[];
     contentAnalysis: ContentAnalysis | null;
@@ -97,6 +101,7 @@ export class ClaudeCodeUsageExtension {
     this.loadPersistedQuota();
     this.startAutoRefresh();
     this.refreshData().then(() => this.startFileWatching());
+    this.startCredentialsWatching();
     console.log('Claude Code Usage Extension: Initialization complete');
   }
 
@@ -523,6 +528,60 @@ export class ClaudeCodeUsageExtension {
     this.watchedDir = null;
   }
 
+  /**
+   * Watch the OAuth credentials file so switching Claude accounts updates the
+   * quota promptly. Without this, the quota stays on the previous account's
+   * numbers for up to a full TTL (120 s) — long enough to read as "stuck on the
+   * wrong account, only a window reload fixes it" (#45). On a change we drop the
+   * cached quota and refetch; the api client re-reads the new token. Watches the
+   * parent dir (the file is rewritten/replaced, which single-file watches miss)
+   * and filters by name. macOS Keychain-stored credentials have no file to
+   * watch — those still self-correct on the next refresh tick.
+   */
+  private startCredentialsWatching(): void {
+    const credsPath = this.apiClient.getCredentialsPath();
+    const dir = path.dirname(credsPath);
+    const name = path.basename(credsPath);
+    if (!fs.existsSync(dir)) {
+      return;
+    }
+    try {
+      this.credsWatcher = fs.watch(dir, (_event, filename) => {
+        if (filename && String(filename) !== name) {
+          return;
+        }
+        if (this.credsDebounceTimer) {
+          clearTimeout(this.credsDebounceTimer);
+        }
+        this.credsDebounceTimer = setTimeout(() => {
+          // The cached quota belongs to the previous token/account. Expire it so
+          // the next refresh bypasses the TTL and refetches with the new token.
+          // The api client's own 429 cool-down still protects the endpoint.
+          this.cache.usageLimitsLastUpdate = new Date(0);
+          this.refreshData();
+        }, 800);
+      });
+    } catch {
+      // Watching unsupported on this platform/filesystem — the refresh tick
+      // still picks up the new account within a TTL.
+    }
+  }
+
+  private stopCredentialsWatching(): void {
+    if (this.credsDebounceTimer) {
+      clearTimeout(this.credsDebounceTimer);
+      this.credsDebounceTimer = undefined;
+    }
+    if (this.credsWatcher) {
+      try {
+        this.credsWatcher.close();
+      } catch {
+        // Already closed.
+      }
+      this.credsWatcher = undefined;
+    }
+  }
+
   /** True when Claude Code has written a log line in the last 60 s. */
   private isActive(): boolean {
     return Date.now() - this.lastActivityAt < 60000;
@@ -816,6 +875,7 @@ export class ClaudeCodeUsageExtension {
       this.refreshTimer = undefined;
     }
     this.stopFileWatching();
+    this.stopCredentialsWatching();
     this.statusBar.dispose();
     this.webviewProvider.dispose();
   }
