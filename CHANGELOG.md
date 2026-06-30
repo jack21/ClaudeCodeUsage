@@ -138,6 +138,13 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   calibrated "real thinking tokens" figure in its tooltip.
 
 ### Fixed
+- **Account switch now refreshes the quota** — switching Claude accounts no
+  longer leaves the status bar stuck on the previous account's usage until a
+  window reload. The OAuth credentials are re-read on every quota fetch (a
+  switched-in account's token is valid, so the old expiry-only re-read never
+  noticed it), and the credentials file is watched so the change is picked up
+  promptly instead of after a full cache interval. (Keychain-stored credentials
+  on macOS update on the next refresh tick.)
 - **Model pricing accuracy** — several models had missing or stale pricing:
   `glm-5.1`, `glm-5.2` (were falling back to glm-4.6 rates), `minimax-m3`
   (used Sonnet default), `mimo-v2.5-pro` (used Sonnet default),
