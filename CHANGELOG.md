@@ -4,27 +4,54 @@ All notable changes to this fork compared to upstream
 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [2.1.0] — Unreleased
+## [2.1.1] — Unreleased
 
 ### Added
 - **Monthly cost in the status bar** — the `statusBarMetric` setting gains a
   new `monthly-cost` option. When selected, the first status-bar item shows the
   current calendar month's total cost ($(calendar) icon) instead of today's
   cost. Hover tooltip mirrors the today tooltip with month-to-date token and
-  cost breakdown.
+  cost breakdown. (PR #41, @PhisicsLollo0.)
 - **Sessions: resume / copy / delete** — each session row can copy its id, copy
   its project path, resume it (in the
   official Claude Code extension, or a terminal for cross-project sessions), or
   delete it (to the trash, after a confirm); plus a Current project / All filter.
+  (PR #43, @oxsean.)
 - **Quota display options** — `quotaFiveHourOnly` (show only the 5-hour window)
   and `showResetInStatusBar` (append a compact reset countdown) in the ⚙ Settings
   tab. The default stays the clean `5h 6% · wk 1%`; full reset times always live
-  in the tooltip. To hide cost, set `statusBarMetric` to `tokens`.
+  in the tooltip. To hide cost, set `statusBarMetric` to `tokens`. (PR #43.)
 - **Sturdier quota** — the last `/usage` result is cached to disk and shown
   instantly on startup; on a 429 the fetch backs off instead of hammering the
-  endpoint.
+  endpoint. (PR #43.)
 - **Wider dashboard** (up to 1600 px) with indented sub-project rows; status-bar
-  setting changes apply without a full dashboard reload.
+  setting changes apply without a full dashboard reload. (PR #43.)
+- **Brazilian Portuguese (pt-BR)** — adds pt-BR as a seventh interface
+  language: status bar, dashboard, settings labels/help and the advice demo
+  sample. (PR #48, @henrique-carvalho-dev.)
+
+### Fixed
+- **Account switch now refreshes the quota** — switching Claude accounts no
+  longer leaves the status bar stuck on the previous account's usage until a
+  window reload. The OAuth credentials are re-read on every quota fetch (a
+  switched-in account's token is valid, so the old expiry-only re-read never
+  noticed it), and the credentials file is watched so the change is picked up
+  promptly instead of after a full cache interval. (Keychain-stored credentials
+  on macOS update on the next refresh tick.) (PR #47.)
+- **Model pricing accuracy** — several models had missing or stale pricing:
+  `glm-5.1`, `glm-5.2` (were falling back to glm-4.6 rates), `minimax-m3`
+  (used Sonnet default), `mimo-v2.5-pro` (used Sonnet default),
+  `kimi-k2.7-code` (input/output correct via family inference, cache wrong),
+  `qwen3.5-flash`, `qwen3.5-plus` (used qwen-plus rates),
+  `hy3-preview` (used Sonnet default), `step-3.7-flash`, `step-3.5-flash`
+  (used Sonnet default). Added correct official/exchange rates for each;
+  registered family-inference branches for minimax, mimo, hy3 and step-
+  so unknown future models from these providers also get sensible defaults.
+  (PR #46, @YuboZhang.)
+
+## [2.1.0] — 2026-06-26
+
+### Added
 - **Weekly Opus limit in the status bar** — opt-in `showOpusWeekly` (default
   off) appends `opus:NN%` after the 5h / weekly quota figures, for heavy Opus
   users who want an at-a-glance weekly Opus signal. Merged from
@@ -149,24 +176,6 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   a large undercount the text-length estimate had on the input side (cache
   creation is invisible to character counts). Sessions' Thinking column gains a
   calibrated "real thinking tokens" figure in its tooltip.
-
-### Fixed
-- **Account switch now refreshes the quota** — switching Claude accounts no
-  longer leaves the status bar stuck on the previous account's usage until a
-  window reload. The OAuth credentials are re-read on every quota fetch (a
-  switched-in account's token is valid, so the old expiry-only re-read never
-  noticed it), and the credentials file is watched so the change is picked up
-  promptly instead of after a full cache interval. (Keychain-stored credentials
-  on macOS update on the next refresh tick.)
-- **Model pricing accuracy** — several models had missing or stale pricing:
-  `glm-5.1`, `glm-5.2` (were falling back to glm-4.6 rates), `minimax-m3`
-  (used Sonnet default), `mimo-v2.5-pro` (used Sonnet default),
-  `kimi-k2.7-code` (input/output correct via family inference, cache wrong),
-  `qwen3.5-flash`, `qwen3.5-plus` (used qwen-plus rates),
-  `hy3-preview` (used Sonnet default), `step-3.7-flash`, `step-3.5-flash`
-  (used Sonnet default). Added correct official/exchange rates for each;
-  registered family-inference branches for minimax, mimo, hy3 and step-
-  so unknown future models from these providers also get sensible defaults.
 
 ### Changed
 - **Header trimmed** — the apple-style auto-refresh toggle moved into the ⚙
