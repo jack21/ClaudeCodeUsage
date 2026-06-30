@@ -395,7 +395,7 @@ export class ClaudeCodeUsageExtension {
       showCost: s.get<boolean>('showCost'),
       showContext: s.get<boolean>('showContext'),
       contextWindowOverride: s.get<number>('contextWindowOverride'),
-      statusBarMetric: s.get<'cost' | 'tokens'>('statusBarMetric'),
+      statusBarMetric: s.get<'cost' | 'monthly-cost' | 'tokens'>('statusBarMetric'),
       showOpusWeekly: s.get<boolean>('showOpusWeekly'),
       usageLimitTracking: s.get<boolean>('usageLimitTracking'),
       quotaFiveHourOnly: s.get<boolean>('quotaFiveHourOnly'),
@@ -779,7 +779,7 @@ export class ClaudeCodeUsageExtension {
 
       // Update UI. Quota is pushed asynchronously by the fire-and-forget fetch
       // above; passing undefined leaves the quota item untouched here.
-      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined);
+      this.statusBar.updateUsageData(todayData, workspaceTodayData, undefined, undefined, monthData);
       this.statusBar.updateContext(
         ClaudeDataLoader.getCurrentContextInfo(records, workspacePath, config.contextWindowOverride)
       );
