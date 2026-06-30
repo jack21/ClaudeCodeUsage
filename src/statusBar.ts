@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ClaudeApiUsageResponse, ClaudeUsageLimit, ContextWindowInfo, UsageData } from './types';
 import { I18n } from './i18n';
+import { formatQuotaStatusText, worstShownUtilisation, QuotaStatusOptions } from './quotaFormat';
 
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
@@ -16,6 +17,9 @@ export class StatusBarManager {
   // Opt-in: append the weekly Opus limit (opus:NN%) to the quota item (PR #38,
   // @wheelbarrel00).
   private showOpusWeekly: boolean = false;
+  // Quota display preferences.
+  private quotaFiveHourOnly: boolean = false; // show only the 5h window
+  private showResetInBar: boolean = false;    // append reset countdown to the bar
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -50,13 +54,17 @@ export class StatusBarManager {
     showContext: boolean,
     usageLimitTracking: boolean = true,
     metric: 'cost' | 'monthly-cost' | 'tokens' = 'cost',
-    showOpusWeekly: boolean = false
+    showOpusWeekly: boolean = false,
+    quotaFiveHourOnly: boolean = false,
+    showResetInBar: boolean = false
   ): void {
     this.showCost = showCost;
     this.showContext = showContext;
     this.usageLimitTracking = usageLimitTracking;
     this.metric = metric;
     this.showOpusWeekly = showOpusWeekly;
+    this.quotaFiveHourOnly = quotaFiveHourOnly;
+    this.showResetInBar = showResetInBar;
     if (!showContext) {
       this.contextItem.hide();
     }
@@ -220,31 +228,28 @@ export class StatusBarManager {
     // hours, even after a plan upgrade or a reset). Drop any window whose reset
     // time has passed. Adapted from PR #24 by @nickearnshaw.
     const live = this.liveWindows(usageLimits);
-    const fiveHour = live?.five_hour;
-    const weekly = live?.seven_day;
-    const opus = live?.seven_day_opus;
-    if (!fiveHour && !weekly && !(this.showOpusWeekly && opus)) {
+    // Collapse to the 5h window only.
+    if (this.quotaFiveHourOnly && live) {
+      live.seven_day = undefined;
+      live.seven_day_opus = undefined;
+    }
+    // The status bar must stay clean: the default is the airy "5h 6% · wk 1%";
+    // reset countdowns are opt-in (showResetInStatusBar), full reset detail
+    // lives in the tooltip. The dense colon-heavy form is deliberately gone.
+    // See quotaFormat.ts (pure + unit-tested).
+    const opts: QuotaStatusOptions = {
+      showReset: this.showResetInBar,
+      fiveHourOnly: this.quotaFiveHourOnly,
+      showOpusWeekly: this.showOpusWeekly
+    };
+    const text = formatQuotaStatusText(live, opts);
+    if (!text) {
       this.quotaItem.hide();
       return;
     }
+    const worstPct = worstShownUtilisation(live, opts);
 
-    const parts: string[] = [];
-    let worstPct = 0;
-    if (fiveHour) {
-      worstPct = Math.max(worstPct, fiveHour.utilization);
-      parts.push(`5h:${Math.round(fiveHour.utilization)}%`);
-    }
-    if (weekly) {
-      worstPct = Math.max(worstPct, weekly.utilization);
-      parts.push(`wk:${Math.round(weekly.utilization)}%`);
-    }
-    // Opt-in weekly Opus cap (PR #38, @wheelbarrel00).
-    if (this.showOpusWeekly && opus) {
-      worstPct = Math.max(worstPct, opus.utilization);
-      parts.push(`opus:${Math.round(opus.utilization)}%`);
-    }
-
-    this.quotaItem.text = `$(dashboard) ${parts.join(' ')}`;
+    this.quotaItem.text = `$(dashboard) ${text}`;
 
     // Stay quiet until usage actually gets high.
     if (worstPct >= 95) {
@@ -473,7 +478,7 @@ export class StatusBarManager {
     );
   }
 
-    /** Time remaining until a reset, e.g. "2h 15m" or "3d 4h". */
+    /** Time remaining until a reset, e.g. "2h 15m" or "3.2d". */
   private formatCountdown(target: Date): string {
     const ms = target.getTime() - Date.now();
     if (ms <= 0) {
@@ -483,7 +488,7 @@ export class StatusBarManager {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     if (hours >= 24) {
-      return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+      return `${(hours / 24).toFixed(1)}d`;
     }
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   }

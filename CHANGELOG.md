@@ -12,6 +12,19 @@ upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangel
   current calendar month's total cost ($(calendar) icon) instead of today's
   cost. Hover tooltip mirrors the today tooltip with month-to-date token and
   cost breakdown.
+- **Sessions: resume / copy / delete** — each session row can copy its id, copy
+  its project path, resume it (in the
+  official Claude Code extension, or a terminal for cross-project sessions), or
+  delete it (to the trash, after a confirm); plus a Current project / All filter.
+- **Quota display options** — `quotaFiveHourOnly` (show only the 5-hour window)
+  and `showResetInStatusBar` (append a compact reset countdown) in the ⚙ Settings
+  tab. The default stays the clean `5h 6% · wk 1%`; full reset times always live
+  in the tooltip. To hide cost, set `statusBarMetric` to `tokens`.
+- **Sturdier quota** — the last `/usage` result is cached to disk and shown
+  instantly on startup; on a 429 the fetch backs off instead of hammering the
+  endpoint.
+- **Wider dashboard** (up to 1600 px) with indented sub-project rows; status-bar
+  setting changes apply without a full dashboard reload.
 - **Weekly Opus limit in the status bar** — opt-in `showOpusWeekly` (default
   off) appends `opus:NN%` after the 5h / weekly quota figures, for heavy Opus
   users who want an at-a-glance weekly Opus signal. Merged from

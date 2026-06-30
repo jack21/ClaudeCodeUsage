@@ -130,6 +130,20 @@ export interface Translations {
     scopeMonth: string;
     attrTodayPointer: string;
     sessionTitle: string;
+    // Session row actions.
+    sessionActions: string;
+    copySessionId: string;
+    copyPath: string;
+    resumeSession: string;
+    resumeInvalid: string;
+    sessionFilterCurrent: string;
+    sessionFilterAll: string;
+    deleteSession: string;
+    deleteSessionConfirm: string;
+    deleteSessionDetail: string;
+    deleteSessionYes: string;
+    deleteSessionNotFound: string;
+    deleteSessionDone: string;
     getAdvice: string;
     adviceCardTitle: string;
     adviceCardDesc: string;
@@ -316,6 +330,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: 'Month',
       attrTodayPointer: 'Details: Content tab',
       sessionTitle: 'Session',
+      sessionActions: 'Actions',
+      copySessionId: 'Copy session ID',
+      copyPath: 'Copy path',
+      resumeSession: 'Resume session',
+      resumeInvalid: 'Invalid session id — cannot resume.',
+      sessionFilterCurrent: 'Current project',
+      sessionFilterAll: 'All',
+      deleteSession: 'Delete session',
+      deleteSessionConfirm: 'Delete session "{name}"?',
+      deleteSessionDetail: 'Its conversation log moves to the trash (recoverable). The extension is otherwise read-only.',
+      deleteSessionYes: 'Delete',
+      deleteSessionNotFound: 'Session log file not found.',
+      deleteSessionDone: 'Deleted "{name}" (moved to trash).',
       getAdvice: 'Get AI Advice',
       adviceCardTitle: 'AI advice',
       adviceCardDesc:
@@ -518,6 +545,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: "Monat",
       attrTodayPointer: "Details: Inhalt-Tab",
       sessionTitle: "Sitzung",
+      sessionActions: 'Aktionen',
+      copySessionId: 'Sitzungs-ID kopieren',
+      copyPath: 'Pfad kopieren',
+      resumeSession: 'Sitzung fortsetzen',
+      resumeInvalid: 'Ungültige Sitzungs-ID — Fortsetzen nicht möglich.',
+      sessionFilterCurrent: 'Aktuelles Projekt',
+      sessionFilterAll: 'Alle',
+      deleteSession: 'Sitzung löschen',
+      deleteSessionConfirm: 'Sitzung "{name}" löschen?',
+      deleteSessionDetail: 'Das Gesprächsprotokoll wandert in den Papierkorb (wiederherstellbar). Die Erweiterung ist ansonsten schreibgeschützt.',
+      deleteSessionYes: 'Löschen',
+      deleteSessionNotFound: 'Sitzungs-Protokolldatei nicht gefunden.',
+      deleteSessionDone: '"{name}" gelöscht (in den Papierkorb verschoben).',
       getAdvice: "KI-Rat holen",
       adviceCardTitle: "KI-Rat",
       adviceCardDesc:
@@ -719,6 +759,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: '月',
       attrTodayPointer: '詳情見「內容分析」頁籤',
       sessionTitle: '會話',
+      sessionActions: '操作',
+      copySessionId: '複製會話 ID',
+      copyPath: '複製路徑',
+      resumeSession: '恢復會話',
+      resumeInvalid: '無效的會話 ID,無法恢復。',
+      sessionFilterCurrent: '目前專案',
+      sessionFilterAll: '全部',
+      deleteSession: '刪除會話',
+      deleteSessionConfirm: '刪除會話「{name}」？',
+      deleteSessionDetail: '對話記錄會移至垃圾桶（可復原）。此擴充功能其餘部分為唯讀。',
+      deleteSessionYes: '刪除',
+      deleteSessionNotFound: '找不到會話記錄檔。',
+      deleteSessionDone: '已刪除「{name}」（已移至垃圾桶）。',
       getAdvice: '取得 AI 建議',
       adviceCardTitle: 'AI 建議',
       adviceCardDesc:
@@ -917,6 +970,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: '月',
       attrTodayPointer: '详情见「内容分析」页签',
       sessionTitle: '会话',
+      sessionActions: '操作',
+      copySessionId: '复制会话 ID',
+      copyPath: '复制路径',
+      resumeSession: '恢复会话',
+      resumeInvalid: '无效的会话 ID,无法恢复。',
+      sessionFilterCurrent: '当前工程',
+      sessionFilterAll: '全部',
+      deleteSession: '删除会话',
+      deleteSessionConfirm: '删除会话「{name}」？',
+      deleteSessionDetail: '对话日志将移至回收站（可恢复）。本扩展其余部分为只读。',
+      deleteSessionYes: '删除',
+      deleteSessionNotFound: '未找到会话日志文件。',
+      deleteSessionDone: '已删除「{name}」（已移至回收站）。',
       getAdvice: '获取 AI 建议',
       adviceCardTitle: 'AI 建议',
       adviceCardDesc:
@@ -1119,6 +1185,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: '月',
       attrTodayPointer: '詳細はコンテンツタブへ',
       sessionTitle: 'セッション',
+      sessionActions: '操作',
+      copySessionId: 'セッションIDをコピー',
+      copyPath: 'パスをコピー',
+      resumeSession: 'セッションを再開',
+      resumeInvalid: '無効なセッションIDのため再開できません。',
+      sessionFilterCurrent: '現在のプロジェクト',
+      sessionFilterAll: 'すべて',
+      deleteSession: 'セッションを削除',
+      deleteSessionConfirm: 'セッション「{name}」を削除しますか？',
+      deleteSessionDetail: '会話ログはゴミ箱に移動します（復元可能）。この拡張機能は他の部分では読み取り専用です。',
+      deleteSessionYes: '削除',
+      deleteSessionNotFound: 'セッションのログファイルが見つかりません。',
+      deleteSessionDone: '「{name}」を削除しました（ゴミ箱に移動）。',
       getAdvice: 'AI アドバイスを取得',
       adviceCardTitle: 'AI アドバイス',
       adviceCardDesc:
@@ -1322,6 +1401,19 @@ const translations: Record<SupportedLanguage, Translations> = {
       scopeMonth: '월',
       attrTodayPointer: '자세한 내용은 콘텐츠 탭에서',
       sessionTitle: '세션',
+      sessionActions: '작업',
+      copySessionId: '세션 ID 복사',
+      copyPath: '경로 복사',
+      resumeSession: '세션 재개',
+      resumeInvalid: '잘못된 세션 ID입니다 — 재개할 수 없습니다.',
+      sessionFilterCurrent: '현재 프로젝트',
+      sessionFilterAll: '전체',
+      deleteSession: '세션 삭제',
+      deleteSessionConfirm: '세션 "{name}"을(를) 삭제할까요?',
+      deleteSessionDetail: '대화 로그가 휴지통으로 이동합니다(복구 가능). 확장 프로그램은 그 외에는 읽기 전용입니다.',
+      deleteSessionYes: '삭제',
+      deleteSessionNotFound: '세션 로그 파일을 찾을 수 없습니다.',
+      deleteSessionDone: '"{name}"을(를) 삭제했습니다(휴지통으로 이동).',
       getAdvice: 'AI 조언 받기',
       adviceCardTitle: 'AI 조언',
       adviceCardDesc:
@@ -1404,6 +1496,8 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'showContext': { label: 'Kontextfenster-Auslastung anzeigen (experimental)', help: 'Standardmäßig aus. Schätzt den aktuellen Sitzungskontext in %, ähnlich /context, anhand des neuesten Logeintrags. Es kann nur die Eingabeseite insgesamt anzeigen, nicht die Kategorieaufteilung von /context (diese sind Claude Code-interne Daten, die nicht auf die Festplatte geschrieben werden), daher ist es nur eine Näherung — ein "~" kennzeichnet eine geschätzte Fenstergröße.' },
     'contextWindowOverride': { label: 'Überschreibung des Kontextfensters (Tokens)', help: '0 = automatisch vom Modell erkennen. Legen Sie Ihr echtes Fenster (z.B. 1000000) für Proxy- oder benutzerdefinierte Modelle fest, die die Autoerkennung nicht erkennt.' },
     'usageLimitTracking': { label: '5-Stunden / Wochenkontingent anzeigen', help: '' },
+    'quotaFiveHourOnly': { label: 'Nur 5-Stunden-Kontingent', help: 'Wochen- (und Opus-)Fenster ausblenden; nur die 5-Stunden-Auslastung zeigen.' },
+    'showResetInStatusBar': { label: 'Reset-Zeit in der Statusleiste', help: 'Reset-Countdown an das Kontingent in der Statusleiste anhängen (z. B. "5h:50%:2.3h").' },
     'showOpusWeekly': { label: 'Wöchentliches Opus-Limit anzeigen', help: 'Hängen Sie die wöchentliche Opus-Obergrenze (opus:NN%) hinter die 5h / Wochenwerte an.' },
     'workflowQuotaWarnPercent': { label: 'Warnung bei Workflow-Kontingent %', help: 'Warnt vor einem Lauf, wenn das verbleibende 5h-Kontingent darunter liegt. 0 = aus.' },
     'dataDirectory': { label: 'Benutzerdefiniertes Datenverzeichnis', help: 'Claude-Datenverzeichnis; leer = automatisch erkennen.' },
@@ -1432,6 +1526,8 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'showContext': { label: '顯示上下文視窗填充 (experimental)', help: '預設關閉。從最新的日誌記錄估計當前工作階段上下文百分比，類似 /context。它只能顯示輸入側的總計，而不是 /context 的類別細分（這些是 Claude Code 內部資料，未寫入磁碟），因此是近似值 — "~" 標記一個猜測的視窗大小。' },
     'contextWindowOverride': { label: '上下文視窗覆寫 (tokens)', help: '0 = 從模型自動檢測。為自動檢測無法識別的代理/自訂模型設定實際視窗（例如 1000000）。' },
     'usageLimitTracking': { label: '顯示 5 小時 / 每週配額', help: '' },
+    'quotaFiveHourOnly': { label: '僅顯示 5 小時配額', help: '隱藏每週（及 Opus）視窗，只顯示 5 小時用量。' },
+    'showResetInStatusBar': { label: '在狀態列顯示重置時間', help: '在狀態列的配額後附加重置倒數（例如「5h:50%:2.3h」）。' },
     'showOpusWeekly': { label: '顯示每週 Opus 限制', help: '在 5 小時 / 每週數字後附加每週 Opus 上限 (opus:NN%)。' },
     'workflowQuotaWarnPercent': { label: '工作流程配額警告 %', help: '當剩餘 5 小時配額低於此值時，在執行前發出警告。0 = 關閉。' },
     'dataDirectory': { label: '自訂資料目錄', help: 'Claude 資料目錄；空白 = 自動偵測。' },
@@ -1460,6 +1556,8 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'showContext': { label: '显示上下文窗口填充 (experimental)', help: '默认关闭。从最新的日志记录估计当前会话上下文百分比，类似于 /context。它只能显示输入侧的总计，而不是 /context 的类别细分（这些是 Claude Code 内部信息，未写入磁盘），因此是近似值 — "~" 标记猜测的窗口大小。' },
     'contextWindowOverride': { label: '上下文窗口覆盖 (tokens)', help: '0 = 从模型自动检测。为自动检测无法识别的代理/自定义模型设置实际窗口（例如 1000000）。' },
     'usageLimitTracking': { label: '显示 5 小时 / 每周配额', help: '' },
+    'quotaFiveHourOnly': { label: '仅显示 5 小时配额', help: '隐藏每周（及 Opus）窗口，只显示 5 小时用量。' },
+    'showResetInStatusBar': { label: '在状态栏显示重置时间', help: '在状态栏的配额后附加重置倒计时（例如「5h:50%:2.3h」）。' },
     'showOpusWeekly': { label: '显示每周 Opus 限制', help: '在 5 小时 / 每周数字后附加每周 Opus 上限 (opus:NN%)。' },
     'workflowQuotaWarnPercent': { label: '工作流配额警告 %', help: '当剩余 5 小时配额低于此值时，运行前发出警告。0 = 关闭。' },
     'dataDirectory': { label: '自定义数据目录', help: 'Claude 数据目录；空 = 自动检测。' },
@@ -1488,6 +1586,8 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'showContext': { label: 'コンテキストウィンドウの使用率を表示 (experimental)', help: 'デフォルトはオフ。最新のログレコードから、/context のように現在のセッションのコンテキスト使用率を推定します。入力側の合計のみ表示でき、/context のカテゴリーごとの内訳は表示できません（それらはディスクに書き込まれない Claude Code 内部の情報です）。そのため近似値であり、"~" は推測されるウィンドウサイズを示します。' },
     'contextWindowOverride': { label: 'コンテキストウィンドウの上書き (トークン)', help: '0 = モデルから自動検出。自動検出で認識できないプロキシ/カスタムモデルに対して、実際のウィンドウ（例: 1000000）を設定します。' },
     'usageLimitTracking': { label: '5時間 / 週間クォータを表示', help: '' },
+    'quotaFiveHourOnly': { label: '5時間クォータのみ表示', help: '週間（および Opus）ウィンドウを隠し、5時間の使用率のみ表示します。' },
+    'showResetInStatusBar': { label: 'ステータスバーにリセット時刻を表示', help: 'ステータスバーのクォータにリセットのカウントダウンを追加します（例：「5h:50%:2.3h」）。' },
     'showOpusWeekly': { label: '週間 Opus 制限を表示', help: '5時間 / 週間の数値の後に、週間 Opus 上限 (opus:NN%) を追加します。' },
     'workflowQuotaWarnPercent': { label: 'ワークフロークォータ警告 %', help: '残りの 5 時間クォータがこれを下回る場合、実行前に警告します。0 = オフ。' },
     'dataDirectory': { label: 'カスタムデータディレクトリ', help: 'Claude データディレクトリ。空 = 自動検出。' },
@@ -1516,6 +1616,8 @@ const SETTINGS_I18N: Partial<Record<SupportedLanguage, Record<string, { label: s
     'showContext': { label: '컨텍스트 창 채우기 표시 (experimental)', help: '기본값은 꺼짐. 최신 로그 레코드를 기반으로 /context와 유사하게 현재 세션의 컨텍스트 비율을 추정합니다. 입력 측 합계만 표시할 수 있으며 /context의 카테고리별 분석은 표시할 수 없습니다 (디스크에 기록되지 않는 Claude Code 내부 정보이므로). 따라서 근사치이며 "~"는 추측된 창 크기를 나타냅니다.' },
     'contextWindowOverride': { label: '컨텍스트 창 재정의 (토큰)', help: '0 = 모델에서 자동 감지. 자동 감지에서 인식할 수 없는 프록시/사용자 지정 모델에 실제 창(예: 1000000)을 설정하세요.' },
     'usageLimitTracking': { label: '5시간 / 주간 할당량 표시', help: '' },
+    'quotaFiveHourOnly': { label: '5시간 할당량만 표시', help: '주간(및 Opus) 창을 숨기고 5시간 사용률만 표시합니다.' },
+    'showResetInStatusBar': { label: '상태 표시줄에 재설정 시간 표시', help: '상태 표시줄 할당량 뒤에 재설정 카운트다운을 추가합니다(예: "5h:50%:2.3h").' },
     'showOpusWeekly': { label: '주간 Opus 제한 표시', help: '5시간 / 주간 수치 뒤에 주간 Opus 한도 (opus:NN%)를 추가합니다.' },
     'workflowQuotaWarnPercent': { label: '워크플로우 할당량 경고 %', help: '남은 5시간 할당량이 이보다 낮을 때 실행 전에 경고합니다. 0 = 끄기.' },
     'dataDirectory': { label: '사용자 지정 데이터 디렉터리', help: 'Claude 데이터 디렉터리; 비워두면 자동 감지.' },
