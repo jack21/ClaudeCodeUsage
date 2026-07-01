@@ -4,15 +4,20 @@ All notable changes to this fork compared to upstream
 [`ClaudeCodeUsage/ClaudeCodeUsage`](https://github.com/ClaudeCodeUsage/ClaudeCodeUsage) (last
 upstream release: 1.0.8). Format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [Unreleased]
+## [2.1.1] — Unreleased
 
 ### Fixed
+- **Invalid timezone no longer breaks the dashboard** — a hand-typed bad IANA
+  zone (e.g. `EST-5 Detroit`) made `Intl` throw "Invalid time zone specified"
+  and the whole dashboard showed *Error*. The timezone setting is now validated;
+  an invalid value falls back to the system zone. (#51)
 - **Sonnet 5 context window** — `contextWindowFor()` only recognised the 1M
   window via a "4.6+" pattern (e.g. `sonnet-4-6`), so `claude-sonnet-5` — which
   has no `-4-` segment — fell through to the 200K legacy default. The dashboard
-  and status-bar context bar now correctly show a 1M window for Sonnet 5.
-
-## [2.1.1] — Unreleased
+  and status-bar context bar now correctly show a 1M window for Sonnet 5. (#50,
+  @UfukTanriverdi8)
+- **Sonnet 5 pricing** — added an explicit `claude-sonnet-5` entry at the Sonnet
+  $3 / $15 tier (it already resolved via family inference; now explicit).
 
 ### Added
 - **Monthly cost in the status bar** — the `statusBarMetric` setting gains a
